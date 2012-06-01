@@ -4,7 +4,7 @@
     <facet type="scala" name="Scala">
       <configuration>
         <option name="compilerLibraryLevel" value="Global" />
-        <option name="compilerLibraryName" value="scala-2.9.2" />
+        <option name="compilerLibraryName" value="scala-2.9-compiler" />
       </configuration>
     </facet>
   </component>

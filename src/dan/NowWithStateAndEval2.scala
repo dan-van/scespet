@@ -53,6 +53,10 @@ class Expr[X](val source:Func[_,_], val target:Func[_, X])(implicit collector:Fu
     f.source = target
     return new Expr[Y](this.target, f)
   }
+
+  def foreach(f:X => Unit) = {
+    map(new AnonFunc(f))
+  }
 }
 
 
@@ -73,33 +77,41 @@ class AnonFunc[X,Y](val f:X => Y) extends AbsFunc[X,Y]{
   }
 }
 
-// I think this is a bit duff, basically it is a root "pipe"
-class Stream[X](val sType:Class[X]) extends Func[Null,X] {
-  val source = new HasVal[Null] {def value = null}
-  def source_= (x:HasVal[Null]):Unit = throw new UnsupportedOperationException("can't set the source of a stream")
-  var value:X = _
-  def calculate = true
+trait EventSource[X] extends Func[Null, X] {
+  def hasNext():Boolean
 }
 
 // I think this is a bit duff, basically it is a root "pipe"
-class IteratorAsFunc[X](val iterable:Iterable[X]) extends Func[Null,X] {
+class IteratorAsFunc[X](val iterable:Iterable[X]) extends EventSource[X] {
   val iterator = iterable.iterator
   val source = new HasVal[Null] {def value = null}
   def source_= (x:HasVal[Null]):Unit = throw new UnsupportedOperationException("can't set the source of a stream")
   var value:X = _
-  def calculate = {if (iterator.hasNext) {value = iterator.next(); true} else false}
+
+  def hasNext() = iterator.hasNext
+
+  def calculate = {if (hasNext) {value = iterator.next(); true} else false}
 }
 
 
 class SimpleEvaluator() extends FuncCollector {
-  var funcs:IndexedSeq[Func[_,_]] = new ArrayBuffer()
-
-  def add[X](stream:Stream[X]):Expr[X] = {
-    new Expr(null, stream)(this)
+  def run() {
+    var i = 0;
+    while (eventSource.hasNext()) {
+      advance()
+      i += 1
+    }
   }
 
-  def add[X](iterator:Iterator[X]):Expr[X] = {
-    var asFunc = new IteratorAsFunc(iterator)
+
+  var funcs:IndexedSeq[Func[_,_]] = new ArrayBuffer()
+
+  var eventSource:EventSource[_] = _
+
+  def add[X](iterable:Iterable[X]):Expr[X] = {
+    if (eventSource != null) throw new IllegalArgumentException("SimpleEval can only handle one root event source")
+    var asFunc = new IteratorAsFunc(iterable)
+    eventSource = asFunc
     new Expr(null, asFunc)(this)
   }
 
@@ -130,5 +142,5 @@ tradeIter += new Trade(3.12, 100)
 tradeIter += new Trade(4.12, 200)
 tradeIter += new Trade(5.12, 100)
 
-simple.add(tradeIter).map().map(println())
+simple.add(tradeIter).map(_.price).foreach(x=>println("Price: " + x ))
 simple.run()
