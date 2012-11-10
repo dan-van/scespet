@@ -1,4 +1,4 @@
-package scespet.core
+package scespet.core2.core
 
 import collection.mutable.ArrayBuffer
 
@@ -35,7 +35,6 @@ class SimpleEvaluator() extends FuncCollector {
   }
 
   def advance() = {
-    eventSource.calculate()
     funcs.foreach(_.calculate())
   }
 }
@@ -44,7 +43,7 @@ trait EventSource[X] extends Func[Null, X] {
   def hasNext():Boolean
 }
 
-// I think this is a bit duff, basically it is a root "pipe", I don't think it really needs to be a function either
+// I think this is a bit duff, basically it is a root "pipe"
 class IteratorAsFunc[X](val iterable:Iterable[X]) extends EventSource[X] {
   val iterator = iterable.iterator
   val source = new HasVal[Null] {def value = null; def trigger = null}

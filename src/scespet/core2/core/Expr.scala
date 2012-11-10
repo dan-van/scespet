@@ -1,10 +1,11 @@
-package scespet.core
+package scespet.core2.core
 
-import java.util.concurrent.TimeUnit
-import gsa.esg.mekon.core.{EventGraphObject, Function}
+import scala.reflect.runtime.universe._
+import reflect.ClassTag
+import stub.gsa.esg.mekon.core.core
+import core.EventGraphObject
 
 /**
- * @author: danvan
  * @version $Id$
  */
 
@@ -32,7 +33,7 @@ trait HasVal[X] {
  * @tparam X
  * @tparam Y
  */
-trait Func[X,Y] extends HasVal[Y] with gsa.esg.mekon.core.Function {
+trait Func[X,Y] extends HasVal[Y] with core.Function {
   var source:HasVal[X]
   def value:Y
   def trigger = this
@@ -61,7 +62,11 @@ class Expr[X](val source:HasVal[X])(implicit collector:FuncCollector) {
   def map[Y](f:X => Y):Expr[Y] = map(new AnonFunc(f))
 
 //  def sel(select:Select[X]):Expr[select.Self] = map(new SelectFunc[X,select.Self](select))
-  def sel(select:Select[X]):Expr[select.Me] = {return new Expr[select.Me](new SelectFunc[X, select.Me](select.asInstanceOf[select.Me]))}
+  def sel[Y <: Select[X]](select:Y):Expr[Y] = {return new Expr[Y](new HasVal[Y] {
+  def value: Y = select
+
+  def trigger: EventGraphObject = null
+})}
 
   def filter(f:X => Boolean):Expr[X] = map(new AnonFilterFunc[X](f))
 
@@ -124,7 +129,7 @@ class SampledFunc[X](val n:Long) extends AbsFunc[X,X]{
 /**
  *
  */
-class SelectFunc[IN, OUT <: Select[IN]](val select:OUT) extends Func[IN,OUT]{
+class SelectFunc[IN, OUT <: Select[_]](val select:OUT) extends Func[IN,OUT]{
   var source :HasVal[IN] = _
   def value = select
 
@@ -134,16 +139,16 @@ class SelectFunc[IN, OUT <: Select[IN]](val select:OUT) extends Func[IN,OUT]{
   }
 }
 
-class IsVal[X](val value:X) extends HasVal[X] {
-  def trigger = value.asInstanceOf[EventGraphObject]
+class IsVal[X <: EventGraphObject](val value:X) extends HasVal[X] {
+  def trigger = value
 }
 
 
 //abstract class Select[IN: TypeTag](implicit tag: TypeTag[IN]) extends DelayedInit {
-abstract class Select[IN] extends DelayedInit {
+abstract class Select[IN](implicit tag:ClassTag[IN]) extends DelayedInit {
   //    value = this
   var in:IN = _
-  type Me <: Select[IN]
+//  type Me <: Select[IN]
 
   var initBody:()=>Unit = _
 

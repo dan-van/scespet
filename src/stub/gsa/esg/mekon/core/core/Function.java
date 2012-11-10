@@ -1,4 +1,4 @@
-package gsa.esg.mekon.core;
+package stub.gsa.esg.mekon.core.core;
 
 /**
  * @author: dvanenckevort_gsa

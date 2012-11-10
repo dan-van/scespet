@@ -1,5 +1,5 @@
 import collection.mutable.ArrayBuffer
-import scespet.core._
+import scespet.core2.core._
 
 /**
  * Created with IntelliJ IDEA.
@@ -9,7 +9,7 @@ import scespet.core._
  * To change this template use File | Settings | File Templates.
  */
 
-case class Trade(var price:Double, var qty:Double)
+class Trade(var price:Double, var qty:Double)
 var trades = new ArrayBuffer[Trade]()
 trades += new Trade(1.12, 100)
 trades += new Trade(2.12, 200)
@@ -18,16 +18,17 @@ trades += new Trade(4.12, 200)
 trades += new Trade(5.12, 100)
 
 
-class CumuSum extends AbsFunc[Double, Double]{
+class Sum extends AbsFunc[Double, Double]{
   def calculate() = {value = value + source.value; true}
 }
 
 var simple = new SimpleEvaluator()
 
 val tradeStream = simple.add(trades)
-//tradeStream.sel(new Select{def Me = This; var cash = in.price * in.qty; var quantity = in.qty})
-val scaledPrices: Expr[Double] = tradeStream.map(x => {println(s"Got trade: $x"); x.price}).map(_ * 100.0).map(x => {println(s"Scaled: $x"); x})
-scaledPrices.map(new CumuSum()).map(x => println("cumu sum: " + x))
+//tradeStream.sel(new Select[_]{var cash = in.price * in.qty; var quantity = in.qty})
+val prices: Expr[Double] = tradeStream.map(_.price)
+prices.map(_ * 100.0).foreach(x => println ("Price: " + x) )
+prices.map(new Sum()).foreach(x => println("sum: " + x))
 
 simple.run()
 
