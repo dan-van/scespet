@@ -4,7 +4,7 @@
     <facet type="scala" name="Scala">
       <configuration>
         <option name="compilerLibraryLevel" value="Global" />
-        <option name="compilerLibraryName" value="scala-compiler-2.10" />
+        <option name="compilerLibraryName" value="scala-2.10" />
         <option name="compilerOptions" value="-Xexperimental" />
       </configuration>
     </facet>
@@ -19,6 +19,7 @@
     <orderEntry type="library" name="scala-compiler-2.10" level="application" />
     <orderEntry type="module" module-name="mekon" />
     <orderEntry type="library" scope="TEST" name="jep-plot" level="application" />
+    <orderEntry type="library" name="scala-2.10" level="application" />
   </component>
 </module>
 

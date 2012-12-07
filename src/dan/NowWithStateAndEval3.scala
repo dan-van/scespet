@@ -1,15 +1,13 @@
 import collection.mutable.ArrayBuffer
-import scespet.core2.core._
+import scespet.core._
+import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
+
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 10/05/2012
- * Time: 22:52
- * To change this template use File | Settings | File Templates.
+ * Experiments with approaches to getting Select statements
  */
 
-class Trade(var price:Double, var qty:Double)
+case class Trade(var price:Double, var qty:Double)
 var trades = new ArrayBuffer[Trade]()
 trades += new Trade(1.12, 100)
 trades += new Trade(2.12, 200)
@@ -24,11 +22,14 @@ class Sum extends AbsFunc[Double, Double]{
 
 var simple = new SimpleEvaluator()
 
-val tradeStream = simple.add(trades)
+val tradeStream : Expr[Trade] = simple.events(trades)
 //tradeStream.sel(new Select[_]{var cash = in.price * in.qty; var quantity = in.qty})
-val prices: Expr[Double] = tradeStream.map(_.price)
-prices.map(_ * 100.0).foreach(x => println ("Price: " + x) )
-prices.map(new Sum()).foreach(x => println("sum: " + x))
+tradeStream.map(x => {println(x);10})
+val turnover = tradeStream.map(x => x.price * x.qty).map(_ * 100)
+turnover.map(t => println(s"Turnover $t"))
+
+
+//prices.map(new Sum()).map(x => println("sum: " + x))
 
 simple.run()
 

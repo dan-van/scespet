@@ -1,9 +1,13 @@
 package scespet.core2.core
 
+/**
+ * This version is all about trying to get some sort of data-frame going
+ */
+
 import scala.reflect.runtime.universe._
 import reflect.ClassTag
-import stub.gsa.esg.mekon.core.core
-import core.EventGraphObject
+import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
+import reflect.api.Exprs
 
 /**
  * @version $Id$
@@ -11,6 +15,8 @@ import core.EventGraphObject
 
 
 trait FuncCollector{
+  def bindSel(src: HasVal[_], sink: Select2[_])
+
   def bind(src:HasVal[_], sink:Func[_,_])
 }
 
@@ -33,7 +39,7 @@ trait HasVal[X] {
  * @tparam X
  * @tparam Y
  */
-trait Func[X,Y] extends HasVal[Y] with core.Function {
+trait Func[X,Y] extends HasVal[Y] with MFunc {
   var source:HasVal[X]
   def value:Y
   def trigger = this
@@ -53,26 +59,53 @@ trait Func[X,Y] extends HasVal[Y] with core.Function {
 class Expr[X](val source:HasVal[X])(implicit collector:FuncCollector) {
 //  implicit def selectToFunc[Y <: Select[X]](select:Y) = {new SelectFunc[X,Y](select)}
 
-  def map[Y](f:Func[X,Y]):Expr[Y] = {
+//  def apply(x: Int): Int = x * 2
+  def unapply(): Option[Expr[X]] = {
+//    val value: X = this.source.value
+    println("unapply gives " + this)
+    Some(this)
+  }
+
+  def flatMap[Y](f: (X)=>Y): Expr[Y] = {
+    val result: Y = f.apply(this.source.value)
+    map(f)
+  }
+
+  def mapF[Y](f:Func[X,Y]):Expr[Y] = {
     f.source = source
     collector.bind(source, f)
     return new Expr[Y](f)
   }
 
-  def map[Y](f:X => Y):Expr[Y] = map(new AnonFunc(f))
+  def map[Y](f:X => Y):Expr[Y] = {
+    mapF(new AnonFunc(f))
+  }
+
+  def sel2[Y <: Select2[X]](s:Y):Expr[Y] = {
+    s.source = source
+    collector.bindSel(source, s)
+    return new Expr[Y](new IsVal[Y](s))
+  }
+
+  def sel3(s: Select2[X]):Expr[s.type] = {
+    s.source = source
+    collector.bindSel(source, s)
+    return new Expr[s.type](new IsVal[s.type](s))
+  }
 
 //  def sel(select:Select[X]):Expr[select.Self] = map(new SelectFunc[X,select.Self](select))
-  def sel[Y <: Select[X]](select:Y):Expr[Y] = {return new Expr[Y](new HasVal[Y] {
-  def value: Y = select
+//  def sel[Y <: Select[X]](select:Y):Expr[Y] = {
+//    return new Expr[Y](new HasVal[Y] {
+//      def value: Y = select
+//      def trigger: EventGraphObject = null
+//    })
+//  }
 
-  def trigger: EventGraphObject = null
-})}
+  def filter(f:X => Boolean):Expr[X] = mapF(new AnonFilterFunc[X](f))
 
-  def filter(f:X => Boolean):Expr[X] = map(new AnonFilterFunc[X](f))
+  def sample(n:Long):Expr[X] = mapF(new SampledFunc[X](n))
 
-  def sample(n:Long):Expr[X] = map(new SampledFunc[X](n))
-
-  def foreach(f:X => Unit) = map(new AnonFunc(f))
+  def foreach(f:X => Unit) = mapF(new AnonFunc(f))
 }
 
 
@@ -163,6 +196,52 @@ abstract class Select[IN](implicit tag:ClassTag[IN]) extends DelayedInit {
 //  def apply():SelectFunc[IN,this.type] = {
 //    return new SelectFunc[IN, Select.this.type](this)
 //  }
+
+
+
+  List(1,2,3).map(x => new {
+    lazy val foo = x*2
+    lazy val bar = foo * 4
+  }).map(x => new {
+    lazy val foo2 = x.foo*2
+    lazy val bar2 = x.bar*4
+  })
+
+
+  List(1,2,3).map(x => new {
+    def foo = x*2
+    lazy val bar = foo * 4
+  }).map(x => new {
+    lazy val foo2 = x.foo*2
+    lazy val bar2 = x.bar*4
+  })
+
+
+}
+
+
+
+abstract class Select2[IN]() extends DelayedInit with MFunc {
+  //    value = this
+  var in:IN = _
+  var source:HasVal[IN] = _
+  //  type Me <: Select[IN]
+
+  var initBody:()=>Unit = _
+
+  override def delayedInit(x: => Unit) {
+    initBody = ()=>{x;}
+  }
+
+  def calculate():Boolean = {
+    in = source.value
+    initBody()
+    return true
+  }
+
+  //  def apply():SelectFunc[IN,this.type] = {
+  //    return new SelectFunc[IN, Select.this.type](this)
+  //  }
 }
 
 

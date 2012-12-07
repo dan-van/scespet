@@ -1,6 +1,7 @@
 package scespet.core2.core
 
 import collection.mutable.ArrayBuffer
+import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
 
 /**
  * @author: danvan
@@ -17,11 +18,11 @@ class SimpleEvaluator() extends FuncCollector {
   }
 
 
-  var funcs:IndexedSeq[Func[_,_]] = new ArrayBuffer()
+  var funcs:IndexedSeq[MFunc] = new ArrayBuffer()
 
   var eventSource:EventSource[_] = _
 
-  def add[X](iterable:Iterable[X]):Expr[X] = {
+  def events[X](iterable:Iterable[X]):Expr[X] = {
     if (eventSource != null) throw new IllegalArgumentException("SimpleEval can only handle one root event source")
     var asFunc = new IteratorAsFunc(iterable)
     eventSource = asFunc
@@ -34,7 +35,13 @@ class SimpleEvaluator() extends FuncCollector {
     funcs = funcs :+ sink
   }
 
+  def bindSel(src: HasVal[_], sink: Select2[_]) {
+    println("bound "+src+" -> "+sink)
+    funcs = funcs :+ sink
+  }
+
   def advance() = {
+    eventSource.calculate()
     funcs.foreach(_.calculate())
   }
 }
