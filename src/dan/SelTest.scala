@@ -21,8 +21,16 @@ var simple = new SimpleEvaluator()
 val tradeStream : Expr[Trade] = simple.events(trades)
 
 // this works.
-tradeStream.sel2(new Select2[Trade]{def turnover=in.price * in.qty;var px = in.price})
-  .map(x => println("Turn = "+x.turnover+" @ px: "+x.px))
+//tradeStream.sel4( () =>  { new Select2[ _ ]{def turnover=in.price * in.qty;var px = in.price} } )
+//tradeStream.sel3(new Select2() ).map( _.in.price )
+//tradeStream.sel2(new Select2{def turnover=in.price * in.qty;var px = in.price})
+//tradeStream.sel2(new Select2{ val turnover = 0; var px = 0.0}( (x,in) => x.turnover += in.qty))
+//tradeStream.map((t) => {case class Foo(dan:Int); new Foo(t.price)})
+tradeStream.map((t) => {case class Foo(dan:Int = t.price)})
+//tradeStream.sel5(new Select2{def turnover=in.price * in.qty;var px = in.price})
+//tradeStream.foo(_.price)
+//  .sel2(new Select2[Select2[Trade] {def turnover: Double; var px: Double}] { def foo = in.turnover }).map( _.foo )
+//  .map(x => println("Turn = "+x.turnover+" @ px: "+x.px))
 
 //// and this doesn't when I remove the type parameter
 //tradeStream.sel2(new Select2{def turnover=in.price * in.qty;var px = in.price})
