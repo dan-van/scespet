@@ -81,16 +81,38 @@ class Expr[X](val source:HasVal[X])(implicit collector:FuncCollector) {
     mapF(new AnonFunc(f))
   }
 
+//  def sel1(s:Select2[X]):Expr[Unit] = {
+//    s.source = source
+//    collector.bindSel(source, s)
+//    return new Expr[Y](new IsVal[Y](s))
+//  }
+
   def sel2[Y <: Select2[X]](s:Y):Expr[Y] = {
     s.source = source
     collector.bindSel(source, s)
     return new Expr[Y](new IsVal[Y](s))
   }
 
+  def foo(s: (X) => Double):Expr[s.type] = {
+    return null;
+  }
   def sel3(s: Select2[X]):Expr[s.type] = {
     s.source = source
     collector.bindSel(source, s)
     return new Expr[s.type](new IsVal[s.type](s))
+  }
+
+  def sel5(s: Select2[X]):Expr[Select2[X]] = {
+    s.source = source
+    collector.bindSel(source, s)
+    return new Expr[Select2[X]](new IsVal[Select2[X]](s))
+  }
+
+  def sel4[OUT <: Select2[X]] (s:() => OUT):Expr[OUT] = {
+//    s.source = source
+//    collector.bindSel(source, s)
+//    return new Expr[s.type](new IsVal[s.type](s))
+    return null
   }
 
 //  def sel(select:Select[X]):Expr[select.Self] = map(new SelectFunc[X,select.Self](select))
@@ -221,7 +243,7 @@ abstract class Select[IN](implicit tag:ClassTag[IN]) extends DelayedInit {
 
 
 
-abstract class Select2[IN]() extends DelayedInit with MFunc {
+class Select2[IN]() extends DelayedInit with MFunc {
   //    value = this
   var in:IN = _
   var source:HasVal[IN] = _

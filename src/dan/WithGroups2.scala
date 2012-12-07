@@ -26,14 +26,32 @@ class Avg extends AbsFunc[Double, Double] {
   def copy() = new Avg
   var n = 0
   var sum = 0.0
-  def calculate() = {n = n + 1; sum = sum + source.value; value = sum / n; true}
+  def calculate() = {n += 1; sum += source.value; value = sum / n; true}
 }
 
-def prints(x:Expr[_]):Unit = {
-  x.map((it) => { println(it) } )
+object Avg {
+  def apply() = new Avg
 }
 
-def prints(x:VectorExpr[_,_]):Unit = {
+class AvgFunc(source:HasVal[Double]) extends MFunc {
+  var n = 0
+  var sum = 0.0
+  def calculate() = {n += 1; sum += source.value; true}
+  def getAvg = sum / n
+}
+
+class AvgObj() {
+  var n = 0
+  var sum = 0.0
+  def add(x:Double) {n += 1; sum += x}
+  def getAvg = sum / n
+}
+
+def avg(expr:Expr[Double]):Expr[Double] = {
+  expr.reduce(new AvgObj() with Fold[Double] {}).map(_.getAvg)
+}
+
+def printv(x:VectorExpr[_,_]):Unit = {
   x.mapv(x => {
     print("vector{")
     for (i <- 0 to x.getSize - 1) {
@@ -46,18 +64,16 @@ def prints(x:VectorExpr[_,_]):Unit = {
 var simple = new SimpleEvaluator()
 val tradeStream = simple.events(trades)
 
-tradeStream.map( t => println("next trade: "+ t) )
-val sumTrades = tradeStream.group( _.name ).map(_.qty).map( new Avg() ).mapv( x => {
-  print("vector{")
-  for (i <- 0 to x.getSize - 1) {
-    print(x.getKey(i) + " -> " + x.get(i) +", ")
-  }
-  println("}")
-} )
-
-//var avgTrades = tradeStream.filter(_.name == "VOD").map(_.qty).map(new Avg()).map( it => {println(it)} )
-//var avgTrades = tradeStream.group(_.name).map(_.qty).map(new Avg())
-//prints(avgTrades)
+//tradeStream.group(_.name).map(_.price).mapv(printv)
+//tradeStream.filter(_.name == "VOD").map(_.qty).reduce(new AvgObj() with Fold[Double]).map(x => println(s"avg Trade = ${x.getAvg}"))
+//implicit def toCreateFunc[K,F <: AbsFunc[_,_]](func:F)(implicit man:ClassTag[F]) : (K) => (F) = {
+//  (_) => {man.unapply(Unit).get}
+//}
+//var avgTrades = tradeStream.filter(_.name == "VOD").map(_.qty).map(new Avg())
+var avgTrades = tradeStream.group(_.name).map(_.qty).map(new Avg())
+avgTrades.map(x => println(s"avg Trade = $x"))
+printv(avgTrades)
+//tradeStream.group(_.name).map(_.qty).mapf( new Avg ).map(x => println(s"avg Trade = $x"))
 // select avg qty from tradestream where name="VOD"
 
 simple.run()

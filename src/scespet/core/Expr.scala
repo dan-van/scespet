@@ -143,7 +143,6 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
 
   def map[Y](f:CopyF[X,Y]):VectorExpr[K,Y] = {
     val createFunc: (K) => Func[X,Y] = (_) => {
-      println("new class of "+f.getClass);
       f.copy()
     }
     return mapEach(createFunc)
@@ -174,7 +173,36 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
     // func yields a Y,
     val func = new AnonFunc[VectorStream[K,X], Y](f) {
       override def calculate() = {
-        println("collapsing")
+        super.calculate()
+      }
+
+      override def toString = "mapv("+f+")"
+    }
+    func.source = new IsVal[VectorStream[K,X]](source){
+      // note, no trigger
+      override def toString = "Vector source for collapse: "+source
+    }
+    new VectorCollapse(source, func, collector.env)
+
+    // this presents those changing Y values and the associated listenable
+    val ySource = new HasVal[Y] {
+      def value = func.value
+      def trigger = func
+    }
+    return new Expr[Y](ySource)
+  }
+
+  /**
+   * converts a VectorExpr[K,V] -> Expr[ VectorStream[K,V] ]
+   *
+   * @param f
+   * @tparam Y
+   * @return
+   */
+  def pack[Y](f:VectorStream[K,X] => Y):Expr[Y] = {
+    // func yields a Y,
+    val func = new AnonFunc[VectorStream[K,X], Y](f) {
+      override def calculate() = {
         super.calculate()
       }
 
@@ -370,5 +398,3 @@ abstract class Select[IN] extends DelayedInit {
 //    return new SelectFunc[IN, Select.this.type](this)
 //  }
 }
-
-
