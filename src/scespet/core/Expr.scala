@@ -19,8 +19,11 @@ import scespet.core.AbsFunc
 
 
 trait FuncCollector {
-  def bind(src:EventGraphObject, sink:MFunc)
-  def env:Environment
+  type Env = Environment
+  type EvtSrc = EventGraphObject
+  type EvtSink = MFunc
+  def bind(src:EvtSrc, sink:EvtSink)
+  def env:Env
 }
 
 
