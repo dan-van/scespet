@@ -32,7 +32,7 @@ class SimpleEvaluator() extends FuncCollector {
   }
 
   def bind(src: EventGraphObject, sink: MFunc) {
-    println("bound "+src+" -> "+sink)
+//    println("bound "+src+" -> "+sink)
     graph.addTrigger(src, sink)
   }
 
