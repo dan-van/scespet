@@ -44,6 +44,14 @@ class SimpleEvaluator() extends FuncCollector {
     def addListener[T](source: Any, sink: EventGraphObject) {
       graph.addTrigger(source.asInstanceOf[EventGraphObject], sink.asInstanceOf[MFunc])
     }
+
+    def removeListener[T](source: Any, sink: EventGraphObject) {
+      graph.removeTrigger(source.asInstanceOf[EventGraphObject], sink.asInstanceOf[MFunc])
+    }
+
+    def hasChanged(trigger: Any):Boolean = {
+      graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
+    }
   }
 
 

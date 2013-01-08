@@ -29,14 +29,24 @@ public class SlowGraphWalk {
             in.add(sourceNode);
         }
 
+        public void removeIn(Node sourceNode) {
+            in.remove(sourceNode);
+        }
+
         public void addOut(Node targetNode) {
             out.add(targetNode);
+        }
+
+        public void removeOut(Node targetNode) {
+            out.remove(targetNode);
         }
 
         public void trigger() {
             if (in.size() > 1) {
                 // it is a rendezvous, punt it
-                joinNodes.add(this);
+                if (!joinNodes.contains(this)) {
+                    joinNodes.add(this);
+                }
             } else {
                 // do it now.
                 execute();
@@ -46,14 +56,14 @@ public class SlowGraphWalk {
         private void execute() {
             boolean propagate = true;
             if (graphObject instanceof Function) {
+                propagate = ((Function) graphObject).calculate();
+            }
+            if (propagate) {
                 if (lastFired == cycleCount) {
                     throw new AssertionError("cycle: "+cycleCount+" This simple graph walk is trying to double-fire a node: "+graphObject);
                 } else {
                     lastFired = cycleCount;
                 }
-                propagate = ((Function) graphObject).calculate();
-            }
-            if (propagate) {
                 for (Node node : out) {
                     node.trigger();
                 }
@@ -76,6 +86,18 @@ public class SlowGraphWalk {
         sourceNode.addOut(targetNode);
         targetNode.addIn(sourceNode);
         propagateOrder(targetNode, sourceNode.order);
+    }
+
+    public void removeTrigger(EventGraphObject source, Function target) {
+        Node sourceNode = getNode(source);
+        Node targetNode = getNode(target);
+        sourceNode.removeOut(targetNode);
+        targetNode.removeIn(sourceNode);
+    }
+
+    public boolean hasChanged(EventGraphObject obj) {
+        Node node = getNode(obj);
+        return node.lastFired == cycleCount && cycleCount >= 0;
     }
 
     private void propagateOrder(Node targetNode, int greaterThan) {
