@@ -1,6 +1,5 @@
-package typetests
+package macros
 
-import typetests.Chaining.{Reduce, Term}
 import scala.tools.reflect.ToolBox
 import scala.reflect.runtime.{universe => ru}
 import reflect.macros.Context

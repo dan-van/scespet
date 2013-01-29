@@ -27,14 +27,7 @@ trait FuncCollector {
 }
 
 
-/**
- * Something that provides a value (i.e. a source)
- * @tparam X
- */
-trait HasVal[X] {
-  def value:X
-  def trigger :EventGraphObject
-}
+
 
 /**
  * something that has a source, and is a source (i.e. a pipe)

@@ -5,7 +5,6 @@
       <configuration>
         <option name="compilerLibraryLevel" value="Global" />
         <option name="compilerLibraryName" value="scala-2.10" />
-        <option name="compilerOptions" value="-Xexperimental" />
       </configuration>
     </facet>
   </component>
@@ -13,16 +12,10 @@
     <exclude-output />
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/test" isTestSource="true" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="scala-2.10" level="application" />
-    <orderEntry type="module" module-name="mekon" />
-    <orderEntry type="library" scope="TEST" name="jep-plot" level="application" />
-    <orderEntry type="library" name="scala-2.10" level="application" />
-    <orderEntry type="library" name="scala-2.10" level="application" />
-    <orderEntry type="module" module-name="macros" />
   </component>
 </module>
 
