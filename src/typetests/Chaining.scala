@@ -19,25 +19,8 @@ trait Window {
   def open:Boolean
 }
 
-class NthEvent(val N:Int, val source:EventGraphObject, env:Environment) extends MFunc {
-  var n = 0;
-  env.addListener(source, this)
-  def calculate():Boolean = {n += 1; return n % N == 0}
-}
-/**
- *
- * @tparam X this is the source event type that is being added to the Reduce
- * @tparam R this is the Reduce function that is performing the reduction of X
- */
-trait NewBucketTriggerFactory[X, R <: Reduce[X]] {
-  def create(source:HasVal[X], reduce:R, env:Environment) : EventGraphObject
-}
 
-trait VectTerm[K,X] {
-  def map[Y](f:X=>Y):VectTerm[K,Y] = ???
-  def map[Y <: Reduce[X]](y:Y):VectTerm[K,Y] = ???
-  def bucket[Y <: Reduce[X]](y:Y, window:Window = null):VectTerm[K,Y] = ???
-}
+
 
 //trait Term[X] {
 //  def by[K](f:X=>K):VectTerm[K,X] = ???

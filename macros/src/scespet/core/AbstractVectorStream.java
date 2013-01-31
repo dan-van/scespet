@@ -1,6 +1,6 @@
-package dan;
+package scespet.core;
 
-import stub.gsa.esg.mekon.core.EventGraphObject;
+import scespet.core.VectorStream;
 import stub.gsa.esg.mekon.core.Function;
 
 import java.util.ArrayList;

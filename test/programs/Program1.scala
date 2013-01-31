@@ -1,8 +1,8 @@
 package programs
 
 import collection.mutable.ArrayBuffer
-import scespet.core.Reduce
-import typetests.{MacroTerm, SimpleChainImpl}
+import scespet.core.{MacroTerm, Reduce}
+import typetests.{SimpleChainImpl}
 
 /**
 * Created with IntelliJ IDEA.
@@ -19,10 +19,14 @@ object Program1 extends App {
   trades += new Trade("MSFT", 3.12, 2)
   trades += new Trade("VOD", 4.12, 100)
   trades += new Trade("MSFT", 5.12, 20)
+  trades += new Trade("VOD", 6.12, 1000)
+  trades += new Trade("MSFT", 7.12, 200)
+  trades += new Trade("VOD", 8.12, 10000)
+  trades += new Trade("MSFT", 9.12, 2000)
 
   class Sum extends Reduce[Int]{
     var s = 0;
-    def add(i:Int):Unit = {s += i}
+    def add(i:Int):Unit = {println(s"Adding $i to sum:$s = ${s+i}");s += i}
 
     override def toString = s"Sum=$s"
   }
@@ -36,15 +40,17 @@ object Program1 extends App {
   val impl: SimpleChainImpl = new SimpleChainImpl()
   var tradeExpr: MacroTerm[Trade] = impl.query(trades).asInstanceOf[MacroTerm[Trade]]
 
+  def output(prefix:String)(term:MacroTerm[_]) = term.map(x => println(prefix + String.valueOf(x)))
+
   def v1 = {
     tradeExpr map {_.qty} map (new Sum) map { println(_) }
   }
   def v2 = {
 //    tradeExpr map {_.qty} bucket2 (new Sum) each 2 map { println(_) }
 //    println(tradeExpr.initialTerm.bucketFoo(new TradePrint).each(2))
-//    val tradeBuckets = tradeExpr.bucket(new TradePrint).each(2)
-//    tradeBuckets.map(_.accVol)
-//      .bucket(new Sum).each(3).map(println(_))
+    val tradeBuckets = tradeExpr.bucket(new TradePrint).each(2)
+    output("tradePrint fired="){tradeBuckets}
+    output("Sum="){ tradeBuckets.map(_.accVol).bucket(new Sum).each(2) }
   }
   def v2a = {
     var qtyStream = tradeExpr map {_.qty}

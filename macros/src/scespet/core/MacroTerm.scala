@@ -1,6 +1,8 @@
-package typetests
+package scespet.core
 
 import scespet.core._
+import reflect.macros.Context
+
 
 /**
  * Created with IntelliJ IDEA.
@@ -39,21 +41,23 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
   def by[K](f: X => K) : VectTerm[K,X] = {
     val vFunc: GroupFunc[K, X] = new GroupFunc[K, X](input, f, eval.env)
     eval.bind(input.trigger, vFunc)
-    return new MacroVectTerm[K, X](eval)(vFunc)
+    return new VectTerm[K, X](eval)(vFunc)
 }
 
 //  def bucket[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.bucket[X,Y]
 
 //  def bucket[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
-  def bucket[Y](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
+  def bucket[Y](bucketFunc: Y):BucketBuilder[Y] = macro BucketMacro.bucket2Macro[Y]
 
-  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[MacroTerm[Y]] = new BucketBuilderImpl[X,Y](newBFunc, input, eval)
+  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[Y] = new BucketBuilderImpl[X,Y](newBFunc, input, eval)
 
-  def newBucketBuilder[B, T](newB: () => B):BucketBuilder[T] = {
+  def newBucketBuilder[B](newB: () => B):BucketBuilder[B] = {
     type Y = B with Reduce[X]
     val reduceGenerator = newB.asInstanceOf[() => Y]
-    var aY: Y = reduceGenerator.apply()
+//    val reduceGenerator = newB
+    var aY = reduceGenerator.apply()
     println("Reducer in MacroTerm generates "+aY)
-    new BucketBuilderImpl[X, Y](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
+//    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
+    new BucketBuilderImpl[X, Y](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[B]]
   }
 }

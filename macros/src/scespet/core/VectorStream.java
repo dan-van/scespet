@@ -1,4 +1,4 @@
-package dan;
+package scespet.core;
 
 import stub.gsa.esg.mekon.core.EventGraphObject;
 import stub.gsa.esg.mekon.core.Function;

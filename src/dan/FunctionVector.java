@@ -1,5 +1,7 @@
 package dan;
 
+import scespet.core.AbstractVectorStream;
+import scespet.core.VectorStream;
 import stub.gsa.esg.mekon.core.Function;
 
 /**

@@ -6,44 +6,18 @@ package scespet.core
 
 import java.util.concurrent.TimeUnit
 import stub.gsa.esg.mekon.core.{Function => MFunc, Environment, EventGraphObject}
-import dan.{VectorCollapse, FunctionVector, VectorStream, AbstractVectorStream}
+import dan.{VectorCollapse, FunctionVector}
 import collection.mutable
 import stub.gsa.esg.mekon.core
-import dan.VectorStream.ReshapeSignal
+import VectorStream.ReshapeSignal
 import reflect.ClassTag
 import scespet.core.AbsFunc
 
-/**
- * @version $Id$
- */
-
-
-trait FuncCollector {
-  type Env = Environment
-  type EvtSrc = EventGraphObject
-  type EvtSink = MFunc
-  def bind(src:EvtSrc, sink:EvtSink)
-  def env:Env
-}
 
 
 
 
-/**
- * something that has a source, and is a source (i.e. a pipe)
- * on "calculate", it may take from its source, and update its yielded value
- * if calculate returns false, then state was not modified
- *
- * i.e. this is an operation that can both map and filter
- * @tparam X
- * @tparam Y
- */
-trait Func[X,Y] extends HasVal[Y] with MFunc {
-  var source:HasVal[X]
-  def value:Y
-  def trigger = this
-  def calculate():Boolean
-}
+
 
 trait Fold[X] {def add(x:X):Unit}
 
@@ -274,38 +248,9 @@ class BoundFunctionVector[K,X, F <: Func[X,V], V](val createFunc:(K) => F, val s
 //  }
 //}
 
-// this one uses pur function calls and tracks updated indicies.
-// we could try a verison that uses wakeup nodes.
-class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:Environment) extends AbstractVectorStream[K,ValueFunc[V], V] with MFunc {
 
-  val getNewColumnTrigger = new ReshapeSignal()
 
-  def newCell(i: Int, key: K) = new ValueFunc[V](source.value, env)  //todo: may not be necessary to do source.value, init later?
 
-  def get(i: Int) = getTrigger(i).value
-
-  def calculate():Boolean = {
-    val nextVal: V = source.value
-    val key: K = keyFunc.apply(nextVal)
-    var index: Int = getIndex(key)
-    if (index == -1) {
-      index = getSize()
-      add(key)
-      env.wakeupThisCycle(getNewColumnTrigger)
-    }
-    var func: ValueFunc[V] = getTrigger(index)
-    func.setValue(nextVal)
-    return true
-  }
-}
-
-class ValueFunc[V](var value:V, env:Environment) extends MFunc {
-  def setValue(newVal:V) {
-    this.value = newVal
-    env.wakeupThisCycle(this);
-  }
-  def calculate() = true;
-}
 
 // integrated map and filter. map -> null implies filter
 class AnonFunc[X,Y](val f:X => Y) extends AbsFunc[X,Y]{
