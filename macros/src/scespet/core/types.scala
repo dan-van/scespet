@@ -15,7 +15,7 @@ trait HasVal[X] {
   def trigger :types.EventGraphObject
 }
 
-trait BucketBuilder[+T] {
+trait BucketBuilder[T] {
   def each(n:Int):T
 }
 

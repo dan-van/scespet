@@ -2,7 +2,7 @@ package programs
 
 import collection.mutable.ArrayBuffer
 import scespet.core.Reduce
-import typetests.{Term, MacroTerm, SimpleChainImpl}
+import typetests.{MacroTerm, SimpleChainImpl}
 
 /**
 * Created with IntelliJ IDEA.
@@ -42,11 +42,13 @@ object Program1 extends App {
   def v2 = {
 //    tradeExpr map {_.qty} bucket2 (new Sum) each 2 map { println(_) }
 //    println(tradeExpr.initialTerm.bucketFoo(new TradePrint).each(2))
-    println(tradeExpr.bucketFoo(new TradePrint).each(2))
+//    val tradeBuckets = tradeExpr.bucket(new TradePrint).each(2)
+//    tradeBuckets.map(_.accVol)
+//      .bucket(new Sum).each(3).map(println(_))
   }
   def v2a = {
     var qtyStream = tradeExpr map {_.qty}
-    qtyStream.asInstanceOf[MacroTerm[Int]].bucket2NoMacro(() => {new Sum}).each(2) map { println (_) }
+    qtyStream.bucket2NoMacro(() => {new Sum}).each(2) map { println (_) }
   }
 //  val v3 = tradeExpr map {_.qty} bucket (new Sum, 2.samples ) map { println(_) }
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}

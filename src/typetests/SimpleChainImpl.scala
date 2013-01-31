@@ -18,7 +18,7 @@ import stub.gsa.esg.mekon.core.{Environment, EventGraphObject}
 class SimpleChainImpl {
   val eval: SimpleEvaluator = new SimpleEvaluator
 
-  def query[X](inputData:Seq[X]):Term[X] = {
+  def query[X](inputData:Seq[X]):MacroTerm[X] = {
     val eventSource = new IteratorEvents[X](inputData)
     eval.eventSource = eventSource
     val initialTerm = new MacroTerm[X](eval)(eventSource)
@@ -29,7 +29,15 @@ class SimpleChainImpl {
 }
 
 
-
+/**
+ * This uses a source of data: input, aggregates events into buckets, and provides those buckets as a stream.
+ * @param input
+ * @param newBFunc
+ * @param triggerBuilder
+ * @param env
+ * @tparam Y
+ * @tparam X
+ */
 class BucketMaintainer[Y <: Reduce[X], X](input:HasVal[X], newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y], env:Environment) extends AbsFunc[X, Y] {
   var nextBucket: Y = _
   var newBucketTrigger: EventGraphObject = null
@@ -64,15 +72,15 @@ class BucketMaintainer[Y <: Reduce[X], X](input:HasVal[X], newBFunc:() => Y, tri
 class MacroVectTerm[K,X](val eval:FuncCollector)(input:VectorStream[K,X]) extends VectTerm[K,X] {
 
 }
-class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, input:HasVal[X], eval:FuncCollector) extends BucketBuilder[Term[Y]] {
-  def each(n: Int):Term[Y] = {
+class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, input:HasVal[X], eval:FuncCollector) extends BucketBuilder[MacroTerm[Y]] {
+  def each(n: Int):MacroTerm[Y] = {
     val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
       def create(source: HasVal[X], reduce: Y, env:Environment) = new NthEvent(n, source.trigger, env)
     }
-    return bucketNoMacro(newBFunc, bucketTrigger)
+    return buildTermForBucketStream(newBFunc, bucketTrigger)
   }
 
-  def bucketNoMacro[Y <: Reduce[X]](newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y]):Term[Y] = {
+  def buildTermForBucketStream[Y <: Reduce[X]](newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y]):MacroTerm[Y] = {
     // todo: make Window a listenable Func
     // "start new bucket" is a pulse, which is triggered from time, input.trigger, or Y
     val listener = new BucketMaintainer[Y,X](input, newBFunc, triggerBuilder, eval.env)

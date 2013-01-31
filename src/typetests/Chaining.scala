@@ -1,6 +1,6 @@
 package typetests
 
-import scespet.core.{Reduce, AbsFunc, HasVal, FuncCollector}
+import scespet.core._
 import stub.gsa.esg.mekon.core.{Environment, EventGraphObject, Function => MFunc}
 
 /**
@@ -39,13 +39,14 @@ trait VectTerm[K,X] {
   def bucket[Y <: Reduce[X]](y:Y, window:Window = null):VectTerm[K,Y] = ???
 }
 
-trait Term[X] {
-  def by[K](f:X=>K):VectTerm[K,X] = ???
-  def map[Y](f:X=>Y):Term[Y] = ???
-  def map[Y <: Reduce[X]](y:Y):Term[Y] = ???
-  //    def bucket[Y <: Reduce[X]](y:Y, window:Window = null):Term[Y]
-  //    def bucket2[Y <: Reduce[X]](y:Y):BucketBuilder[Term[Y]]
-}
+//trait Term[X] {
+//  def by[K](f:X=>K):VectTerm[K,X] = ???
+//  def map[Y](f:X=>Y):Term[Y] = ???
+//  def map[Y <: Reduce[X]](y:Y):Term[Y] = ???
+////  def bucket[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[Term[Y]]
+//  //    def bucket[Y <: Reduce[X]](y:Y, window:Window = null):Term[Y]
+//  //    def bucket2[Y <: Reduce[X]](y:Y):BucketBuilder[Term[Y]]
+//}
 
 
 object Chaining {
