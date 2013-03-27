@@ -1,7 +1,7 @@
 package programs
 
 import collection.mutable.ArrayBuffer
-import scespet.core.{MacroTerm, Reduce}
+import scespet.core.{HasVal, MacroTerm, Reduce}
 import typetests.{SimpleChainImpl}
 
 /**
@@ -34,6 +34,8 @@ object Program1 extends App {
   class TradePrint extends Reduce[Trade]{
     var accVol = 0
     def add(t:Trade):Unit = {accVol += t.qty; println("Reduce: "+t+" gave ACCVOL: "+accVol)}
+
+    override def toString = s"TradeAccVol:$accVol"
   }
 
 
@@ -43,22 +45,38 @@ object Program1 extends App {
   def output(prefix:String)(term:MacroTerm[_]) = term.map(x => println(prefix + String.valueOf(x)))
 
   def v1 = {
-    tradeExpr map {_.qty} map (new Sum) map { println(_) }
+    tradeExpr map {_.qty} fold_all (new Sum) map { println(_) }
   }
   def v2 = {
 //    tradeExpr map {_.qty} bucket2 (new Sum) each 2 map { println(_) }
 //    println(tradeExpr.initialTerm.bucketFoo(new TradePrint).each(2))
-    val tradeBuckets = tradeExpr.bucket(new TradePrint).each(2)
+    val tradeBuckets = tradeExpr.reduce(new TradePrint).each(2)
     output("tradePrint fired="){tradeBuckets}
-    output("Sum="){ tradeBuckets.map(_.accVol).bucket(new Sum).each(2) }
+    output("Sum="){ tradeBuckets.map(_.accVol).reduce(new Sum).each(2) }
   }
   def v2a = {
     var qtyStream = tradeExpr map {_.qty}
     qtyStream.bucket2NoMacro(() => {new Sum}).each(2) map { println (_) }
   }
-//  val v3 = tradeExpr map {_.qty} bucket (new Sum, 2.samples ) map { println(_) }
+
+  def v3 = {
+    class Counter[T <: Any] extends Reduce[T] {
+      var c=0
+      def add(x: T) { c += 1 }
+
+      override def toString = String.valueOf(c)
+    }
+    val counter: MacroTerm[Counter[Trade]] = tradeExpr.fold_all(new Counter)
+    val windowStream = counter.map(x => (x.c % 3) != 0)
+    val tradeBuckets = tradeExpr.reduce(new TradePrint).window(windowStream)
+    output("test="){counter.join(windowStream)}
+    output("tradeBucket="){tradeBuckets}
+//    output("window="){windowStream}
+
+  }
+//  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
-  //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } bucket(new Sum, 2.hours.between("09:00", "15:00") )
-  v2
+  //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
+  v3
   impl.run
 }

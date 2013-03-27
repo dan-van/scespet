@@ -5,17 +5,13 @@ import reflect.macros.Context
 
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 17/01/2013
- * Time: 21:47
- * To change this template use File | Settings | File Templates.
+ * This wraps an input HasVal with API to provide typesafe reactive expression building
  */
-class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTerm {
+class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTerm[X] {
   import scala.reflect.macros.Context
   import scala.language.experimental.macros
 
-  def map[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
+  def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
     val listener = new AbsFunc[X,Y] {
       value = y
       def calculate() = {
@@ -44,20 +40,51 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
     return new VectTerm[K, X](eval)(vFunc)
 }
 
-//  def bucket[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.bucket[X,Y]
+  def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
+    val listener = new HasVal[(X,Y)] with types.MFunc {
+      def trigger = this
 
-//  def bucket[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
-  def bucket[Y](bucketFunc: Y):BucketBuilder[Y] = macro BucketMacro.bucket2Macro[Y]
+      var value:(X,Y) = _
 
-  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[Y] = new BucketBuilderImpl[X,Y](newBFunc, input, eval)
+      def calculate() = {
+        value = (input.value, y.input.value)
+        true
+      }
+    }
+    eval.bind(input.trigger, listener)
+    eval.bind(y.input.trigger, listener)
+    return new MacroTerm[(X,Y)](eval)(listener)
+  }
 
-  def newBucketBuilder[B](newB: () => B):BucketBuilder[B] = {
+  def take[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
+    val listener = new HasVal[(X,Y)] with types.MFunc {
+      def trigger = this
+
+      var value:(X,Y) = _
+
+      def calculate() = {
+        value = (input.value, y.input.value)
+        true
+      }
+    }
+    eval.bind(input.trigger, listener)
+    return new MacroTerm[(X,Y)](eval)(listener)
+  }
+
+//  def reduce[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.reduce[X,Y]
+
+//  def reduce[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
+  def reduce[Y](bucketFunc: Y):BucketBuilder[X,Y] = macro BucketMacro.bucket2Macro[X,Y]
+
+  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, eval)
+
+  def newBucketBuilder[B](newB: () => B):BucketBuilder[X, B] = {
     type Y = B with Reduce[X]
     val reduceGenerator = newB.asInstanceOf[() => Y]
 //    val reduceGenerator = newB
     var aY = reduceGenerator.apply()
     println("Reducer in MacroTerm generates "+aY)
 //    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    new BucketBuilderImpl[X, Y](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[B]]
+    new BucketBuilderImpl[X, Y](reduceGenerator, new MacroTerm[X](eval)(input), eval).asInstanceOf[BucketBuilder[X, B]]
   }
 }

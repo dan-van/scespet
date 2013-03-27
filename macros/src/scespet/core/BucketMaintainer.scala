@@ -19,7 +19,7 @@ class BucketMaintainer[Y <: Reduce[X], X](input:HasVal[X], newBFunc:() => Y, tri
     var closedBucket = false
     if (newBucketTrigger == null || env.hasChanged(newBucketTrigger)) {
       // TODO: distinguish between initial event?
-      println(s"Starting new bucket. Old = $nextBucket, bucketTrigger = $newBucketTrigger")
+      println(s"Starting new reduce. Old = $nextBucket, bucketTrigger = $newBucketTrigger")
       if (nextBucket != null) {
         value = nextBucket
         closedBucket = true

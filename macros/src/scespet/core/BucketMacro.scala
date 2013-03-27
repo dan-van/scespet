@@ -10,7 +10,7 @@ import reflect.macros.Context
  * To change this template use File | Settings | File Templates.
  */
 object BucketMacro {
-  def bucket2Macro[Y : c.WeakTypeTag](c: Context{type PrefixType=BucketTerm})(bucketFunc: c.Expr[Y]) :c.Expr[BucketBuilder[Y]] = {
+  def bucket2Macro[X : c.WeakTypeTag, Y : c.WeakTypeTag](c: Context{type PrefixType=BucketTerm[X]})(bucketFunc: c.Expr[Y]) :c.Expr[BucketBuilder[X,Y]] = {
     import c.universe.reify
     //    ???
     reify{
@@ -19,7 +19,7 @@ object BucketMacro {
       //      type boundY = Reduce[X]
       //      type Y_ = Y with Reduce[X]
       val newBFunc:()=>Y = () => {bucketFunc.splice}
-      val term:BucketTerm = c.prefix.splice
+      val term:BucketTerm[X] = c.prefix.splice
       term.newBucketBuilder[Y](newBFunc)
       //      val input:HasVal[X] = term.input
       //      val eval:FuncCollector = term.eval
@@ -54,12 +54,12 @@ object BucketMacro {
 //  }
 
 
-//  def bucket[X,Y]
+//  def reduce[X,Y]
 //  (c: Context)
 //  (bucketFunc: c.Expr[Y], window: c.Expr[Window]): c.Expr[Term[Y]] = {
 //    import c.universe._
 //    var newBucketFunc = reify(() => {
-//      val newBucket = bucketFunc.splice; println("constructed new bucket: " + newBucket); newBucket
+//      val newBucket = bucketFunc.splice; println("constructed new reduce: " + newBucket); newBucket
 //    })
 //    // TODO: an impl that takes ()=>Bucket
 //    null

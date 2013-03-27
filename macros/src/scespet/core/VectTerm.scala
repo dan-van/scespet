@@ -10,5 +10,5 @@ package scespet.core
 class VectTerm[K,X](val eval:FuncCollector)(input:VectorStream[K,X]) {
   def map[Y](f:X=>Y):VectTerm[K,Y] = ???
   def map[Y <: Reduce[X]](y:Y):VectTerm[K,Y] = ???
-//  def bucket[Y <: Reduce[X]](y:Y, window:Window = null):VectTerm[K,Y] = ???
+//  def reduce[Y <: Reduce[X]](y:Y, window:Window = null):VectTerm[K,Y] = ???
 }

@@ -20,6 +20,10 @@ trait FuncCollector {
  */
 trait HasVal[X] {
   def value:X
+
+  /**
+   * @return the object to listen to in order to receive notifications of <code>value</code> changing
+   */
   def trigger :types.EventGraphObject
 }
 
@@ -33,22 +37,43 @@ trait HasVal[X] {
  * @tparam Y
  */
 trait Func[X,Y] extends HasVal[Y] with MFunc {
+  // TODO: why is source necessary?
   var source:HasVal[X]
   def value:Y
+
+  /**
+   * This needs to be defined to allow someone to listen to me
+   * @return
+   */
   def trigger = this
   def calculate():Boolean
 }
 
-trait BucketBuilder[T] {
+case class Events(n:Int)
+case class Time(n:Int)
+
+trait BucketBuilder[X,T] {
   def each(n:Int):MacroTerm[T]
+
+  def window(windowStream: MacroTerm[Boolean]) :MacroTerm[T]
+
+//  def all():MacroTerm[T]
+//
+//  def window(n:Events):MacroTerm[T]
+//  def window(n:Time):MacroTerm[T]
+//  def window(windowStream:MacroTerm[Boolean]):MacroTerm[T]
+//
+//  // todo: add a parameter for the input stream
+//  def reset_pre(f:T=>Boolean):MacroTerm[T]
+//  def reset_post(f:T=>Boolean):MacroTerm[T]
 }
 
 trait Reduce[X] {
   def add(x:X)
 }
 
-trait BucketTerm {
-  def newBucketBuilder[B](newB:()=>B):BucketBuilder[B]
+trait BucketTerm[X] {
+  def newBucketBuilder[B](newB:()=>B):BucketBuilder[X, B]
 }
 
 

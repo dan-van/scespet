@@ -26,8 +26,8 @@ trait Window {
 //  def by[K](f:X=>K):VectTerm[K,X] = ???
 //  def map[Y](f:X=>Y):Term[Y] = ???
 //  def map[Y <: Reduce[X]](y:Y):Term[Y] = ???
-////  def bucket[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[Term[Y]]
-//  //    def bucket[Y <: Reduce[X]](y:Y, window:Window = null):Term[Y]
+////  def reduce[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[Term[Y]]
+//  //    def reduce[Y <: Reduce[X]](y:Y, window:Window = null):Term[Y]
 //  //    def bucket2[Y <: Reduce[X]](y:Y):BucketBuilder[Term[Y]]
 //}
 
