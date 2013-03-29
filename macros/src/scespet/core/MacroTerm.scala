@@ -11,6 +11,7 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
   import scala.reflect.macros.Context
   import scala.language.experimental.macros
 
+  // this will be a synonym for fold(Y).all
   def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
     val listener = new AbsFunc[X,Y] {
       value = y
@@ -34,11 +35,23 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
     return new MacroTerm[Y](eval)(listener)
   }
 //  override def by[K](f: X => K) : VectTerm[K,X] = macro ByMacro.by[K,X]
+  /**
+   * present this single stream as a vector stream, where f maps value to key
+   * effectively a demultiplex operation
+   * @param f
+   * @tparam K
+   * @return
+   */
   def by[K](f: X => K) : VectTerm[K,X] = {
     val vFunc: GroupFunc[K, X] = new GroupFunc[K, X](input, f, eval.env)
     eval.bind(input.trigger, vFunc)
     return new VectTerm[K, X](eval)(vFunc)
-}
+  }
+
+  def byf[K](newGenerator:(X)=>HasVal[K]) : VectTerm[X,K] = {
+    ???
+//    this.by(x => x).mapk(newGenerator)
+  }
 
   def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
     val listener = new HasVal[(X,Y)] with types.MFunc {

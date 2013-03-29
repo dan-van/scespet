@@ -1,3 +1,4 @@
+/*
 import collection.mutable.ArrayBuffer
 import gsa.esg.mekon.business.id.RIC
 import gsa.esg.mekon.business.price.{Side, Book, RawBook}
@@ -11,7 +12,7 @@ import gsa.esg.mekon.run.TestConfig.Feeds
 import gsa.esg.mekon.run.{CoreServices, TestConfig, Configurator}
 import scespet.core._
 
-
+object TestMekonEval extends App {
 val config = new TestConfig()
 config.setTimeRange("yesterday", Region.EU)
 config.addFeeds("Reuters-EU", Feeds.KEYFRAME)
@@ -57,3 +58,5 @@ class CumuSum extends AbsFunc[Double, Double]{
 run.run()
 
 
+}
+*/

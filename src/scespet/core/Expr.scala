@@ -6,7 +6,7 @@ package scespet.core
 
 import java.util.concurrent.TimeUnit
 import stub.gsa.esg.mekon.core.{Function => MFunc, Environment, EventGraphObject}
-import dan.{VectorCollapse, FunctionVector}
+import dan.{VectorCollapse}
 import collection.mutable
 import stub.gsa.esg.mekon.core
 import VectorStream.ReshapeSignal
@@ -99,7 +99,6 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
    */
   def mapEach[Y](createFunc: (K) => Func[X,Y]): VectorExpr[K, Y] = {
     val funcVector = new BoundFunctionVector[K, X, Func[X,Y], Y](createFunc, source, collector)
-    funcVector.setSource(source)
     return new VectorExpr[K, Y](funcVector)
   }
 
@@ -213,7 +212,17 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
 //  }
 }
 
-class BoundFunctionVector[K,X, F <: Func[X,V], V](val createFunc:(K) => F, val sourceVect:VectorStream[K,X] ,val collector:FuncCollector) extends FunctionVector[K, F, V] {
+/**
+ * I think this is a vector of Reduce operations
+ * @param createFunc
+ * @param sourceVect
+ * @param collector
+ * @tparam K
+ * @tparam X
+ * @tparam F
+ * @tparam V
+ */
+class BoundFunctionVector[K,X, F <: Func[X,V], V](val createFunc:(K) => F, val sourceVect:VectorStream[K,X] ,val collector:FuncCollector) extends ChainedVector[K, F, V](sourceVect, collector.env) {
   def newCell(i: Int, key: K):F = {
     val newInstance = createFunc.apply(key)
     val triggerI = sourceVect.getTrigger(i)
@@ -231,11 +240,6 @@ class BoundFunctionVector[K,X, F <: Func[X,V], V](val createFunc:(K) => F, val s
   def get(i: Int):V = {
     var func = getTrigger(i)
     return func.value
-  }
-
-  override def setSource(source: VectorStream[K, _]) {
-    super.setSource(source)
-    collector.bind(source.getNewColumnTrigger, getNewColumnTrigger)
   }
 }
 

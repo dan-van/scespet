@@ -3,6 +3,8 @@ package scespet.core
 import scespet.core.VectorStream.ReshapeSignal
 
 /**
+ * This takes a Stream and demultiplexes it into a VectorStream using a value -> key function
+ *
  * Created with IntelliJ IDEA.
  * User: danvan
  * Date: 31/01/2013

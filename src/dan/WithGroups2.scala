@@ -3,7 +3,7 @@ import scespet.core._
 import stub.gsa.esg.mekon.core.{Function => MFunc}
 //import scala.language.implicitConversions
 
-
+object WithGroups2 extends App {
 /**
  * Experiments with approaches to getting Select statements
  */
@@ -81,3 +81,4 @@ simple.run()
 //m.getTrades("VOD").map(_.price).map(_ * 100.0).map(x=>println("Price: " + x ))
 //m.getPrices("VOD").map(_.price).map(_ * 100.0).map(x=>println("Price: " + x ))
 //simple.run()
+}

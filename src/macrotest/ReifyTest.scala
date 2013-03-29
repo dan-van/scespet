@@ -10,7 +10,9 @@ import macros.Foo
 import scala.reflect.runtime.{universe => ru}
 import scala.tools.reflect.Eval
 
+object ReifyTest extends App {
 val exp = ru.reify(new Foo("FooBar"))
 val builderExp = ru.reify(() => exp.splice)
 val buildFunc = builderExp.eval
 //scala.reflect.runtime.currentMirror
+}

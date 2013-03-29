@@ -1,7 +1,8 @@
-package dan;
+package scespet.core;
 
 import scespet.core.AbstractVectorStream;
 import scespet.core.VectorStream;
+import stub.gsa.esg.mekon.core.Environment;
 import stub.gsa.esg.mekon.core.Function;
 
 /**
@@ -11,12 +12,15 @@ import stub.gsa.esg.mekon.core.Function;
  * Time: 09:51
  * To change this template use File | Settings | File Templates.
  */
-public abstract class FunctionVector<K, F extends Function, V> extends AbstractVectorStream<K, F, V> {
+public abstract class ChainedVector<K, F extends Function, V> extends AbstractVectorStream<K, F, V> {
 
-    private final ReshapeSignal reshapeSignal;
-    private VectorStream<K, ?> sourceVector;
+    private final VectorStream.ReshapeSignal reshapeSignal;
+    private final VectorStream<K, ?> sourceVector;
+    private final Environment env;
 
-    public FunctionVector() {
+    public ChainedVector(final VectorStream<K, ?> sourceVector, Environment env) {
+        this.sourceVector = sourceVector;
+        this.env = env;
         reshapeSignal = new ReshapeSignal() {
             public boolean calculate() {
                 boolean added = false;
@@ -28,19 +32,17 @@ public abstract class FunctionVector<K, F extends Function, V> extends AbstractV
                 return added;
             }
         };
+        env.addListener(sourceVector.getNewColumnTrigger(), reshapeSignal);
+//        env.fireAfterChangingListeners()
+        env.wakeupThisCycle(reshapeSignal);
+//        reshapeSignal.calculate();
     }
 
     @Override
     public abstract F newCell(int i, K key);
 
-    protected void setSource(VectorStream<K, ?> source) {
-        this.sourceVector = source;
-        // do the initial reshape (could do this as a fireAfterChangingListeners?)
-        reshapeSignal.calculate();
-    }
-
     @Override
-    public ReshapeSignal getNewColumnTrigger() {
+    public VectorStream.ReshapeSignal getNewColumnTrigger() {
         return reshapeSignal;
     }
 }

@@ -8,7 +8,7 @@ import collection.mutable.ArrayBuffer
  * To change this template use File | Settings | File Templates.
  */
 
-
+object NowWithState extends App {
 class Trade(var price:Double, var qty:Double)
 var t:Trade = new Trade(1.2, 100)
 
@@ -103,3 +103,4 @@ tradeSrc.value = new Trade(2.24, 200)
 println( "next val = " + simple.next() )
 // this is typesafe and compiles.
 // next experiment, thread reference fields
+}

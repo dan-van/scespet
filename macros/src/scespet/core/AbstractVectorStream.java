@@ -77,4 +77,17 @@ public abstract class AbstractVectorStream<K, F extends Function, V> implements 
             functions.add(newValue);
         }
     }
+
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder("{");
+        for (int i=0; i<getSize(); i++) {
+            buf.append(getKey(i)).append("=").append(get(i)).append(", ");
+        }
+        if (getSize() > 0) {
+            buf.delete(buf.length() - 2, buf.length());
+        }
+        buf.append("}");
+        return buf.toString();
+    }
 }

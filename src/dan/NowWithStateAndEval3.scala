@@ -2,7 +2,7 @@ import collection.mutable.ArrayBuffer
 import scespet.core._
 import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
 
-
+object NowWithStateAndEval3 extends App {
 /**
  * Experiments with approaches to getting Select statements
  */
@@ -39,3 +39,4 @@ simple.run()
 //m.getTrades("VOD").map(_.price).map(_ * 100.0).map(x=>println("Price: " + x ))
 //m.getPrices("VOD").map(_.price).map(_ * 100.0).map(x=>println("Price: " + x ))
 //simple.run()
+}
