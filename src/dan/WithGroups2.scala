@@ -61,7 +61,7 @@ def printv(x:VectorExpr[_,_]):Unit = {
 }
 
 var simple = new SimpleEvaluator()
-val tradeStream = simple.events(trades)
+val tradeStream = new Expr(simple.addEventSource(new IteratorEvents(trades)))(simple)
 
 //tradeStream.group(_.name).map(_.price).mapv(printv)
 //tradeStream.filter(_.name == "VOD").map(_.qty).reduce(new AvgObj() with Fold[Double]).map(x => println(s"avg Trade = ${x.getAvg}"))

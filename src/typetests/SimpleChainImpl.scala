@@ -17,9 +17,9 @@ import stub.gsa.esg.mekon.core.{Environment, EventGraphObject}
 class SimpleChainImpl {
   val eval: SimpleEvaluator = new SimpleEvaluator
 
-  def query[X](inputData:Seq[X]):MacroTerm[X] = {
-    val eventSource = new IteratorEvents[X](inputData)
-    eval.eventSource = eventSource
+  def query[X](stream: TraversableOnce[X]): MacroTerm[X] = {
+    val eventSource = new IteratorEvents[X](stream)
+    eval.addEventSource(eventSource)
     val initialTerm = new MacroTerm[X](eval)(eventSource)
     return initialTerm
   }

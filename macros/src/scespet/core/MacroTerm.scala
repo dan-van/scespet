@@ -34,6 +34,25 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
     eval.bind(input.trigger, listener)
     return new MacroTerm[Y](eval)(listener)
   }
+
+  def filter(accept: (X) => Boolean):MacroTerm[X] = {
+    class FilteredValue extends UpdatingHasVal[X] {
+      var value = null.asInstanceOf[X]
+
+      def calculate() = {
+        if (accept(input.value)) {
+          value = input.value
+          true
+        } else {
+          false
+        }
+      }
+    }
+    val listener: FilteredValue = new FilteredValue
+    eval.bind(input.trigger, listener)
+    return new MacroTerm[X](eval)(listener)
+  }
+
 //  override def by[K](f: X => K) : VectTerm[K,X] = macro ByMacro.by[K,X]
   /**
    * present this single stream as a vector stream, where f maps value to key

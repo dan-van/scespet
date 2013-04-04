@@ -18,7 +18,7 @@ trait FuncCollector {
  * Something that provides a value (i.e. a source)
  * @tparam X
  */
-trait HasVal[X] {
+trait HasVal[X] extends types.EventGraphObject {
   def value:X
 
   /**
@@ -27,6 +27,28 @@ trait HasVal[X] {
   def trigger :types.EventGraphObject
 }
 
+trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
+  /**
+   * @return the object to listen to in order to receive notifications of <code>value</code> changing
+   */
+  def trigger = this
+}
+
+/**
+ * trivial UpdatingHasVal which needs to be bound to an event source.
+ * on trigger, it will apply function f and store the result
+ * @param initVal
+ * @param f
+ * @tparam Y
+ */
+class Generator[Y](initVal:Y, f:()=>Y) extends UpdatingHasVal[Y] {
+  var value = initVal
+
+  def calculate():Boolean = {
+    value = f()
+    return true
+  }
+}
 /**
  * something that has a source, and is a source (i.e. a pipe)
  * on "calculate", it may take from its source, and update its yielded value
@@ -36,17 +58,11 @@ trait HasVal[X] {
  * @tparam X
  * @tparam Y
  */
-trait Func[X,Y] extends HasVal[Y] with MFunc {
+trait Func[X,Y] extends UpdatingHasVal[Y] {
   // TODO: why is source necessary?
   var source:HasVal[X]
   def value:Y
 
-  /**
-   * This needs to be defined to allow someone to listen to me
-   * @return
-   */
-  def trigger = this
-  def calculate():Boolean
 }
 
 case class Events(n:Int)

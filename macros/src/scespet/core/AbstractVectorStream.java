@@ -1,6 +1,7 @@
 package scespet.core;
 
 import scespet.core.VectorStream;
+import stub.gsa.esg.mekon.core.EventGraphObject;
 import stub.gsa.esg.mekon.core.Function;
 
 import java.util.ArrayList;
@@ -15,7 +16,7 @@ import java.util.Map;
  * Time: 08:31
  * To change this template use File | Settings | File Templates.
  */
-public abstract class AbstractVectorStream<K, F extends Function, V> implements VectorStream<K, V> {
+public abstract class AbstractVectorStream<K, F extends EventGraphObject, V> implements VectorStream<K, V> {
     private Map<K, Integer> indicies = new HashMap<K, Integer>();
     private List<K> keys = new ArrayList<K>();
     private List<F> functions = new ArrayList<F>();

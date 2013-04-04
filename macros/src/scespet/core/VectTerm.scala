@@ -29,60 +29,59 @@ class VectTerm[K,X](val eval:FuncCollector)(input:VectorStream[K,X]) {
    * @return
    */
   def collapse():MacroTerm[VectorStream[K,X]] = {
-    val collapsed = new HasVal[VectorStream[K,X]] with types.MFunc {
-      def value = input
-      def trigger = this
+    val collapsed = new UpdatingHasVal[VectorStream[K,X]] {
+      val value = input
       def calculate() = true
     }
-    // link the 'collapsed' function up so it is added as a listener to every function in the source vector
-    new ChainedVector[K, types.MFunc, types.MFunc](input, eval.env) {
-      def newCell(i: Int, key: K) = {
-        val cellTrigger: EventGraphObject = input.getTrigger(i)
-        eval.bind(cellTrigger, collapsed)
-        collapsed
-      }
-
-      def get(i: Int) = getAt(i)
-    }
-    return new MacroTerm[VectorStream[K,X]](eval)(collapsed)
+    val cellBuilder = (index:Int, key:K) => collapsed
+    // do the normal chained vector wiring, but don't return it
+    newIsomorphicVector(cellBuilder)
+    return new MacroTerm[VectorStream[K, X]](eval)(collapsed)
   }
 
+  class FuncApplyCell[Y](f: X=>Y, index:Int, key:K) extends UpdatingHasVal[Y] {
+    var value = null.asInstanceOf[Y]
+
+    // initialise value
+    calculate()
+
+    def calculate():Boolean = {
+      val x: X = input.get(index)
+      value = f(x)
+      return true
+    }
+  }
 
   def map[Y](f:X=>Y):VectTerm[K,Y] = {
-    class FuncApply(sourceIndex:Int) extends AbsFunc[X,Y] {
-      def calculate():Boolean = {
-        val x: X = input.get(sourceIndex)
-        value = f(x)
-        return true
-      }
+    class MapCell(index:Int) extends UpdatingHasVal[Y] {
+      var value = f(input.get(index))
+      def calculate() = {value = f(input.get(index)); true}
     }
-
-    val output:VectorStream[K, Y] = new ChainedVector[K, Func[X,Y], Y](input, eval.env) {
-      def newCell(i: Int, key: K) :Func[X,Y] = {
-        val cellFunc: FuncApply = new FuncApply(i)
-        val sourceTrigger: EventGraphObject = input.getTrigger(i)
-        eval.bind(sourceTrigger, cellFunc)
-        return cellFunc
-      }
-
-      def get(i: Int) = getAt(i).value
-    }
-    return new VectTerm[K, Y](eval)(output)
+    val cellBuilder = (index:Int, key:K) => new MapCell(index)
+//    val cellBuilder = (index:Int, key:K) => {
+//      val cellUpdateFunc = () => { f(input.get(index)) }
+//      val initial = cellUpdateFunc()
+//      new Generator[Y](initial, cellUpdateFunc)
+//    }
+    return newIsomorphicVector(cellBuilder)
   }
 
   def fold_all_noMacro[Y <: Reduce[X]](reduceBuilder:() => Y):VectTerm[K,Y] = {
-    class FuncApply(sourceIndex:Int) extends AbsFunc[X,Y] {
-      value = reduceBuilder.apply()
+    val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
+      val value = reduceBuilder.apply()
       def calculate():Boolean = {
-        val x: X = input.get(sourceIndex)
+        val x: X = input.get(index)
         value.add(x)
         return true
       }
     }
+    return newIsomorphicVector(cellBuilder)
+  }
 
-    val output:VectorStream[K, Y] = new ChainedVector[K, Func[X,Y], Y](input, eval.env) {
-      def newCell(i: Int, key: K) :Func[X,Y] = {
-        val cellFunc: FuncApply = new FuncApply(i)
+  private def newIsomorphicVector[Y](cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
+    val output: VectorStream[K, Y] = new ChainedVector[K, UpdatingHasVal[Y], Y](input, eval.env) {
+      def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
+        val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
         val sourceTrigger: EventGraphObject = input.getTrigger(i)
         eval.bind(sourceTrigger, cellFunc)
         return cellFunc
@@ -93,6 +92,14 @@ class VectTerm[K,X](val eval:FuncCollector)(input:VectorStream[K,X]) {
     return new VectTerm[K, Y](eval)(output)
   }
 
+
+  def mapk[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
+    val output: VectorStream[K, Y] = new ChainedVector[K, HasVal[Y], Y](input, eval.env) {
+      def newCell(i: Int, key: K): HasVal[Y] = cellFromKey(key)
+      def get(i: Int) = getAt(i).value
+    }
+    return new VectTerm[K, Y](eval)(output)
+  }
 
   //  def reduce[Y <: Reduce[X]](y:Y, window:Window = null):VectTerm[K,Y] = ???
 }
