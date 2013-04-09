@@ -15,9 +15,19 @@ class Sum extends Reduce[Int]{
 
   override def toString = s"Sum=$s"
 }
-class Counter[T <: Any] extends Reduce[T] {
+
+/**
+ * todo: how can we genericise Counter to allow type inference to fill in the type param here?
+ * @tparam T
+ */
+class Counter[T] extends Reduce[T] {
   var c=0
   def add(x: T) { c += 1 }
 
   override def toString = String.valueOf(c)
 }
+
+//object Foo {
+//  val c = new Counter2()
+//  c.add(1)
+//}

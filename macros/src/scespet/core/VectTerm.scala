@@ -9,23 +9,11 @@ import stub.gsa.esg.mekon.core.EventGraphObject
  * Time: 21:10
  * To change this template use File | Settings | File Templates.
  */
-class VectTerm[K,X](val eval:FuncCollector)(input:VectorStream[K,X]) {
-
-//  def mapEach[Y](createFunc: (K) => Func[X,Y]): VectorExpr[K, Y] = {
-//    val funcVector = new BoundFunctionVector[K, X, Func[X,Y], Y](createFunc, source, collector)
-//    funcVector.setSource(source)
-//    return new VectorExpr[K, Y](funcVector)
-//  }
-
-//  def mapf[Y](f:Func[X,Y]): VectorExpr[K, Y] = {
-//    val createFunc: (K) => Func[X,Y] = (_) => {f.getClass.newInstance()}
-//    return mapEach(createFunc)
-//  }
-
+class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) {
   /**
    * demultiplex operation. Want to think more about other facilities on this line
    * how do we really want to do a demean-like operation to a vector?
-   * is it a custom reduction, or is this a good approach
+   * This approach allows us to treat it like a 'reduce' on a stream of vectors, but is that really the best way?
    * @return
    */
   def collapse():MacroTerm[VectorStream[K,X]] = {
@@ -37,19 +25,6 @@ class VectTerm[K,X](val eval:FuncCollector)(input:VectorStream[K,X]) {
     // do the normal chained vector wiring, but don't return it
     newIsomorphicVector(cellBuilder)
     return new MacroTerm[VectorStream[K, X]](eval)(collapsed)
-  }
-
-  class FuncApplyCell[Y](f: X=>Y, index:Int, key:K) extends UpdatingHasVal[Y] {
-    var value = null.asInstanceOf[Y]
-
-    // initialise value
-    calculate()
-
-    def calculate():Boolean = {
-      val x: X = input.get(index)
-      value = f(x)
-      return true
-    }
   }
 
   def map[Y](f:X=>Y):VectTerm[K,Y] = {
@@ -100,6 +75,8 @@ class VectTerm[K,X](val eval:FuncCollector)(input:VectorStream[K,X]) {
     }
     return new VectTerm[K, Y](eval)(output)
   }
+
+  def reduceNoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilderVectImpl[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, eval)
 
   //  def reduce[Y <: Reduce[X]](y:Y, window:Window = null):VectTerm[K,Y] = ???
 }

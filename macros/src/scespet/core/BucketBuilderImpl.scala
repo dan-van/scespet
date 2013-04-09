@@ -8,56 +8,6 @@ package scespet.core
  * To change this template use File | Settings | File Templates.
  */
 class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], eval:FuncCollector) extends BucketBuilder[X, Y] {
-  class WindowMaintainer(val windowStream: MacroTerm[Boolean]) extends HasVal[Y] with types.MFunc {
-    val dataEvents = inputTerm.input
-    eval.env.addListener(dataEvents, this)
-
-    val windowEvents = windowStream.input
-    eval.env.addListener(windowEvents, this)
-
-    var inWindow = windowEvents.value
-
-    var nextReduce : Y = _
-    if (inWindow) nextReduce = newBFunc.apply()
-
-    var completedReduce : Y = _
-
-    def trigger = this
-
-    def value = completedReduce
-
-    def calculate():Boolean = {
-      // add data before window close
-      var fire = false
-
-      var isNowOpen = inWindow
-      if (eval.env.hasChanged(windowEvents)) {
-        isNowOpen = windowEvents.value
-      }
-      if (isNowOpen && !inWindow) {
-        // window started
-        nextReduce = newBFunc.apply()
-        inWindow = true
-      }
-      if (eval.env.hasChanged(dataEvents)) {
-        // note, if the window close coincides with this event, we discard the datapoint
-        // i.e. window close takes precedence
-        if (isNowOpen) {
-          nextReduce.add(dataEvents.value)
-          // TODO: for 'fold' mode, we'd need
-          // if (fireOnEvent) fire = true
-        }
-      }
-      if (inWindow && !isNowOpen) {
-        // window closed. snap the current reduction and get ready for a new one
-        completedReduce = nextReduce
-        nextReduce = null.asInstanceOf[Y]
-        inWindow = false
-        fire = true
-      }
-      return fire
-    }
-  }
 
   def window(windowStream: MacroTerm[Boolean]) :MacroTerm[Y] = {
     // two ways of doing this. Use Mekon primitives, or Reactive
@@ -75,7 +25,7 @@ class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm
 //    }
 //    inputTerm.join(windowStream).reduce()
 //    val bucketMaintainer = new HasVal[Y] with types.MFunc
-return new MacroTerm[Y](eval)(new WindowMaintainer(windowStream))
+return new MacroTerm[Y](eval)(new WindowedReduce[X,Y](inputTerm.input, windowStream.input, newBFunc, eval.env))
 //    ???
   }
 

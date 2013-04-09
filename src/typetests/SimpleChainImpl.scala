@@ -24,6 +24,11 @@ class SimpleChainImpl {
     return initialTerm
   }
 
+  def term[X](hasVal:HasVal[X]) {
+    // the hasVal needs to already be a listener in this graph.
+    return new MacroTerm[X](eval)(hasVal)
+  }
+
   def run() = eval.run()
 }
 

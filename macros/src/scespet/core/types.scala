@@ -84,6 +84,23 @@ trait BucketBuilder[X,T] {
 //  def reset_post(f:T=>Boolean):MacroTerm[T]
 }
 
+trait BucketBuilderVect[X, K, T] {
+  def each(n:Int):VectTerm[K,T]
+
+  /**
+   * window the whole vector by a single bucket stream (e.g. 9:00-17:00 EU)
+   * @param windowStream
+   * @return
+   */
+  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K, T]
+
+  /**
+   * window each element in the vector with the given window function
+   * @return
+   */
+  def window(windowFunc: K => HasVal[Boolean]) :VectTerm[K, T]
+}
+
 trait Reduce[X] {
   def add(x:X)
 }
