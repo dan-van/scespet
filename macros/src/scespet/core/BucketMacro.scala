@@ -32,7 +32,16 @@ object BucketMacro {
     }
   }
 
-//  def bucket3Macro[X : c.WeakTypeTag, Y : c.WeakTypeTag](c: Context{type PrefixType=MacroTerm[X]})(bucketFunc: c.Expr[Y]) :c.Expr[BucketBuilder[Term[Y]]] = {
+  def bucket2MacroVect[K: c.WeakTypeTag, X : c.WeakTypeTag, Y : c.WeakTypeTag](c: Context{type PrefixType=VectTerm[K,X]})(bucketFunc: c.Expr[Y]) :c.Expr[BucketBuilderVect[K,X,Y]] = {
+    import c.universe.reify
+    reify{
+      val newBFunc:()=>Y = () => {bucketFunc.splice}
+      val term:VectTerm[K,X] = c.prefix.splice
+      term.newBucketBuilder[Y](newBFunc)
+    }
+  }
+
+  //  def bucket3Macro[X : c.WeakTypeTag, Y : c.WeakTypeTag](c: Context{type PrefixType=MacroTerm[X]})(bucketFunc: c.Expr[Y]) :c.Expr[BucketBuilder[Term[Y]]] = {
 //    import c.universe._
 //    //    ???
 //    reify{

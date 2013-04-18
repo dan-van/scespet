@@ -1,5 +1,7 @@
 package scespet.core
 
+import stub.gsa.esg.mekon.core.EventGraphObject
+
 /**
  * Created with IntelliJ IDEA.
  * User: danvan
@@ -7,7 +9,7 @@ package scespet.core
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:VectTerm[K, X], eval:FuncCollector) extends BucketBuilderVect[X, K, Y] {
+class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:VectTerm[K, X], eval:FuncCollector) extends BucketBuilderVect[K, X, Y] {
   val inputVectorStream: VectorStream[K, X] = inputTerm.input
 
   def window(windowStream: MacroTerm[Boolean]) :VectTerm[K,Y] = {
@@ -42,7 +44,24 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:Ve
   }
 
   def each(n: Int):VectTerm[K, Y] = {
-    ???
+    val sliceFunc:Int => types.EventGraphObject = index => {
+      val sourceVect = inputTerm.input
+      val cellFiredTrigger: EventGraphObject = sourceVect.getTrigger(index)
+      new NthEvent(n, cellFiredTrigger, eval.env)
+    }
+    val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](inputVectorStream, eval.env) {
+      def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
+        val sourcehasVal = new HasVal[X] {
+          def value: X = inputVectorStream.get(i)
+          def trigger = inputVectorStream.getTrigger(i)
+        }
+        val perCellSliceTrigger :types.EventGraphObject = sliceFunc(i)
+        new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, false, newBFunc, eval.env)
+      }
+
+      def get(i: Int): Y = getAt(i).value
+    }
+    return new VectTerm[K,Y](eval)(chainedVector)
 //    val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
 //      def create(source: HasVal[X], reduce: Y, env:types.Env) = new NthEvent(n, source.trigger, env)
 //    }

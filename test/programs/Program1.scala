@@ -90,7 +90,8 @@ object Program1 extends App {
     def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter[Trade]).map(_.c % 3 != 0).input
     out("by name, window %3 count") {tradeStream.by(_.name).reduceNoMacro(() => {new Counter[Trade]}).window(windows _)}
   }
-//  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
+
+  //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
   //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
   v8

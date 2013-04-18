@@ -84,7 +84,7 @@ trait BucketBuilder[X,T] {
 //  def reset_post(f:T=>Boolean):MacroTerm[T]
 }
 
-trait BucketBuilderVect[X, K, T] {
+trait BucketBuilderVect[K, X, T] {
   def each(n:Int):VectTerm[K,T]
 
   /**
@@ -107,6 +107,10 @@ trait Reduce[X] {
 
 trait BucketTerm[X] {
   def newBucketBuilder[B](newB:()=>B):BucketBuilder[X, B]
+}
+
+trait BucketVectTerm[K,X] {
+  def newBucketBuilder[B](newB:()=>B):BucketBuilderVect[K, X, B]
 }
 
 

@@ -9,7 +9,10 @@ import stub.gsa.esg.mekon.core.EventGraphObject
  * Time: 21:10
  * To change this template use File | Settings | File Templates.
  */
-class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) {
+class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) extends BucketVectTerm[K,X] {
+  import scala.reflect.macros.Context
+  import scala.language.experimental.macros
+
   /**
    * demultiplex operation. Want to think more about other facilities on this line
    * how do we really want to do a demean-like operation to a vector?
@@ -76,7 +79,18 @@ class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) {
     return new VectTerm[K, Y](eval)(output)
   }
 
-  def reduceNoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilderVectImpl[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, eval)
+  def reduceNoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, eval)
 
-  //  def reduce[Y <: Reduce[X]](y:Y, window:Window = null):VectTerm[K,Y] = ???
+  def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
+
+  def newBucketBuilder[B](newB: () => B): BucketBuilderVect[K, X, B] = {
+    type Y = B with Reduce[X]
+    val reduceGenerator: ()=>Y = newB.asInstanceOf[() => Y]
+    //    val reduceGenerator = newB
+    var aY = reduceGenerator.apply()
+    println("Reducer in VectTerm generates "+aY)
+    //    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
+    return new BucketBuilderVectImpl[K, X, Y](reduceGenerator, new VectTerm[K, X](eval)(input), eval).asInstanceOf[BucketBuilderVect[K, X, B]]
+  }
+
 }
