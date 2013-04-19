@@ -9,8 +9,8 @@ import scespet.core.{VectTerm, MacroTerm}
  */
 package object programs {
   class TermPrint(val prefix:String) {
-    def apply(term:MacroTerm[_]):Unit = term.map(x => println(prefix + String.valueOf(x)))
-    def apply(term:VectTerm[_,_]):Unit = term.collapse().map(x => println(prefix + String.valueOf(x)))
+    def apply[X](term:MacroTerm[X]) :MacroTerm[X] = { term.map(x => println(prefix + String.valueOf(x))); term }
+    def apply[K,X](term:VectTerm[K,X]):VectTerm[K,X] = { term.collapse().map(x => println(prefix + String.valueOf(x))); term }
   }
   def out(prefix:String):TermPrint = new TermPrint(prefix)
 

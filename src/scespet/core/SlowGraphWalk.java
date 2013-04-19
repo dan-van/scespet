@@ -14,7 +14,7 @@ import java.util.*;
  */
 public class SlowGraphWalk {
 
-    private class Node {
+    public class Node {
         private int lastFired = -1;
         private Set<Node> in = new HashSet<Node>(2);
         private Set<Node> out = new HashSet<Node>(2);
@@ -23,6 +23,18 @@ public class SlowGraphWalk {
 
         private Node(EventGraphObject graphObject) {
             this.graphObject = graphObject;
+        }
+
+        public EventGraphObject getGraphObject() {
+            return graphObject;
+        }
+
+        public Collection<EventGraphObject> getListeners() {
+            ArrayList<EventGraphObject> list = new ArrayList<EventGraphObject>();
+            for (Node node : out) {
+                list.add(node.getGraphObject());
+            }
+            return list;
         }
 
         public void addIn(Node sourceNode) {
@@ -79,6 +91,25 @@ public class SlowGraphWalk {
     });
     private IdentityHashMap<EventGraphObject, Node> nodes = new IdentityHashMap<EventGraphObject, Node>();
     private int cycleCount = -1;
+
+    public Collection<Node> getAllNodes() {
+        Set<Node> allNodes = new HashSet<Node>();
+        for (Node node : nodes.values()) {
+            addToNodeSet(allNodes, node);
+        }
+        return allNodes;
+    }
+
+    private void addToNodeSet(Set<Node> allNodes, Node node) {
+        if (allNodes.add(node)) {
+            for (Node inNode : node.in) {
+                addToNodeSet(allNodes, inNode);
+            }
+            for (Node outNode : node.out) {
+                addToNodeSet(allNodes, outNode);
+            }
+        }
+    }
 
     public void addTrigger(EventGraphObject source, Function target) {
         Node sourceNode = getNode(source);
