@@ -3,6 +3,7 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core._
 import typetests.{SimpleChainImpl}
+import scespet.TermBuilder
 
 /**
 * Created with IntelliJ IDEA.
@@ -66,9 +67,19 @@ object Program1 extends App {
     val nameVectTakeTrades: VectTerm[String, Trade] = namesExpr.by(x => x).mapk(k => getTrades(k).input)
     out("name to trade") {nameVectTakeTrades}
   }
+
+  def testTransport = {
+
+    var myProgrm = out(".N names:"){ new TermBuilder().query(names).filter(_.endsWith(".N")) }.eval.asInstanceOf[TermBuilder]
+
+    val newProg = new SimpleEvaluator()
+    myProgrm.copyInto(newProg)
+
+    newProg.run()
+  }
 //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
   //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
-  v6
+  testTransport
   impl.run
 }
