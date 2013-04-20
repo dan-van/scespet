@@ -7,17 +7,20 @@ import scala.collection.JavaConverters._
 import scespet.core.types
 
 /**
- * @author: danvan
  * @version $Id$
  */
 class TermBuilder extends FuncCollector with types.Env {
-  val roots = ArrayBuffer[types.EventGraphObject]()
+  val roots = ArrayBuffer[Root[_]]()
   val graph = new SlowGraphWalk
 
   def query[X](stream: TraversableOnce[X]): MacroTerm[X] = {
-    val eventSource = new IteratorEvents[X](stream)
-    roots.append( eventSource )
-    val initialTerm = new MacroTerm[X](this)(eventSource)
+    var root = new Root( _ => new IteratorEvents[X](stream) )
+    return addRoot(root)
+  }
+
+  def addRoot[X](root: Root[X]): MacroTerm[X] = {
+    roots.append(root)
+    val initialTerm = new MacroTerm[X](this)(root)
     return initialTerm
   }
 
@@ -37,6 +40,9 @@ class TermBuilder extends FuncCollector with types.Env {
   def wakeupThisCycle(target: Function) {???}
 
   def copyInto(other:FuncCollector) {
+    for (root <- roots) {
+      other.addRoot(root)
+    }
     for (node <- graph.getAllNodes.asScala; listener <- node.getListeners.asScala) {
       other.env.addListener(node.getGraphObject, listener)
     }

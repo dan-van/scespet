@@ -16,4 +16,6 @@ class MekonEval(val env: Environment) extends FuncCollector {
   def stream[X](x:X) :Expr[X] = {
     new Expr[X](new IsVal[X](x))(this)
   }
+
+  def addRoot[X](root: Root[X]): MacroTerm[X] = ???
 }

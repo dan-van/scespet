@@ -16,38 +16,52 @@ class SimpleEvaluator() extends FuncCollector {
 
   val graph = new SlowGraphWalk
 
-  var eventSources = mutable.Buffer[EventSource[_]]()
+  val eventSources = mutable.Set[EventSource[_]]()
+  val eventSourceQueue = mutable.Buffer[EventSource[_]]()
 
   def addEventSource[X](events: EventSource[X]) :EventSource[X] = {
-    if (events.hasNext()) {
-      eventSources += events
-    } else {
-      println("Empty event source added")
+    if (eventSources.add(events)) {
+      if (events.hasNext()) {
+        eventSourceQueue += events
+      } else {
+        println("Empty event source added")
+      }
     }
     events
+  }
+
+
+  def addRoot[X](root: Root[X]): MacroTerm[X] = {
+    root.init(env)
+//    val trigger: _root_.scespet.core.types.EventGraphObject = root.trigger
+//    addEventSource(trigger.asInstanceOf[EventSource[_]])
+    return new MacroTerm[X](this)(root)
   }
 
   def run() {run(1000)}
 
   def run(n:Int) {
     val stopAt = eventI + n
-    while (! eventSources.isEmpty && eventI < stopAt) {
+    while (! eventSourceQueue.isEmpty && eventI < stopAt) {
       eventI += 1
-      val nextSource = eventSources(eventSourceIdx)
-      println(s"\nFiring event $eventI from $nextSource");
+      val nextSource = eventSourceQueue(eventSourceIdx)
+      println(s"\nFiring event $eventI from $nextSource, hasNext= ${nextSource.hasNext()}");
       nextSource.advance()
       graph.fire(nextSource)
       if (!nextSource.hasNext()) {
-        eventSources.remove(eventSourceIdx)
+        eventSourceQueue.remove(eventSourceIdx)
       } else {
         eventSourceIdx += 1
       }
-      if (eventSourceIdx >= eventSources.length) eventSourceIdx = 0
+      if (eventSourceIdx >= eventSourceQueue.length) eventSourceIdx = 0
     }
   }
 
   def bind(src: EventGraphObject, sink: MFunc) {
 //    println("bound "+src+" -> "+sink)
+    if (src.isInstanceOf[scespet.core.EventSource[_]]) {
+      addEventSource(src.asInstanceOf[scespet.core.EventSource[_]])
+    }
     graph.addTrigger(src, sink)
   }
 
@@ -57,6 +71,10 @@ class SimpleEvaluator() extends FuncCollector {
     }
 
     def addListener[T](source: Any, sink: EventGraphObject) {
+      if (source.isInstanceOf[scespet.core.EventSource[_]]) {
+        addEventSource(source.asInstanceOf[scespet.core.EventSource[_]])
+      }
+
       graph.addTrigger(source.asInstanceOf[EventGraphObject], sink.asInstanceOf[MFunc])
     }
 

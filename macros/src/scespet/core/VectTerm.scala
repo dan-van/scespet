@@ -79,7 +79,7 @@ class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) extends
     return new VectTerm[K, Y](eval)(output)
   }
 
-  def reduceNoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, eval)
+  def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, eval)
 
   def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
 

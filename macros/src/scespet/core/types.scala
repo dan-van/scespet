@@ -9,7 +9,27 @@ package object types {
   type MFunc = stub.gsa.esg.mekon.core.Function
 }
 
+/**
+ * used to wrap a builder on 'HasVal' to allow FuncCollector to install roots into different environments
+ * @param builder
+ * @tparam X
+ */
+class Root[X](builder :types.Env => HasVal[X]) extends UpdatingHasVal[X] {
+  var delegate :HasVal[X] = _
+
+  def init(newEnv :types.Env) = {
+    delegate = builder(newEnv)
+    // downstream listeners are assuming I will fire when I have a new value.
+    // to make this happen, we need to bind up a listener to our true underlier
+    newEnv.addListener(delegate.trigger, this)
+  }
+  def value: X = delegate.value
+
+  def calculate(): Boolean = true
+}
+
 trait FuncCollector {
+  def addRoot[X](root:Root[X]) :MacroTerm[X]
   def bind(src:types.EventGraphObject, sink:types.MFunc)
   def env:types.Env
 }
@@ -101,7 +121,7 @@ trait BucketBuilderVect[K, X, T] {
   def window(windowFunc: K => HasVal[Boolean]) :VectTerm[K, T]
 }
 
-trait Reduce[X] {
+trait Reduce[-X] {
   def add(x:X)
 }
 

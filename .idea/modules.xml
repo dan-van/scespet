@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/Scespet.iml" filepath="$PROJECT_DIR$/Scespet.iml" />
       <module fileurl="file://$PROJECT_DIR$/macros/macros.iml" filepath="$PROJECT_DIR$/macros/macros.iml" />
+      <module fileurl="file://$PROJECT_DIR$/stubs/stubs.iml" filepath="$PROJECT_DIR$/stubs/stubs.iml" />
     </modules>
   </component>
 </project>
