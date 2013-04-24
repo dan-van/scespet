@@ -125,7 +125,12 @@ trait Reduce[-X] {
   def add(x:X)
 }
 
-trait BucketTerm[X] {
+trait Term[+X] {
+  def map[Y](f: (X) => Y):Term[Y]
+  def filter(accept: (X) => Boolean):Term[X]
+}
+
+trait BucketTerm[X] extends Term[X] {
   def newBucketBuilder[B](newB:()=>B):BucketBuilder[X, B]
 }
 

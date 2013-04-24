@@ -36,7 +36,7 @@ object TradesExample extends App {
   val impl: SimpleChainImpl = new SimpleChainImpl()
   var tradeExpr: MacroTerm[Trade] = impl.query(trades).asInstanceOf[MacroTerm[Trade]]
 
-  def output(prefix:String)(term:MacroTerm[_]) = term.map(x => println(prefix + String.valueOf(x)))
+  def output[X](prefix:String)(term:MacroTerm[X]) = term.map(x => println(prefix + String.valueOf(x)))
 
   def v1 = {
     tradeExpr map {_.qty} fold_all (new Sum) map { println(_) }
