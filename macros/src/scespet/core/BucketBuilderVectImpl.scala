@@ -1,6 +1,6 @@
 package scespet.core
 
-import stub.gsa.esg.mekon.core.EventGraphObject
+import gsa.esg.mekon.core.EventGraphObject
 
 /**
  * Created with IntelliJ IDEA.

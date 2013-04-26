@@ -1,9 +1,9 @@
 package scespet.core
 
 import collection.mutable.ArrayBuffer
-import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc, Environment}
-import stub.gsa.esg.mekon.core
+import gsa.esg.mekon.core.{EventGraphObject, Function => MFunc, Environment}
 import collection.mutable
+import scespet.expression.CollectingTerm
 
 
 /**
@@ -29,6 +29,16 @@ class SimpleEvaluator() extends FuncCollector {
     }
     events
   }
+
+  def addExpression[X](data: TraversableOnce[X], term: CollectingTerm[X]) = {
+    var events = new IteratorEvents[X](data)
+    addEventSource(events)
+    var root = new MacroTerm[X](this)(events)
+    CollectingTerm.applyTree(term, root)
+    SimpleEvaluator.this
+  }
+
+
 
 
   def addRoot[X](root: Root[X]): MacroTerm[X] = {
@@ -66,7 +76,7 @@ class SimpleEvaluator() extends FuncCollector {
   }
 
   val env = new Environment {
-    def wakeupThisCycle(target: core.Function) {
+    def wakeupThisCycle(target: MFunc) {
       graph.wakeup(target)
     }
 

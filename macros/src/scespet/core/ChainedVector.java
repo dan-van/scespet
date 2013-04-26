@@ -1,10 +1,7 @@
 package scespet.core;
 
-import scespet.core.AbstractVectorStream;
-import scespet.core.VectorStream;
-import stub.gsa.esg.mekon.core.Environment;
-import stub.gsa.esg.mekon.core.EventGraphObject;
-import stub.gsa.esg.mekon.core.Function;
+import gsa.esg.mekon.core.Environment;
+import gsa.esg.mekon.core.EventGraphObject;
 
 /**
  * Created with IntelliJ IDEA.

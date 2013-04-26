@@ -6,7 +6,7 @@ package scespet.core2.core
 
 import scala.reflect.runtime.universe._
 import reflect.ClassTag
-import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
+import gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
 import reflect.api.Exprs
 
 /**

@@ -1,6 +1,6 @@
 import collection.mutable.ArrayBuffer
 import scespet.core._
-import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
+import gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
 
 object NowWithStateAndEval3 extends App {
 /**

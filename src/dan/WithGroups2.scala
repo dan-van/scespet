@@ -1,6 +1,6 @@
 import collection.mutable.ArrayBuffer
 import scespet.core._
-import stub.gsa.esg.mekon.core.{Function => MFunc}
+import gsa.esg.mekon.core.{Function => MFunc}
 //import scala.language.implicitConversions
 
 object WithGroups2 extends App {

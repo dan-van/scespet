@@ -4,6 +4,8 @@ import collection.mutable.ArrayBuffer
 import scespet.core._
 import typetests.SimpleChainImpl
 import scespet.TermBuilder
+import scespet.util._
+
 
 /**
 * Created with IntelliJ IDEA.
@@ -60,12 +62,12 @@ object TestSingleTerms extends App {
   }
 
   def remoteRun = {
-    var myProgrm = out(".N names:"){ new TermBuilder().query(names).filter(_.endsWith(".N")) }.eval.asInstanceOf[TermBuilder]
-
-    val newProg = new SimpleEvaluator()
-    myProgrm.copyInto(newProg)
-
-    newProg.run()
+//    var myProgrm = out(".N names:"){ new TermBuilder().query(names).filter(_.endsWith(".N")) }.eval.asInstanceOf[TermBuilder]
+//
+//    val newProg = new SimpleEvaluator()
+//    myProgrm.copyInto(newProg)
+//
+//    newProg.run()
   }
   //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}

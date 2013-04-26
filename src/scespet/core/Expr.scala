@@ -5,10 +5,10 @@ package scespet.core
  */
 
 import java.util.concurrent.TimeUnit
-import stub.gsa.esg.mekon.core.{Function => MFunc, Environment, EventGraphObject}
+import gsa.esg.mekon.core.{Function => MFunc, Environment, EventGraphObject}
 import dan.{VectorCollapse}
 import collection.mutable
-import stub.gsa.esg.mekon.core
+import gsa.esg.mekon.core
 import VectorStream.ReshapeSignal
 import reflect.ClassTag
 import scespet.core.AbsFunc

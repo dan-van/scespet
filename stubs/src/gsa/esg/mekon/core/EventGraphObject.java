@@ -1,4 +1,4 @@
-package stub.gsa.esg.mekon.core;
+package gsa.esg.mekon.core;
 
 /**
  * todo: could this be renamed as GraphListenable ?

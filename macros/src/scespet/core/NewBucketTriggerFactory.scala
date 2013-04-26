@@ -1,6 +1,6 @@
 package scespet.core
 
-import stub.gsa.esg.mekon.core.{EventGraphObject, Environment}
+import gsa.esg.mekon.core.{EventGraphObject, Environment}
 
 /**
  *

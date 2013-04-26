@@ -3,6 +3,8 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core._
 import typetests.SimpleChainImpl
+import scespet.util._
+
 
 /**
  * test Macro implementation

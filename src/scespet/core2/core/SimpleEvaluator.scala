@@ -1,7 +1,7 @@
 package scespet.core2.core
 
 import collection.mutable.ArrayBuffer
-import stub.gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
+import gsa.esg.mekon.core.{EventGraphObject, Function => MFunc}
 
 /**
  * @author: danvan

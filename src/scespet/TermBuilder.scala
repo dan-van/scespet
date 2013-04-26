@@ -1,7 +1,7 @@
 package scespet
 
 import scespet.core._
-import stub.gsa.esg.mekon.core.{Function, EventGraphObject}
+import gsa.esg.mekon.core.{Function, EventGraphObject}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 import scespet.core.types

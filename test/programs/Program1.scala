@@ -3,7 +3,7 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core._
 import typetests.{SimpleChainImpl}
-import scespet.TermBuilder
+import scespet.util._
 
 /**
 * Created with IntelliJ IDEA.

@@ -1,6 +1,6 @@
 package scespet.core
 
-import stub.gsa.esg.mekon.core.{EventGraphObject, Environment}
+import gsa.esg.mekon.core.{EventGraphObject, Environment}
 
 /**
  * This uses a source of data: input, aggregates events into buckets, and provides those buckets as a stream.

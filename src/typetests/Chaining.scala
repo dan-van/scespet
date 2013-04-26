@@ -1,7 +1,7 @@
 package typetests
 
 import scespet.core._
-import stub.gsa.esg.mekon.core.{Environment, EventGraphObject, Function => MFunc}
+import gsa.esg.mekon.core.{Environment, EventGraphObject, Function => MFunc}
 
 /**
  * Created with IntelliJ IDEA.

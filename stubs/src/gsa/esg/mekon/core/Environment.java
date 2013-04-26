@@ -1,6 +1,4 @@
-package stub.gsa.esg.mekon.core;
-
-import com.sun.org.apache.xml.internal.utils.ObjectVector;
+package gsa.esg.mekon.core;
 
 /**
  * Created with IntelliJ IDEA.

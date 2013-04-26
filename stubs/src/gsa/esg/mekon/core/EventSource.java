@@ -1,4 +1,4 @@
-package stub.gsa.esg.mekon.core;
+package gsa.esg.mekon.core;
 
 /**
  * A common interface to anything that can provide time cursored sets of data.

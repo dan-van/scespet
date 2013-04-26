@@ -1,10 +1,12 @@
 package scespet
 
 import scespet.core._
-import stub.gsa.esg.mekon.core.{Function, EventGraphObject}
+import gsa.esg.mekon.core.{Function, EventGraphObject}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 import scespet.core.types
+import scespet.util._
+
 
 /**
  * This is an attempt to more closely capture the high-level expression graph
@@ -34,7 +36,18 @@ package expression {
     def filter(accept: (X) => Boolean): Term[X] = new FilterTerm[X](this, accept)
   }
 
-  class CollectingTerm[X : reflect.ClassTag] extends AbsTerm[X, X](source = null) {
+  object CollectingTerm {
+    def applyTree[X](node:AbsTerm[_, X], copyTerm:Term[X]) {
+      type Y = Any
+      for (nodeChild <- node.children) {
+        val typedNodeChild = nodeChild.asInstanceOf[AbsTerm[X,Y]]
+        val copyChild: Term[Y] = typedNodeChild.applyTo(copyTerm)
+        applyTree[Y](typedNodeChild, copyChild)
+      }
+    }
+  }
+
+  class CollectingTerm[X] extends AbsTerm[X, X](source = null) {
     def applyTo(term: Term[X]): Term[X] = term
   }
 
@@ -50,47 +63,19 @@ package expression {
     }
   }
 
-
   // ---- executing term ----
-  class StopTerm[X]() extends Term[X] {
-    def map[Y](f: (X) => Y): Term[Y] = new StopTerm[Y]
-
-    def filter(accept: (X) => Boolean): Term[X] = this
-  }
-
-  class ExecutingTerm[X](x:X) extends Term[X] {
-    def map[Y](f: (X) => Y): Term[Y] = {
-      val y = f(x)
-      println(s".map($f) = $y")
-      new ExecutingTerm[Y](y)
-    }
-
-    def filter(accept: (X) => Boolean): Term[X] = {
-      val continue = accept(x)
-      println(s".filter($accept) = $continue")
-      if (continue) {
-        new ExecutingTerm[X](x)
-      } else {
-        println("STOP")
-        new StopTerm[X]
-      }
-    }
-  }
 
   object Test extends App {
+    // termCollector should know the type of its root nodes.
+    // this allows specific builders to know if they can build from a given collector
     var root = new CollectingTerm[String]()
-    var term = root.map(_.length).filter(_ > 3)
+    out("is > 3 chars: ") {root.map(_.length).filter(_ > 3)}
 
-    var newRoot = new ExecutingTerm[String]("Hello")
-    applyTree[String](root, newRoot)
+//    collector.installTo( new ExprPrinter( x => "Hello") )
+//    new ExprPrinter().executeTree("Hello", root)
+//    new ExprPrinter().start("Hello").map(_.length)
 
-    def applyTree[X](node:AbsTerm[_, X], copyTerm:Term[X]) {
-      type Y = Any
-      for (nodeChild <- node.children) {
-        val typedNodeChild = nodeChild.asInstanceOf[AbsTerm[X,Y]]
-        val copyChild: Term[Y] = typedNodeChild.applyTo(copyTerm)
-        applyTree[Y](typedNodeChild, copyChild)
-      }
-    }
+    new SimpleEvaluator().addExpression(Seq("Hello", "there", "dan"), root).run()
+
   }
 }

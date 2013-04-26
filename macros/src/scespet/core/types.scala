@@ -1,12 +1,12 @@
 package scespet.core
 
 import reflect.macros.Context
-import stub.gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
+import gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
 
 package object types {
-  type Env = stub.gsa.esg.mekon.core.Environment
-  type EventGraphObject = stub.gsa.esg.mekon.core.EventGraphObject
-  type MFunc = stub.gsa.esg.mekon.core.Function
+  type Env = gsa.esg.mekon.core.Environment
+  type EventGraphObject = gsa.esg.mekon.core.EventGraphObject
+  type MFunc = gsa.esg.mekon.core.Function
 }
 
 /**

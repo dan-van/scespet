@@ -4,7 +4,7 @@ import scala.reflect.runtime.{universe => ru}
 import reflect.ClassTag
 import scespet.core._
 import reflect.macros.Context
-import stub.gsa.esg.mekon.core.{Environment, EventGraphObject}
+import gsa.esg.mekon.core.{Environment, EventGraphObject}
 
 /**
  * Created with IntelliJ IDEA.
