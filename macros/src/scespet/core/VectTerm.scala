@@ -9,7 +9,7 @@ import gsa.esg.mekon.core.EventGraphObject
  * Time: 21:10
  * To change this template use File | Settings | File Templates.
  */
-class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) extends BucketVectTerm[K,X] {
+class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends BucketVectTerm[K,X] {
   import scala.reflect.macros.Context
   import scala.language.experimental.macros
 
@@ -27,7 +27,7 @@ class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) extends
     val cellBuilder = (index:Int, key:K) => collapsed
     // do the normal chained vector wiring, but don't return it
     newIsomorphicVector(cellBuilder)
-    return new MacroTerm[VectorStream[K, X]](eval)(collapsed)
+    return new MacroTerm[VectorStream[K, X]](env)(collapsed)
   }
 
   def map[Y](f:X=>Y):VectTerm[K,Y] = {
@@ -57,29 +57,29 @@ class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) extends
   }
 
   private def newIsomorphicVector[Y](cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
-    val output: VectorStream[K, Y] = new ChainedVector[K, UpdatingHasVal[Y], Y](input, eval.env) {
+    val output: VectorStream[K, Y] = new ChainedVector[K, UpdatingHasVal[Y], Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
         val sourceTrigger: EventGraphObject = input.getTrigger(i)
-        eval.bind(sourceTrigger, cellFunc)
+        env.addListener(sourceTrigger, cellFunc)
         return cellFunc
       }
 
       def get(i: Int) = getAt(i).value
     }
-    return new VectTerm[K, Y](eval)(output)
+    return new VectTerm[K, Y](env)(output)
   }
 
 
   def mapk[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
-    val output: VectorStream[K, Y] = new ChainedVector[K, HasVal[Y], Y](input, eval.env) {
+    val output: VectorStream[K, Y] = new ChainedVector[K, HasVal[Y], Y](input, env) {
       def newCell(i: Int, key: K): HasVal[Y] = cellFromKey(key)
       def get(i: Int) = getAt(i).value
     }
-    return new VectTerm[K, Y](eval)(output)
+    return new VectTerm[K, Y](env)(output)
   }
 
-  def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, eval)
+  def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
 
   def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
 
@@ -90,7 +90,7 @@ class VectTerm[K,X](val eval:FuncCollector)(val input:VectorStream[K,X]) extends
     var aY = reduceGenerator.apply()
     println("Reducer in VectTerm generates "+aY)
     //    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    return new BucketBuilderVectImpl[K, X, Y](reduceGenerator, new VectTerm[K, X](eval)(input), eval).asInstanceOf[BucketBuilderVect[K, X, B]]
+    return new BucketBuilderVectImpl[K, X, Y](reduceGenerator, new VectTerm[K, X](env)(input), env).asInstanceOf[BucketBuilderVect[K, X, B]]
   }
 
 }

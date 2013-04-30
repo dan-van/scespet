@@ -1,8 +1,7 @@
 package programs
 
 import collection.mutable.ArrayBuffer
-import scespet.core.{MacroTerm, Reduce}
-import typetests.SimpleChainImpl
+import scespet.core.{SimpleEvaluator, IteratorEvents, MacroTerm, Reduce}
 import scespet.util._
 
 
@@ -15,17 +14,18 @@ import scespet.util._
 */
 object TradesExample extends App {
   case class Trade(name:String, price:Double, qty:Int)
-  var trades = new ArrayBuffer[Trade]()
-  trades += new Trade("VOD", 1.12, 1)
-  trades += new Trade("VOD", 2.12, 10)
-  trades += new Trade("MSFT", 3.12, 2)
-  trades += new Trade("VOD", 4.12, 100)
-  trades += new Trade("MSFT", 5.12, 20)
-  trades += new Trade("VOD", 6.12, 1000)
-  trades += new Trade("MSFT", 7.12, 200)
-  trades += new Trade("VOD", 8.12, 10000)
-  trades += new Trade("MSFT", 9.12, 2000)
+  var tradeList = new ArrayBuffer[Trade]()
+  tradeList += new Trade("VOD", 1.12, 1)
+  tradeList += new Trade("VOD", 2.12, 10)
+  tradeList += new Trade("MSFT", 3.12, 2)
+  tradeList += new Trade("VOD", 4.12, 100)
+  tradeList += new Trade("MSFT", 5.12, 20)
+  tradeList += new Trade("VOD", 6.12, 1000)
+  tradeList += new Trade("MSFT", 7.12, 200)
+  tradeList += new Trade("VOD", 8.12, 10000)
+  tradeList += new Trade("MSFT", 9.12, 2000)
 
+  var trades = IteratorEvents(tradeList)
 
   class TradePrint extends Reduce[Trade]{
     var accVol = 0
@@ -35,7 +35,7 @@ object TradesExample extends App {
   }
 
 
-  val impl: SimpleChainImpl = new SimpleChainImpl()
+  val impl: SimpleEvaluator = new SimpleEvaluator()
   var tradeExpr: MacroTerm[Trade] = impl.query(trades).asInstanceOf[MacroTerm[Trade]]
 
   def v1 = {

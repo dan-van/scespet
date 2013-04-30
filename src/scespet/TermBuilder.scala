@@ -1,7 +1,7 @@
 package scespet
 
 import scespet.core._
-import gsa.esg.mekon.core.{Function, EventGraphObject}
+import gsa.esg.mekon.core.{EventSource, Function, EventGraphObject}
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 import scespet.core.types
@@ -9,12 +9,12 @@ import scespet.core.types
 /**
  * @version $Id$
  */
-class TermBuilder extends FuncCollector with types.Env {
+class TermBuilder extends types.Env {
   val roots = ArrayBuffer[Root[_]]()
   val graph = new SlowGraphWalk
 
   def query[X](stream: TraversableOnce[X]): MacroTerm[X] = {
-    var root = new Root( _ => new IteratorEvents[X](stream) )
+    var root = new Root( _ => IteratorEvents[X](stream) )
     return addRoot(root)
   }
 
@@ -48,5 +48,7 @@ class TermBuilder extends FuncCollector with types.Env {
     }
   }
 
-  def env = this
+  def addEventSource(source: EventSource) = ???
+
+  def setStickyInGraph(source: EventGraphObject, sticky: Boolean) = ???
 }

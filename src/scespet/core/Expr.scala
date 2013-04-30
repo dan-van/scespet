@@ -11,7 +11,6 @@ import collection.mutable
 import gsa.esg.mekon.core
 import VectorStream.ReshapeSignal
 import reflect.ClassTag
-import scespet.core.AbsFunc
 
 
 
@@ -30,12 +29,12 @@ trait Fold[X] {def add(x:X):Unit}
  * @param collector
  * @tparam X
  */
-class Expr[X](val source:HasVal[X])(implicit collector:FuncCollector) {
+class Expr[X](val source:HasVal[X])(implicit collector:types.Env) {
 //  implicit def selectToFunc[Y <: Select[X]](select:Y) = {new SelectFunc[X,Y](select)}
 
   def map[Y](f:Func[X,Y]):Expr[Y] = {
     f.source = source
-    collector.bind(source.trigger, f)
+    collector.addListener(source.trigger, f)
     return new Expr[Y](f)
   }
 
@@ -80,8 +79,8 @@ class Expr[X](val source:HasVal[X])(implicit collector:FuncCollector) {
   def foreach(f:X => Unit) = map(new AnonFunc(f))
 
   def group[Y](f:X => Y):VectorExpr[Y, X] = {
-    val vFunc: GroupFunc[Y, X] = new GroupFunc[Y, X](source, f, collector.env)
-    collector.bind(source.trigger, vFunc)
+    val vFunc: GroupFunc[Y, X] = new GroupFunc[Y, X](source, f, collector)
+    collector.addListener(source.trigger, vFunc)
     return new VectorExpr[Y, X](vFunc)
   }
 
@@ -89,7 +88,7 @@ class Expr[X](val source:HasVal[X])(implicit collector:FuncCollector) {
 
 // ------- now the vector stuff ------------
 
-class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollector){
+class VectorExpr[K,X]( source:VectorStream[K,X])(implicit env:types.Env){
   /**
    * generate a new derived vector, that uses "createFunc" to generate new vector cells.
    * BoundFunctionVector manages this, and we chain it up to this current expression's vector
@@ -98,7 +97,7 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
    * @return
    */
   def mapEach[Y](createFunc: (K) => Func[X,Y]): VectorExpr[K, Y] = {
-    val funcVector = new BoundFunctionVector[K, X, Func[X,Y], Y](createFunc, source, collector)
+    val funcVector = new BoundFunctionVector[K, X, Func[X,Y], Y](createFunc, source, env)
     return new VectorExpr[K, Y](funcVector)
   }
 
@@ -151,7 +150,7 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
       // note, no trigger
       override def toString = "Vector source for collapse: "+source
     }
-    new VectorCollapse(source, func, collector.env)
+    new VectorCollapse(source, func, env)
 
     // this presents those changing Y values and the associated listenable
     val ySource = new HasVal[Y] {
@@ -181,7 +180,7 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
       // note, no trigger
       override def toString = "Vector source for collapse: "+source
     }
-    new VectorCollapse(source, func, collector.env)
+    new VectorCollapse(source, func, env)
 
     // this presents those changing Y values and the associated listenable
     val ySource = new HasVal[Y] {
@@ -222,11 +221,11 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit collector:FuncCollecto
  * @tparam F
  * @tparam V
  */
-class BoundFunctionVector[K,X, F <: Func[X,V], V](val createFunc:(K) => F, val sourceVect:VectorStream[K,X] ,val collector:FuncCollector) extends ChainedVector[K, F, V](sourceVect, collector.env) {
+class BoundFunctionVector[K,X, F <: Func[X,V], V](val createFunc:(K) => F, val sourceVect:VectorStream[K,X] ,val env:types.Env) extends ChainedVector[K, F, V](sourceVect, env) {
   def newCell(i: Int, key: K):F = {
     val newInstance = createFunc.apply(key)
     val triggerI = sourceVect.getTrigger(i)
-    collector.bind(triggerI, newInstance)
+    env.addListener(triggerI, newInstance)
     newInstance.source = new HasVal[X](){
       def value = sourceVect.get(i)
       def trigger = triggerI

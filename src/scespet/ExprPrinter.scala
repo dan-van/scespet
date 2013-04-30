@@ -2,7 +2,7 @@ package scespet
 
 import core.Term
 import reflect.ClassTag
-import scespet.expression.{AbsTerm, CollectingTerm}
+import scespet.expression.{AbsTerm, RootTerm}
 
 /**
  * Created with IntelliJ IDEA.
@@ -14,11 +14,6 @@ import scespet.expression.{AbsTerm, CollectingTerm}
 class ExprPrinter() extends Builder {
   def start[X](x: X) :Term[X] = {
     new ExecutingTerm[X](x)
-  }
-
-  def executeTree[X](startVal: X, expressionRoot: CollectingTerm[X]) = {
-    var exec = new ExecutingTerm[X](startVal)
-    CollectingTerm.applyTree(expressionRoot, exec)
   }
 
   class StopTerm[X]() extends Term[X] {

@@ -16,10 +16,42 @@ import scespet.util._
  * @version $Id$
  */
 package expression {
-  abstract class AbsTerm[IN, X](val source:AbsTerm[_, IN]) extends Term[X] {
-    if (source != null) source.addChild(this)
+  class Scesspet {
+    val leaves = collection.mutable.Set[AbsTerm[_,_]]()
+    val allNodes = collection.mutable.Set[AbsTerm[_,_]]()
 
-    val children = collection.mutable.Buffer[AbsTerm[X, _]]()
+    def query[X](data: TraversableOnce[X], timeFunc:(X)=>Long) : Term[X] = {
+      var root = new TraversableRoot[X](data, timeFunc)
+      addNode(null, root)
+      root
+    }
+
+    def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
+      var root = new HasValRoot[X](newHasVal)
+      addNode( null, root )
+      root
+    }
+
+    def addNode(parent:AbsTerm[_,_], child:AbsTerm[_,_]) = {
+      if (parent != null) {
+        leaves -= parent
+        allNodes += parent
+      }
+      if (! allNodes.contains(child)) {
+        leaves += child
+        allNodes += child
+      }
+    }
+  }
+
+  abstract class AbsTerm[IN, X](val source:AbsTerm[_, IN]) extends Term[X] {
+    // are joins multi parent?
+    val parent :AbsTerm[_, IN] = source
+    if (source != null) {
+      source.addChild(this)
+    }
+
+    val children = collection.mutable.LinkedHashSet[AbsTerm[X, _]]()
     protected def addChild(child:AbsTerm[X, _]) {
       children += child
     }
@@ -36,19 +68,35 @@ package expression {
     def filter(accept: (X) => Boolean): Term[X] = new FilterTerm[X](this, accept)
   }
 
-  object CollectingTerm {
-    def applyTree[X](node:AbsTerm[_, X], copyTerm:Term[X]) {
-      type Y = Any
-      for (nodeChild <- node.children) {
-        val typedNodeChild = nodeChild.asInstanceOf[AbsTerm[X,Y]]
-        val copyChild: Term[Y] = typedNodeChild.applyTo(copyTerm)
-        applyTree[Y](typedNodeChild, copyChild)
-      }
+//  object RootTerm {
+//    def applyTree[X](node:AbsTerm[_, X], copyTerm:Term[X]) {
+//      type Y = Any
+//      for (nodeChild <- node.children) {
+//        val typedNodeChild = nodeChild.asInstanceOf[AbsTerm[X,Y]]
+//        val copyChild: Term[Y] = typedNodeChild.applyTo(copyTerm)
+//        applyTree[Y](typedNodeChild, copyChild)
+//      }
+//    }
+//  }
+
+  class TraversableRoot[X](val data: TraversableOnce[X], timeFunc:(X)=>Long) extends RootTerm[X] {
+    def buildHasVal(env: types.Env): HasVal[X] = {
+      val events = new IteratorEvents[X](data, timeFunc)
+      env.addEventSource(events)
+      events
+    }
+  }
+  class HasValRoot[X](val newHasVal :(types.Env) => HasVal[X]) extends RootTerm[X] {
+    def buildHasVal(env: types.Env): HasVal[X] = {
+      var events = newHasVal.apply(env)
+      env.setStickyInGraph(events.trigger, true)
+      events
     }
   }
 
-  class CollectingTerm[X] extends AbsTerm[X, X](source = null) {
-    def applyTo(term: Term[X]): Term[X] = term
+  abstract class RootTerm[X] extends AbsTerm[X, X](source = null) {
+    def applyTo(term: Term[X]): Term[X] = ???
+    def buildHasVal(env :types.Env) :HasVal[X]
   }
 
   class MapTerm[IN, X](source:AbsTerm[_, IN], val mapFunc:(IN)=>X) extends AbsTerm[IN, X](source) {
@@ -68,14 +116,17 @@ package expression {
   object Test extends App {
     // termCollector should know the type of its root nodes.
     // this allows specific builders to know if they can build from a given collector
-    var root = new CollectingTerm[String]()
-    out("is > 3 chars: ") {root.map(_.length).filter(_ > 3)}
+    var prog = new Scesspet()
+//    var root = prog.trace("Hello")
+//    var root = prog.query(Seq("Hello", "there", "dan"))
+    var root = prog.query(env => IteratorEvents[String](Seq("Hello", "there", "dan")))
 
-//    collector.installTo( new ExprPrinter( x => "Hello") )
-//    new ExprPrinter().executeTree("Hello", root)
-//    new ExprPrinter().start("Hello").map(_.length)
+    var query = out("is > 3 chars: ") {root.map(_.length).filter(_ > 3)}
 
-    new SimpleEvaluator().addExpression(Seq("Hello", "there", "dan"), root).run()
+    new SimpleEvaluator().run(prog)
+    var result = new SimpleEvaluator().run(query)
+    println("collected data = "+result)
+//    new MekonEvaluator().run(prog)
 
   }
 }

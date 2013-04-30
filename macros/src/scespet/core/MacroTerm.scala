@@ -7,7 +7,7 @@ import reflect.macros.Context
 /**
  * This wraps an input HasVal with API to provide typesafe reactive expression building
  */
-class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTerm[X] {
+class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X] {
   import scala.reflect.macros.Context
   import scala.language.experimental.macros
 
@@ -20,8 +20,8 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
         true
       }
     }
-    eval.bind(input.trigger, listener)
-    return new MacroTerm[Y](eval)(listener)
+    env.addListener(input.trigger, listener)
+    return new MacroTerm[Y](env)(listener)
   }
 
   def map[Y](f: (X) => Y):MacroTerm[Y] = {
@@ -31,8 +31,8 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
         true
       }
     }
-    eval.bind(input.trigger, listener)
-    return new MacroTerm[Y](eval)(listener)
+    env.addListener(input.trigger, listener)
+    return new MacroTerm[Y](env)(listener)
   }
 
   def filter(accept: (X) => Boolean):MacroTerm[X] = {
@@ -49,8 +49,8 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
       }
     }
     val listener: FilteredValue = new FilteredValue
-    eval.bind(input.trigger, listener)
-    return new MacroTerm[X](eval)(listener)
+    env.addListener(input.trigger, listener)
+    return new MacroTerm[X](env)(listener)
   }
 
 //  override def by[K](f: X => K) : VectTerm[K,X] = macro ByMacro.by[K,X]
@@ -62,9 +62,9 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
    * @return
    */
   def by[K](f: X => K) : VectTerm[K,X] = {
-    val vFunc: GroupFunc[K, X] = new GroupFunc[K, X](input, f, eval.env)
-    eval.bind(input.trigger, vFunc)
-    return new VectTerm[K, X](eval)(vFunc)
+    val vFunc: GroupFunc[K, X] = new GroupFunc[K, X](input, f, env)
+    env.addListener(input.trigger, vFunc)
+    return new VectTerm[K, X](env)(vFunc)
   }
 
   def byf[K](newGenerator:(X)=>HasVal[K]) : VectTerm[X,K] = {
@@ -83,9 +83,9 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
         true
       }
     }
-    eval.bind(input.trigger, listener)
-    eval.bind(y.input.trigger, listener)
-    return new MacroTerm[(X,Y)](eval)(listener)
+    env.addListener(input.trigger, listener)
+    env.addListener(y.input.trigger, listener)
+    return new MacroTerm[(X,Y)](env)(listener)
   }
 
   def take[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
@@ -99,8 +99,8 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
         true
       }
     }
-    eval.bind(input.trigger, listener)
-    return new MacroTerm[(X,Y)](eval)(listener)
+    env.addListener(input.trigger, listener)
+    return new MacroTerm[(X,Y)](env)(listener)
   }
 
 //  def reduce[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.reduce[X,Y]
@@ -108,7 +108,7 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
 //  def reduce[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
   def reduce[Y](bucketFunc: Y):BucketBuilder[X,Y] = macro BucketMacro.bucket2Macro[X,Y]
 
-  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, eval)
+  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, env)
 
   def newBucketBuilder[B](newB: () => B):BucketBuilder[X, B] = {
     type Y = B with Reduce[X]
@@ -117,6 +117,6 @@ class MacroTerm[X](val eval:FuncCollector)(val input:HasVal[X]) extends BucketTe
     var aY = reduceGenerator.apply()
     println("Reducer in MacroTerm generates "+aY)
 //    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    new BucketBuilderImpl[X, Y](reduceGenerator, new MacroTerm[X](eval)(input), eval).asInstanceOf[BucketBuilder[X, B]]
+    new BucketBuilderImpl[X, Y](reduceGenerator, new MacroTerm[X](env)(input), env).asInstanceOf[BucketBuilder[X, B]]
   }
 }

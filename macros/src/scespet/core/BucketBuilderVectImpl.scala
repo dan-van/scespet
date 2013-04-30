@@ -9,59 +9,59 @@ import gsa.esg.mekon.core.EventGraphObject
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:VectTerm[K, X], eval:FuncCollector) extends BucketBuilderVect[K, X, Y] {
+class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:VectTerm[K, X], env:types.Env) extends BucketBuilderVect[K, X, Y] {
   val inputVectorStream: VectorStream[K, X] = inputTerm.input
 
   def window(windowStream: MacroTerm[Boolean]) :VectTerm[K,Y] = {
-    val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, eval.env) {
+    val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
         val sourcehasVal = new HasVal[X] {
           def value: X = inputVectorStream.get(i)
           def trigger = inputVectorStream.getTrigger(i)
         }
-        new WindowedReduce[X,Y](sourcehasVal, windowStream.input, newBFunc, eval.env)
+        new WindowedReduce[X,Y](sourcehasVal, windowStream.input, newBFunc, env)
       }
 
       def get(i: Int): Y = getAt(i).value
     }
-    return new VectTerm[K,Y](eval)(chainedVector)
+    return new VectTerm[K,Y](env)(chainedVector)
   }
 
   def window(windowFunc: K=>HasVal[Boolean]) :VectTerm[K,Y] = {
-    val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, eval.env) {
+    val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
         val sourcehasVal = new HasVal[X] {
           def value: X = inputVectorStream.get(i)
           def trigger = inputVectorStream.getTrigger(i)
         }
         val perCellWindow = windowFunc(key)
-        new WindowedReduce[X,Y](sourcehasVal, perCellWindow, newBFunc, eval.env)
+        new WindowedReduce[X,Y](sourcehasVal, perCellWindow, newBFunc, env)
       }
 
       def get(i: Int): Y = getAt(i).value
     }
-    return new VectTerm[K,Y](eval)(chainedVector)
+    return new VectTerm[K,Y](env)(chainedVector)
   }
 
   def each(n: Int):VectTerm[K, Y] = {
     val sliceFunc:Int => types.EventGraphObject = index => {
       val sourceVect = inputTerm.input
       val cellFiredTrigger: EventGraphObject = sourceVect.getTrigger(index)
-      new NthEvent(n, cellFiredTrigger, eval.env)
+      new NthEvent(n, cellFiredTrigger, env)
     }
-    val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](inputVectorStream, eval.env) {
+    val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
         val sourcehasVal = new HasVal[X] {
           def value: X = inputVectorStream.get(i)
           def trigger = inputVectorStream.getTrigger(i)
         }
         val perCellSliceTrigger :types.EventGraphObject = sliceFunc(i)
-        new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, false, newBFunc, eval.env)
+        new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, false, newBFunc, env)
       }
 
       def get(i: Int): Y = getAt(i).value
     }
-    return new VectTerm[K,Y](eval)(chainedVector)
+    return new VectTerm[K,Y](env)(chainedVector)
 //    val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
 //      def create(source: HasVal[X], reduce: Y, env:types.Env) = new NthEvent(n, source.trigger, env)
 //    }
@@ -72,9 +72,9 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:Ve
 //    // todo: make Window a listenable Func
 //    // "start new reduce" is a pulse, which is triggered from time, input.trigger, or Y
 //    val input = inputTerm.input
-//    val listener = new BucketMaintainer[Y,X](input, newBFunc, triggerBuilder, eval.env)
+//    val listener = new BucketMaintainer[Y,X](input, newBFunc, triggerBuilder, env)
 //    eval.bind(input.trigger, listener)
-//    return new MacroTerm[Y](eval)(listener)
+//    return new MacroTerm[Y](env)(listener)
 //  }
 }
 

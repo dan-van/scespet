@@ -7,7 +7,7 @@ package scespet.core
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], eval:FuncCollector) extends BucketBuilder[X, Y] {
+class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], env:types.Env) extends BucketBuilder[X, Y] {
 
   def window(windowStream: MacroTerm[Boolean]) :MacroTerm[Y] = {
     // two ways of doing this. Use Mekon primitives, or Reactive
@@ -25,7 +25,7 @@ class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm
 //    }
 //    inputTerm.join(windowStream).reduce()
 //    val bucketMaintainer = new HasVal[Y] with types.MFunc
-return new MacroTerm[Y](eval)(new WindowedReduce[X,Y](inputTerm.input, windowStream.input, newBFunc, eval.env))
+return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStream.input, newBFunc, env))
 //    ???
   }
 
@@ -40,9 +40,9 @@ return new MacroTerm[Y](eval)(new WindowedReduce[X,Y](inputTerm.input, windowStr
     // todo: make Window a listenable Func
     // "start new reduce" is a pulse, which is triggered from time, input.trigger, or Y
     val input = inputTerm.input
-    val listener = new BucketMaintainer[Y,X](input, newBFunc, triggerBuilder, eval.env)
-    eval.bind(input.trigger, listener)
-    return new MacroTerm[Y](eval)(listener)
+    val listener = new BucketMaintainer[Y,X](input, newBFunc, triggerBuilder, env)
+    env.addListener(input.trigger, listener)
+    return new MacroTerm[Y](env)(listener)
   }
 }
 

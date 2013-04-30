@@ -7,6 +7,7 @@ package object types {
   type Env = gsa.esg.mekon.core.Environment
   type EventGraphObject = gsa.esg.mekon.core.EventGraphObject
   type MFunc = gsa.esg.mekon.core.Function
+  type EventSource = gsa.esg.mekon.core.EventSource
 }
 
 /**

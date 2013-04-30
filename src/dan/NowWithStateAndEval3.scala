@@ -21,7 +21,9 @@ class Sum extends AbsFunc[Double, Double]{
 }
 
 var simple = new SimpleEvaluator()
-val tradeEvents = simple.addEventSource( new IteratorEvents(trades) )
+val tradeEvents = IteratorEvents(trades)
+simple.addEventSource( tradeEvents )
+
 val tradeStream : Expr[Trade] = new Expr(tradeEvents)(simple)
 //tradeStream.sel(new Select[_]{var cash = in.price * in.qty; var quantity = in.qty})
 tradeStream.map(x => {println(x);10})
