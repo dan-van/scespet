@@ -123,9 +123,13 @@ package expression {
 
     var query = out("is > 3 chars: ") {root.map(_.length).filter(_ > 3)}
 
-    new SimpleEvaluator().run(prog)
-    var result = new SimpleEvaluator().run(query)
-    println("collected data = "+result)
+//    new SimpleEvaluator().run(prog)
+    var env = new SimpleEnv
+//    var env = new MekonEnv
+    new EnvTermBuilder(env).query(query.asInstanceOf[AbsTerm[_,_]])
+    env.run()
+//    var result = new SimpleEvaluator().run(query)
+//    println("collected data = "+result)
 //    new MekonEvaluator().run(prog)
 
   }
