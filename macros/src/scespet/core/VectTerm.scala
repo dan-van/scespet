@@ -32,7 +32,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 
   def map[Y](f:X=>Y):VectTerm[K,Y] = {
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
-      var value = f(input.get(index))
+//      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+      var value:Y = _
       def calculate() = {value = f(input.get(index)); true}
     }
     val cellBuilder = (index:Int, key:K) => new MapCell(index)
@@ -41,6 +42,18 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 //      val initial = cellUpdateFunc()
 //      new Generator[Y](initial, cellUpdateFunc)
 //    }
+    return newIsomorphicVector(cellBuilder)
+  }
+
+  def fold_all2[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
+    val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
+      val value = reduceBuilder
+      def calculate():Boolean = {
+        val x: X = input.get(index)
+        value.add(x)
+        return true
+      }
+    }
     return newIsomorphicVector(cellBuilder)
   }
 
@@ -62,6 +75,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
         val sourceTrigger: EventGraphObject = input.getTrigger(i)
         env.addListener(sourceTrigger, cellFunc)
+        // initialise the cell
+        cellFunc.calculate()
         return cellFunc
       }
 

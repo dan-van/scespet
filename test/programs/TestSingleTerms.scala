@@ -2,7 +2,6 @@ package programs
 
 import collection.mutable.ArrayBuffer
 import scespet.core._
-import scespet.TermBuilder
 import scespet.util._
 
 

@@ -6,6 +6,11 @@
         <option name="compilerLibraryLevel" value="Global" />
         <option name="compilerLibraryName" value="scala-2.10" />
         <option name="compilerOptions" value="-Xexperimental" />
+        <option name="pluginPaths">
+          <array>
+            <option value="libs/annotations-2.0.1.jar" />
+          </array>
+        </option>
       </configuration>
     </facet>
   </component>
@@ -18,11 +23,12 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="scala-2.10" level="application" />
-    <orderEntry type="module" module-name="stubs" />
     <orderEntry type="library" scope="TEST" name="jep-plot" level="application" />
     <orderEntry type="library" name="scala-2.10" level="application" />
     <orderEntry type="library" name="scala-2.10" level="application" />
     <orderEntry type="module" module-name="macros" />
+    <orderEntry type="library" name="annotations-2.0" level="project" />
+    <orderEntry type="module" module-name="mekon" />
   </component>
 </module>
 

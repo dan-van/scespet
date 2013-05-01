@@ -3,9 +3,7 @@ package scespet
 import scespet.core._
 import gsa.esg.mekon.core.{Function, EventGraphObject}
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.JavaConverters._
 import scespet.core.types
-import scespet.util._
 
 
 /**
@@ -16,7 +14,19 @@ import scespet.util._
  * @version $Id$
  */
 package expression {
-  class Scesspet {
+
+import gsa.esg.mekon.MekonConfig
+import gsa.esg.mekon.run.{TestConfig, Configurator}
+import gsa.esg.mekon.business.Region
+import java.util.logging.Level
+import gsa.esg.mekon.run.TestConfig.Feeds
+import gsa.esg.mekon.components.adapters.{FeedSymbolMetaData, FeedDictionary, FeedRepository, FeedCollection}
+import gsa.esg.mekon.feedtransforms.FeedObjectRef
+import gsa.esg.mekon.components.adapters.FeedRepository.FeedConfig
+import gsa.esg.mekon.components.trading.Feed
+import scala.collection.mutable
+
+class Scesspet {
     val leaves = collection.mutable.Set[AbsTerm[_,_]]()
     val allNodes = collection.mutable.Set[AbsTerm[_,_]]()
 
@@ -82,7 +92,7 @@ package expression {
   class TraversableRoot[X](val data: TraversableOnce[X], timeFunc:(X)=>Long) extends RootTerm[X] {
     def buildHasVal(env: types.Env): HasVal[X] = {
       val events = new IteratorEvents[X](data, timeFunc)
-      env.addEventSource(events)
+      env.registerEventSource(events)
       events
     }
   }
@@ -109,28 +119,5 @@ package expression {
     def applyTo(term: Term[X]): Term[X] = {
       term.filter(accept)
     }
-  }
-
-  // ---- executing term ----
-
-  object Test extends App {
-    // termCollector should know the type of its root nodes.
-    // this allows specific builders to know if they can build from a given collector
-    var prog = new Scesspet()
-//    var root = prog.trace("Hello")
-//    var root = prog.query(Seq("Hello", "there", "dan"))
-    var root = prog.query(env => IteratorEvents[String](Seq("Hello", "there", "dan")))
-
-    var query = out("is > 3 chars: ") {root.map(_.length).filter(_ > 3)}
-
-//    new SimpleEvaluator().run(prog)
-    var env = new SimpleEnv
-//    var env = new MekonEnv
-    new EnvTermBuilder(env).query(query.asInstanceOf[AbsTerm[_,_]])
-    env.run()
-//    var result = new SimpleEvaluator().run(query)
-//    println("collected data = "+result)
-//    new MekonEvaluator().run(prog)
-
   }
 }

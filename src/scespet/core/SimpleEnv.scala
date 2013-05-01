@@ -1,8 +1,9 @@
 package scespet.core
 
 import collection.mutable
-import gsa.esg.mekon.core.{EventGraphObject, EventSource}
+import gsa.esg.mekon.core._
 import scespet.expression.{Scesspet, RootTerm, AbsTerm}
+import java.util.TimeZone
 
 /**
  * Created with IntelliJ IDEA.
@@ -75,5 +76,81 @@ class SimpleEnv() extends types.Env {
   def hasChanged(trigger: Any):Boolean = {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
   }
+
+  def getSharedObject[T](clazz: Class[T], args : AnyRef* ) = ???
+
+  def getSystemId = ???
+
+  def getSystemTimezone = ???
+
+  def getClockDate(tz: TimeZone) = ???
+
+  def addWakeupReceiver[T](provider: T, consumer: Function) = ???
+
+  def removeWakeupReceiver(provider: Any, consumer: Function) {}
+
+  def addListener[T](provider: T, consumer: Function) = ???
+
+  def removeListener(provider: Any, consumer: Function) {}
+
+  def addOrdering[T](provider: T, consumer: EventGraphObject) = ???
+
+  def removeOrdering(provider: Any, consumer: EventGraphObject) {}
+
+  def getTriggers(consumer: Function) = ???
+
+  def registerService(service: Service) {}
+
+  def getService[T <: Service](serviceClass: Class[T]) = ???
+
+  def getSharedObject[T](clazz: Class[T], constructorSig: Array[Class[_]], args: AnyRef*) = ???
+
+  def registerBeanMaintainer(beanMaintainer: BeanMaintainer[_]) {}
+
+  def registerEventSource(source: EventSource) {}
+
+  def getEventTime = ???
+
+  def getClockTime = ???
+
+  def getStartTime = ???
+
+  def getEndTime = ???
+
+  def isRealtime = ???
+
+  def isCurrentThreadWithinFire = ???
+
+  def prettyPrintClockTime() = ???
+
+  def prettyPrintTime(t: Long) = ???
+
+  def invokeAtRealtime(task: Runnable, wakeupAfterRunnable: Function) {}
+
+  def getProperty(propertyName: String) = ???
+
+  def getProperty(propertyName: String, defaultValue: String) = ???
+
+  def getProperty(propertyName: String, defaultValue: Double) = ???
+
+  def getProperty(propertyName: String, defaultValue: Int) = ???
+
+  def getProperty(propertyName: String, defaultValue: Long) = ???
+
+  def getProperty(propertyName: String, defaultValue: Boolean) = ???
+
+  def getApplicationProperties = ???
+
+  def substitute(valueString: String) = ???
+
+  def wakeupThisCycle(graphObject: EventGraphObject) {}
+
+  def fireAfterChangingListeners(function: Function) {}
+
+  def getDelayedExecutor(wakeupTarget: Function) = ???
+
+  def shutDown(reason: String, error: Throwable) {}
+
+  def getRootEnvironment = ???
 }
 

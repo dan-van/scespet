@@ -2,7 +2,7 @@ package scespet
 
 import core._
 import core.types
-import scespet.expression.{RootTerm, AbsTerm}
+import scespet.expression.{HasValRoot, RootTerm, AbsTerm}
 
 /**
  * Created with IntelliJ IDEA.
@@ -12,7 +12,7 @@ import scespet.expression.{RootTerm, AbsTerm}
  * To change this template use File | Settings | File Templates.
  */
 class EnvTermBuilder(val env :types.Env) {
-  def query[X <: types.MFunc](func: X) : MacroTerm[X] = {
+  def query[X <: types.EventGraphObject](func: X) : MacroTerm[X] = {
     var hasVal = new IsVal[X](func)
     return new MacroTerm[X](env)(hasVal)
   }
@@ -32,6 +32,11 @@ class EnvTermBuilder(val env :types.Env) {
     } else {
       ???
     }
+  }
+
+  def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
+    val hasVal = newHasVal(env)
+    query(hasVal)
   }
 
 }

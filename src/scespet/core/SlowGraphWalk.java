@@ -29,10 +29,10 @@ public class SlowGraphWalk {
             return graphObject;
         }
 
-        public Collection<EventGraphObject> getListeners() {
-            ArrayList<EventGraphObject> list = new ArrayList<EventGraphObject>();
+        public Collection<Function> getListeners() {
+            ArrayList<Function> list = new ArrayList<Function>();
             for (Node node : out) {
-                list.add(node.getGraphObject());
+                list.add((Function) node.getGraphObject());
             }
             return list;
         }
