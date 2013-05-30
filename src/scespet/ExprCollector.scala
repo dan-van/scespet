@@ -15,15 +15,7 @@ import scespet.core.types
  */
 package expression {
 
-import gsa.esg.mekon.MekonConfig
-import gsa.esg.mekon.run.{TestConfig, Configurator}
-import gsa.esg.mekon.business.Region
 import java.util.logging.Level
-import gsa.esg.mekon.run.TestConfig.Feeds
-import gsa.esg.mekon.components.adapters.{FeedSymbolMetaData, FeedDictionary, FeedRepository, FeedCollection}
-import gsa.esg.mekon.feedtransforms.FeedObjectRef
-import gsa.esg.mekon.components.adapters.FeedRepository.FeedConfig
-import gsa.esg.mekon.components.trading.Feed
 import scala.collection.mutable
 
 class Scesspet {

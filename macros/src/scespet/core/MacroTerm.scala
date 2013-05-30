@@ -2,6 +2,7 @@ package scespet.core
 
 import scespet.core._
 import reflect.macros.Context
+import scala.reflect.ClassTag
 
 
 /**
@@ -10,6 +11,8 @@ import reflect.macros.Context
 class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X] {
   import scala.reflect.macros.Context
   import scala.language.experimental.macros
+  import scala.collection.JavaConverters._
+
 
   // this will be a synonym for fold(Y).all
   def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
@@ -67,9 +70,29 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new VectTerm[K, X](env)(vFunc)
   }
 
-  def byf[K](newGenerator:(X)=>HasVal[K]) : VectTerm[X,K] = {
-    ???
-//    this.by(x => x).mapk(newGenerator)
+  def takef[Y](newGenerator:(X)=>HasVal[Y]) : VectTerm[X,Y] = {
+    this.by(x => x).mapk(newGenerator)
+  }
+
+// Take a stream of X (usually representing some collection), map X -> Collection[Y] and generate a new flattened set of Y (mainly used if X is some form of collection and you want to flatten it)
+//  def values[X1 <: ClassTag[X]]() : VectTerm[X1,X1] = values[X1](x => Traversable(x.asInstanceOf[X1]))
+
+//  def distinct2[Y : ClassTag]() = values[Y](x => {Traversable[Y](x.asInstanceOf[Y])} )
+
+  def valueSet[Y : ClassTag](expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ) : VectTerm[Y,Y] = {
+    val initial = expand(input.value)
+    val typeY = reflect.classTag[Y]
+    val javaClass : Class[Y] = typeY.runtimeClass.asInstanceOf[Class[Y]]
+    val flattenedSet = new MutableVector[Y](javaClass, initial.toIterable.asJava, env) with types.MFunc {
+      env.addListener(input.trigger, this)
+
+      def calculate(): Boolean = {
+        var toAdd = expand(input.value)
+        toAdd.foreach( add(_) )
+        false
+      }
+    }
+    return new VectTerm[Y, Y](env)(flattenedSet)
   }
 
   def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
@@ -79,7 +102,8 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
       var value:(X,Y) = _
 
       def calculate() = {
-        value = (input.value, y.input.value)
+        var aY:Y = y.input.value
+        value = (input.value, aY)
         true
       }
     }

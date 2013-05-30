@@ -24,6 +24,11 @@ class EWMA(val lambda:Double = 0.98) extends Reduce[Int]{
   override def toString = s"Sum=$s"
 }
 
+class Collect extends Reduce[AnyRef] {
+  val data = collection.mutable.Buffer[AnyRef]()
+  def add(x: AnyRef) {data += x}
+}
+
 /**
  * todo: how can we genericise Counter to allow type inference to fill in the type param here?
  * @tparam T

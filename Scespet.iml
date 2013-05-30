@@ -29,6 +29,8 @@
     <orderEntry type="module" module-name="macros" />
     <orderEntry type="library" name="annotations-2.0" level="project" />
     <orderEntry type="module" module-name="mekon" />
+    <orderEntry type="module" module-name="stubs" />
+    <orderEntry type="library" name="scavis" level="application" />
   </component>
 </module>
 

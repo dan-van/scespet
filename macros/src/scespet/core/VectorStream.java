@@ -10,7 +10,8 @@ import java.util.List;
  */
 public interface VectorStream<K, V> {
     int getSize();
-    List<K> geyKeys();
+    List<K> getKeys();
+    List<V> getValues();
     V get(int i);
     K getKey(int i);
 

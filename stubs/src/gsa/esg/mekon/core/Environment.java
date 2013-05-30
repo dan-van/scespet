@@ -9,7 +9,7 @@ package gsa.esg.mekon.core;
  */
 public interface Environment {
     public boolean hasChanged(Object trigger);
-    public void addEventSource(EventSource source);
+    public void registerEventSource(EventSource source);
     public void setStickyInGraph(EventGraphObject source, boolean sticky);
     public <T> void addListener(Object source, EventGraphObject sink);
     public <T> void removeListener(Object source, EventGraphObject sink);

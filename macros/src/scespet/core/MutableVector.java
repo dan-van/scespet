@@ -4,10 +4,7 @@ import gsa.esg.mekon.core.Environment;
 import gsa.esg.mekon.core.EventGraphObject;
 import gsa.esg.mekon.core.Function;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**
  * @version $Id$
@@ -16,7 +13,8 @@ import java.util.List;
 public class MutableVector<X> implements VectorStream<X,X> {
     private Class<X> type;
     private Environment env;
-    ArrayList<X> values = new ArrayList<X>();
+    private ArrayList<X> values = new ArrayList<X>();
+    private Set<X> uniqueness = new HashSet<X>();
     boolean elementsListenable;
 
     final Function nullListenable = new Function() {
@@ -32,7 +30,9 @@ public class MutableVector<X> implements VectorStream<X,X> {
         Iterator<X> iterator = initial.iterator();
         while (iterator.hasNext()) {
             X next = iterator.next();
-            values.add(next);
+            if (uniqueness.add(next)) {
+                values.add(next);
+            }
         }
         // don't bother: env.wakeupThisCycle(reshaped);
     }
@@ -44,21 +44,39 @@ public class MutableVector<X> implements VectorStream<X,X> {
         env.setStickyInGraph(reshaped, true);
     }
 
-    public void add(X x) {
-        values.add(x);
-        env.wakeupThisCycle(reshaped);
+    public boolean add(X x) {
+        boolean added = uniqueness.add(x);
+        if (added) {
+            values.add(x);
+            env.wakeupThisCycle(reshaped);
+        }
+        return added;
     }
 
-    public void addAll(Collection<X> xs) {
-        values.addAll(xs);
-        env.wakeupThisCycle(reshaped);
+    public boolean addAll(Iterable<X> xs) {
+        boolean added = false;
+        for (X x : xs) {
+            boolean add = uniqueness.add(x);
+            if (add) {
+                added = true;
+                values.add(x);
+            }
+        }
+        if (added) {
+            env.wakeupThisCycle(reshaped);
+        }
+        return added;
     }
 
     public int getSize() {
         return values.size();
     }
 
-    public List<X> geyKeys() {
+    public List<X> getKeys() {
+        return values;
+    }
+
+    public List<X> getValues() {
         return values;
     }
 
@@ -78,7 +96,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
         }
     }
 
-    public ReshapeSignal getNewColumnTrigger() {
+    public VectorStream.ReshapeSignal getNewColumnTrigger() {
         return reshaped;
     }
 }

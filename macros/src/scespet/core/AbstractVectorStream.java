@@ -23,7 +23,7 @@ public abstract class AbstractVectorStream<K, F extends EventGraphObject, V> imp
     }
 
     @Override
-    public List<K> geyKeys() {
+    public List<K> getKeys() {
         return keys;
     }
 
@@ -38,8 +38,17 @@ public abstract class AbstractVectorStream<K, F extends EventGraphObject, V> imp
 
     public abstract F newCell(int i, K key);
 
-    public List<F> values() {
+    public List<F> getTriggers() {
         return functions;
+    }
+
+    public List<V> getValues() {
+        // todo: replace with Guava
+        ArrayList<V> valueSnap = new ArrayList<V>(size());
+        for (int i=0; i<size(); i++) {
+            valueSnap.add(get(i));
+        }
+        return valueSnap;
     }
 
     public int size() {
