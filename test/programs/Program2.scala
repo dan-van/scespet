@@ -51,6 +51,10 @@ object Program2 extends App {
     tradeStream
   }
 
+  /**
+   *
+   * Test takef
+   */
   def v3 = {
 //    var start = impl.query(trades)
     val nameStream = impl.query(names)

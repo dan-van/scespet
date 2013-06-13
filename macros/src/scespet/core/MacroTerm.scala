@@ -96,9 +96,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   }
 
   def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
-    val listener = new HasVal[(X,Y)] with types.MFunc {
-      def trigger = this
-
+    val listener = new UpdatingHasVal[(X,Y)] {
       var value:(X,Y) = _
 
       def calculate() = {
@@ -113,9 +111,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   }
 
   def take[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
-    val listener = new HasVal[(X,Y)] with types.MFunc {
-      def trigger = this
-
+    val listener = new UpdatingHasVal[(X,Y)] {
       var value:(X,Y) = _
 
       def calculate() = {

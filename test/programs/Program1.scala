@@ -100,5 +100,5 @@ object Program1 extends App {
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
   //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
   v8
-  impl.run
+  impl.run()
 }

@@ -7,9 +7,9 @@ package scespet.core
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasVal[X], val windowEvents :HasVal[Boolean], newReduce :()=>Y, env :types.Env) extends UpdatingHasVal[Y] {
-    env.addListener(dataEvents.trigger, this)
-    env.addListener(windowEvents.trigger, this)
+class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :()=>Y, env :types.Env) extends UpdatingHasVal[Y] {
+    env.addListener(dataEvents.getTrigger, this)
+    env.addListener(windowEvents.getTrigger, this)
 
     var inWindow = windowEvents.value
 
@@ -25,7 +25,7 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasVal[X], val windowEve
     var fire = false
 
     var isNowOpen = inWindow
-    if (env.hasChanged(windowEvents.trigger)) {
+    if (env.hasChanged(windowEvents.getTrigger)) {
       isNowOpen = windowEvents.value
     }
     if (isNowOpen && !inWindow) {
@@ -33,7 +33,7 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasVal[X], val windowEve
       nextReduce = newReduce()
       inWindow = true
     }
-    if (env.hasChanged(dataEvents.trigger)) {
+    if (env.hasChanged(dataEvents.getTrigger)) {
       // note, if the window close coincides with this event, we discard the datapoint
       // i.e. window close takes precedence
       if (isNowOpen) {

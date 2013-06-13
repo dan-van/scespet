@@ -18,6 +18,7 @@ public abstract class AbstractVectorStream<K, F extends EventGraphObject, V> imp
     private Map<K, Integer> indicies = new HashMap<K, Integer>();
     private List<K> keys = new ArrayList<K>();
     private List<F> functions = new ArrayList<F>();
+    private List<HasValue<V>> valueHolders = new ArrayList<HasValue<V>>();
 
     public AbstractVectorStream() {
     }
@@ -36,23 +37,29 @@ public abstract class AbstractVectorStream<K, F extends EventGraphObject, V> imp
         return functions.get(i);
     }
 
-    public abstract F newCell(int i, K key);
+    public HasValue<V> getValueHolder(int i) {
+        return valueHolders.get(i);
+    }
 
-    public List<F> getTriggers() {
-        return functions;
+    public abstract HasValue<V> newCell(int i, K key);
+
+    @Override
+    public V get(int i) {
+        return valueHolders.get(i).value();
     }
 
     public List<V> getValues() {
         // todo: replace with Guava
         ArrayList<V> valueSnap = new ArrayList<V>(size());
         for (int i=0; i<size(); i++) {
-            valueSnap.add(get(i));
+            V value = getValueHolder(i).value();
+            valueSnap.add( value );
         }
         return valueSnap;
     }
 
     public int size() {
-        return functions.size();
+        return valueHolders.size();
     }
 
     public F getAt(int i) {
@@ -81,8 +88,13 @@ public abstract class AbstractVectorStream<K, F extends EventGraphObject, V> imp
             index = keys.size();
             indicies.put(key, index);
             keys.add(key);
-            F newValue = newCell(index, key);
-            functions.add(newValue);
+
+            // say this is not initialised, an implementation can override this to be true if necessary
+            getNewColumnTrigger().newColumnAdded(index, false);
+            HasValue<V> newValue = newCell(index, key);
+            valueHolders.add(newValue);
+            F f = (F) newValue.getTrigger();
+            functions.add(f);
         }
     }
 

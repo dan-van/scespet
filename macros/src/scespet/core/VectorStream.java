@@ -1,9 +1,10 @@
 package scespet.core;
 
+import gsa.esg.mekon.core.Environment;
 import gsa.esg.mekon.core.EventGraphObject;
 import gsa.esg.mekon.core.Function;
 
-import java.util.List;
+import java.util.*;
 
 /**
  * new keys are only ever added.
@@ -16,13 +17,37 @@ public interface VectorStream<K, V> {
     K getKey(int i);
 
     // todo: how about a HasVal<X> interface. i.e. a {trigger, value} tuple.
+    HasValue<V> getValueHolder(int i);
     EventGraphObject getTrigger(int i);
     ReshapeSignal getNewColumnTrigger();
 
     public static class ReshapeSignal implements Function {
+        private Environment env;
+
+        public ReshapeSignal(Environment env) {
+            this.env = env;
+        }
+
+        private Map<Integer, Boolean> newColumnHasValue = Collections.emptyMap();
+        private Map<Integer, Boolean> newColumnHasValue_pending = new TreeMap();
         @Override
         public boolean calculate() {
-            return true;
+            newColumnHasValue = newColumnHasValue_pending;
+            newColumnHasValue_pending = new TreeMap();
+            return ! newColumnHasValue.isEmpty();
+        }
+
+        public void newColumnAdded(int i, boolean hasInitialValue) {
+            if (newColumnHasValue_pending.isEmpty()) {
+                env.wakeupThisCycle(this);
+            }
+            newColumnHasValue_pending.put(i, hasInitialValue);
+        }
+
+        public boolean newColumnHasValue(int i) {
+            Boolean hasValue = newColumnHasValue.get(i);
+            if (hasValue == null) throw new IllegalArgumentException(i+" is not a new column");
+            return hasValue;
         }
     }
 }

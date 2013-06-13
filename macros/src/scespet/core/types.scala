@@ -39,13 +39,15 @@ trait FuncCollector {
  * Something that provides a value (i.e. a source)
  * @tparam X
  */
-trait HasVal[X] extends types.EventGraphObject {
+trait HasVal[X] extends HasValue[X]{
   def value:X
 
   /**
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
    */
   def trigger :types.EventGraphObject
+
+  def getTrigger: EventGraphObject = trigger
 }
 
 trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {

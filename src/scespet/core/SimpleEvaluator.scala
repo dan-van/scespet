@@ -14,12 +14,12 @@ import core.{EventGraphObject, EventSource}
  */
 
 class SimpleEvaluator() extends EnvTermBuilder(new SimpleEnv()) {
-  def run() {
-    env.asInstanceOf[SimpleEnv].run()
+  def run(iter:Integer = 1000) {
+    env.asInstanceOf[SimpleEnv].run(iter)
   }
 }
 
-trait EventSourceX[X] extends HasVal[X] with gsa.esg.mekon.core.EventSource {
+trait EventSourceX[X] extends gsa.esg.mekon.core.EventSource with HasVal[X] {
   def hasNext():Boolean
   def advanceState()
 

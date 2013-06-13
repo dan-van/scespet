@@ -215,7 +215,6 @@ class VectorExpr[K,X]( source:VectorStream[K,X])(implicit env:types.Env){
  * I think this is a vector of Reduce operations
  * @param createFunc
  * @param sourceVect
- * @param collector
  * @tparam K
  * @tparam X
  * @tparam F
@@ -234,11 +233,6 @@ class BoundFunctionVector[K,X, F <: Func[X,V], V](val createFunc:(K) => F, val s
       // initialise the value?
     newInstance.calculate()
     return newInstance
-  }
-
-  def get(i: Int):V = {
-    var func = getTrigger(i)
-    return func.value
   }
 }
 

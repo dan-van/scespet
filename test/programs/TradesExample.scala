@@ -3,6 +3,7 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core.{SimpleEvaluator, IteratorEvents, MacroTerm, Reduce}
 import scespet.util._
+import org.junit.Test
 
 
 /**
@@ -48,9 +49,10 @@ object TradesExample extends App {
     out("tradePrint fired="){tradeBuckets}
     out("Sum="){ tradeBuckets.map(_.accVol).reduce(new Sum).each(2) }
   }
+
   def v2a = {
     var qtyStream = tradeExpr map {_.qty}
-    qtyStream.bucket2NoMacro(() => {new Sum}).each(2) map { println (_) }
+    out("sum bucket 2"){qtyStream.reduce(new Sum).each(2)}
   }
 
   def v3 = {
@@ -71,5 +73,5 @@ object TradesExample extends App {
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
   //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
   v3
-  impl.run
+  impl.run()
 }

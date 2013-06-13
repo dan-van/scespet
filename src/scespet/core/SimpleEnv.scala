@@ -14,12 +14,18 @@ import java.util.TimeZone
  */
 class SimpleEnv() extends Environment {
   var eventI = 0
-  var eventSourceIdx = 0
+  var eventTime :Long = _
 
   val graph = new SlowGraphWalk
 
   val eventSources = mutable.Set[EventSource]()
-  val eventSourceQueue = mutable.Buffer[EventSource]()
+
+  val eventSourceQueue = {
+    var ordering = new Ordering[EventSource] {
+      def compare(x: EventSource, y: EventSource): Int = (y.getNextTime - x.getNextTime).toInt
+    }
+    mutable.PriorityQueue[EventSource]()(ordering)
+  }
 
   def registerEventSource(events: EventSource) {
     if (eventSources.add(events)) {
@@ -44,22 +50,25 @@ class SimpleEnv() extends Environment {
     val stopAt = eventI + n
     while (! eventSourceQueue.isEmpty && eventI < stopAt) {
       eventI += 1
-      val nextSource = eventSourceQueue(eventSourceIdx)
-      println(s"\nFiring event $eventI from $nextSource, hasNext= ${nextSource.hasNext()}");
+      val nextSource = eventSourceQueue.head
+//      println(s"\nFiring event $eventI from $nextSource, hasNext= ${nextSource.hasNext()}");
+      eventTime = nextSource.getNextTime
       nextSource.advanceState()
       graph.fire(nextSource)
-      if (!nextSource.hasNext()) {
-        eventSourceQueue.remove(eventSourceIdx)
+      if (nextSource.hasNext()) {
+        eventSourceQueue += nextSource
       } else {
-        eventSourceIdx += 1
+        println(s"terminated ${nextSource}")
       }
-      if (eventSourceIdx >= eventSourceQueue.length) eventSourceIdx = 0
     }
   }
 
   def wakeupThisCycle(target: types.MFunc) {
     graph.wakeup(target)
   }
+
+  @Override
+  def getEventTime = eventTime
 
   def addListener[T](source: Any, sink: types.EventGraphObject) {
     if (source.isInstanceOf[EventSource]) {

@@ -3,6 +3,7 @@ package scespet
 import core._
 import core.types
 import scespet.expression.{HasValRoot, RootTerm, AbsTerm}
+import gsa.esg.mekon.core.EventGraphObject
 
 /**
  * Created with IntelliJ IDEA.
@@ -12,7 +13,7 @@ import scespet.expression.{HasValRoot, RootTerm, AbsTerm}
  * To change this template use File | Settings | File Templates.
  */
 class EnvTermBuilder(val env :types.Env) {
-  def query[X <: types.EventGraphObject](func: X) : MacroTerm[X] = {
+  def query[X](func: X) : MacroTerm[X] = {
     var hasVal = new IsVal[X](func)
     return new MacroTerm[X](env)(hasVal)
   }

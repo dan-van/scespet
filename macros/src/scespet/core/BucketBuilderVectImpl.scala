@@ -15,14 +15,9 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:Ve
   def window(windowStream: MacroTerm[Boolean]) :VectTerm[K,Y] = {
     val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
-        val sourcehasVal = new HasVal[X] {
-          def value: X = inputVectorStream.get(i)
-          def trigger = inputVectorStream.getTrigger(i)
-        }
-        new WindowedReduce[X,Y](sourcehasVal, windowStream.input, newBFunc, env)
+        val sourceHasVal = inputVectorStream.getValueHolder(i)
+        new WindowedReduce[X,Y](sourceHasVal, windowStream.input, newBFunc, env)
       }
-
-      def get(i: Int): Y = getAt(i).value
     }
     return new VectTerm[K,Y](env)(chainedVector)
   }
@@ -30,15 +25,10 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:Ve
   def window(windowFunc: K=>HasVal[Boolean]) :VectTerm[K,Y] = {
     val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
-        val sourcehasVal = new HasVal[X] {
-          def value: X = inputVectorStream.get(i)
-          def trigger = inputVectorStream.getTrigger(i)
-        }
+        val sourcehasVal = inputVectorStream.getValueHolder(i)
         val perCellWindow = windowFunc(key)
         new WindowedReduce[X,Y](sourcehasVal, perCellWindow, newBFunc, env)
       }
-
-      def get(i: Int): Y = getAt(i).value
     }
     return new VectTerm[K,Y](env)(chainedVector)
   }
@@ -51,15 +41,10 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:Ve
     }
     val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
-        val sourcehasVal = new HasVal[X] {
-          def value: X = inputVectorStream.get(i)
-          def trigger = inputVectorStream.getTrigger(i)
-        }
+        val sourcehasVal = inputVectorStream.getValueHolder(i)
         val perCellSliceTrigger :types.EventGraphObject = sliceFunc(i)
         new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, false, newBFunc, env)
       }
-
-      def get(i: Int): Y = getAt(i).value
     }
     return new VectTerm[K,Y](env)(chainedVector)
 //    val bucketTrigger = new NewBucketTriggerFactory[X, Y] {

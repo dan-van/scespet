@@ -15,11 +15,15 @@ import scespet.core.VectorStream.ReshapeSignal
 // we could try a verison that uses wakeup nodes.
 class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends AbstractVectorStream[K,ValueFunc[V], V] with types.MFunc {
 
-  val getNewColumnTrigger = new ReshapeSignal()
+  val getNewColumnTrigger = new ReshapeSignal(env)
 
-  def newCell(i: Int, key: K) = new ValueFunc[V](source.value, env)  //todo: may not be necessary to do source.value, init later?
-
-  def get(i: Int) = getTrigger(i).value
+  def newCell(i: Int, key: K) = {
+    val cell = new ValueFunc[V](source.value, env)  //todo: may not be necessary to do source.value, init later?
+    cell.calculate()
+    // this cell is now initialised
+    getNewColumnTrigger.newColumnAdded(i, true)
+    cell
+  }
 
   def calculate():Boolean = {
     val nextVal: V = source.value
@@ -28,7 +32,6 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
     if (index == -1) {
       index = getSize()
       add(key)
-      env.wakeupThisCycle(getNewColumnTrigger)
     }
     var func: ValueFunc[V] = getTrigger(index)
     func.setValue(nextVal)

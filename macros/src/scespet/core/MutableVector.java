@@ -14,6 +14,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
     private Class<X> type;
     private Environment env;
     private ArrayList<X> values = new ArrayList<X>();
+    private ArrayList<HasValue<X>> cells = new ArrayList<HasValue<X>>();
     private Set<X> uniqueness = new HashSet<X>();
     boolean elementsListenable;
 
@@ -23,18 +24,15 @@ public class MutableVector<X> implements VectorStream<X,X> {
         }
     };
 
-    final ReshapeSignal reshaped = new ReshapeSignal();
+    final ReshapeSignal reshaped = new ReshapeSignal(env);
 
     public MutableVector(Class<X> type, Iterable<X> initial, Environment env) {
         this(type, env);
         Iterator<X> iterator = initial.iterator();
         while (iterator.hasNext()) {
             X next = iterator.next();
-            if (uniqueness.add(next)) {
-                values.add(next);
-            }
+            add(next);
         }
-        // don't bother: env.wakeupThisCycle(reshaped);
     }
 
     public MutableVector(Class<X> type, Environment env) {
@@ -45,12 +43,16 @@ public class MutableVector<X> implements VectorStream<X,X> {
     }
 
     public boolean add(X x) {
-        boolean added = uniqueness.add(x);
-        if (added) {
+        if (uniqueness.add(x)) {
+            int i = values.size();
             values.add(x);
-            env.wakeupThisCycle(reshaped);
+            Cell<X> cell = new Cell<X>(x);
+            cells.add(cell);
+            // this cell is initialised
+            reshaped.newColumnAdded(i, true);
+            return true;
         }
-        return added;
+        return false;
     }
 
     public boolean addAll(Iterable<X> xs) {
@@ -89,14 +91,37 @@ public class MutableVector<X> implements VectorStream<X,X> {
     }
 
     public EventGraphObject getTrigger(int i) {
-        if (elementsListenable) {
-            return (EventGraphObject) values.get(i);
-        } else {
-            return nullListenable;
-        }
+        return cells.get(i).getTrigger();
     }
 
     public VectorStream.ReshapeSignal getNewColumnTrigger() {
         return reshaped;
+    }
+
+    @Override
+    public HasValue<X> getValueHolder(int i) {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    private class Cell<X> implements HasValue<X> {
+        private final X next;
+
+        public Cell(X next) {
+            this.next = next;
+        }
+
+        @Override
+        public X value() {
+            return next;
+        }
+
+        @Override
+        public EventGraphObject getTrigger() {
+            if (elementsListenable) {
+                return (EventGraphObject) next;
+            } else {
+                return nullListenable;
+            }
+        }
     }
 }

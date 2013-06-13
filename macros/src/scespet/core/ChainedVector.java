@@ -16,28 +16,29 @@ public abstract class ChainedVector<K, F extends EventGraphObject, V> extends Ab
     private final VectorStream<K, ?> sourceVector;
     private final Environment env;
 
-    public ChainedVector(final VectorStream<K, ?> sourceVector, Environment env) {
+    public ChainedVector(final VectorStream<K, ?> sourceVector, final Environment env) {
         this.sourceVector = sourceVector;
         this.env = env;
-        reshapeSignal = new ReshapeSignal() {
+
+        // this listens to the source reshaping, applies our new columns, then fires on that we have reshaped
+        reshapeSignal = new ReshapeSignal(env) {
+            private ReshapeSignal sourceVectorChanged = sourceVector.getNewColumnTrigger();
+            {
+                env.addListener(sourceVectorChanged, this);
+            }
             public boolean calculate() {
-                boolean added = false;
                 for (int i=getSize(); i<sourceVector.getSize(); i++) {
                     K newKey = sourceVector.getKey(i);
                     add(newKey);
-                    added = true;
                 }
-                return added;
+                return super.calculate();
             }
         };
-        env.addListener(sourceVector.getNewColumnTrigger(), reshapeSignal);
 //        env.fireAfterChangingListeners()
         env.wakeupThisCycle(reshapeSignal);
 //        reshapeSignal.calculate();
     }
 
-    @Override
-    public abstract F newCell(int i, K key);
 
     @Override
     public VectorStream.ReshapeSignal getNewColumnTrigger() {

@@ -7,8 +7,8 @@ package scespet.core
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasVal[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, env :types.Env) extends UpdatingHasVal[Y] {
-    env.addListener(dataEvents.trigger, this)
+class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, env :types.Env) extends UpdatingHasVal[Y] {
+    env.addListener(dataEvents.getTrigger, this)
     env.addListener(sliceEvents, this)
 
     var nextReduce : Y = newReduce()
@@ -28,7 +28,7 @@ class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasVal[X], val sliceEvents
         fire = true
       }
     }
-    if (env.hasChanged(dataEvents.trigger)) {
+    if (env.hasChanged(dataEvents.getTrigger)) {
       nextReduce.add(dataEvents.value)
     }
     if (!sliceBefore) {

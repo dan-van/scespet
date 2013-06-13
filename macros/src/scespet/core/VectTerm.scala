@@ -2,6 +2,7 @@ package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
 import scala.reflect.ClassTag
+import java.util.logging.Logger
 
 /**
  * Created with IntelliJ IDEA.
@@ -39,7 +40,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
 //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
       var value:Y = _
-      def calculate() = {value = f(input.get(index)); true}
+      def calculate() = {
+        var in = input.get(index)
+        value = f(in);
+        true
+      }
     }
     val cellBuilder = (index:Int, key:K) => new MapCell(index)
 //    val cellBuilder = (index:Int, key:K) => {
@@ -47,6 +52,50 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 //      val initial = cellUpdateFunc()
 //      new Generator[Y](initial, cellUpdateFunc)
 //    }
+    return newIsomorphicVector(cellBuilder)
+  }
+
+  // TODO: common requirement to specify a f(X) => Option[Y] as a filter.map chain
+  // This compiles:
+  // class Test[X](val in:X) {
+  //  def myF[Y](f:X => Option[Y]):Test[Y] = {val oy = f(in); new Test(oy.getOrElse(null.asInstanceOf[Y]))}
+  // }
+  // new Test[Any]("Hello").myF(_ match {case x:Integer => Some(x);case _ => None}).in
+
+  def filterType[Y : ClassTag]():VectTerm[K,Y] = {
+    class MapCell(index:Int) extends UpdatingHasVal[Y] {
+      //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+      var value:Y = _
+      def calculate() = {
+        val inputVal = input.get(index)
+        val oy = reflect.classTag[Y].unapply(inputVal)
+        if (oy.isDefined) {
+          value = oy.get
+          true
+        } else {
+          false
+        }
+      }
+    }
+    val cellBuilder = (index:Int, key:K) => new MapCell(index)
+    return newIsomorphicVector(cellBuilder)
+  }
+
+  def filter(accept: (X) => Boolean):VectTerm[K,X] = {
+    class MapCell(index:Int) extends UpdatingHasVal[X] {
+      //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+      var value:X = _
+      def calculate() = {
+        val inputVal = input.get(index)
+        if (accept(inputVal)) {
+          value = inputVal
+          true
+        } else {
+          false
+        }
+      }
+    }
+    val cellBuilder = (index:Int, key:K) => new MapCell(index)
     return newIsomorphicVector(cellBuilder)
   }
 
@@ -78,14 +127,21 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     val output: VectorStream[K, Y] = new ChainedVector[K, UpdatingHasVal[Y], Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
-        val sourceTrigger: EventGraphObject = input.getTrigger(i)
+        var sourceCell = input.getValueHolder(i)
+        val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
         env.addListener(sourceTrigger, cellFunc)
         // initialise the cell
-        cellFunc.calculate()
+        var hasInputValue = input.getNewColumnTrigger.newColumnHasValue(i)
+        var hasChanged = env.hasChanged(sourceTrigger)
+        if (hasChanged && !hasInputValue) {
+          println("WARN: didn't expect this")
+        }
+        if (hasInputValue || hasChanged) {
+          val hasInitialOutput = cellFunc.calculate()
+          getNewColumnTrigger.newColumnAdded(i, hasInitialOutput)
+        }
         return cellFunc
       }
-
-      def get(i: Int) = getAt(i).value
     }
     return new VectTerm[K, Y](env)(output)
   }
@@ -142,9 +198,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
    * @return
    */
   def mapk[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
-    val output: VectorStream[K, Y] = new ChainedVector[K, HasVal[Y], Y](input, env) {
-      def newCell(i: Int, key: K): HasVal[Y] = cellFromKey(key)
-      def get(i: Int) = getAt(i).value
+    val output: VectorStream[K, Y] = new ChainedVector[K, EventGraphObject, Y](input, env) {
+      def newCell(i: Int, key: K) = cellFromKey(key)
     }
     return new VectTerm[K, Y](env)(output)
   }

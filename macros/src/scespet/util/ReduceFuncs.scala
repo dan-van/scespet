@@ -1,6 +1,7 @@
 package scespet.util
 
 import scespet.core.Reduce
+import scala.math.ScalaNumericAnyConversions
 
 /**
  * Created with IntelliJ IDEA.
@@ -12,6 +13,13 @@ import scespet.core.Reduce
 class Sum extends Reduce[Int]{
   var s = 0
   def add(n:Int):Unit = {s = n + s}
+
+  override def toString = s"Sum=$s"
+}
+
+class SumN extends Reduce[ScalaNumericAnyConversions]{
+  var s = 0
+  def add(n:ScalaNumericAnyConversions):Unit = {s = n.intValue() + s;}
 
   override def toString = s"Sum=$s"
 }
