@@ -30,7 +30,7 @@ class SimpleEnv() extends Environment {
   def registerEventSource(events: EventSource) {
     if (eventSources.add(events)) {
       if (events.hasNext()) {
-        eventSourceQueue += events
+        eventSourceQueue.enqueue( events )
       } else {
         println("Empty event source added")
       }
@@ -50,13 +50,13 @@ class SimpleEnv() extends Environment {
     val stopAt = eventI + n
     while (! eventSourceQueue.isEmpty && eventI < stopAt) {
       eventI += 1
-      val nextSource = eventSourceQueue.head
+      val nextSource = eventSourceQueue.dequeue()
 //      println(s"\nFiring event $eventI from $nextSource, hasNext= ${nextSource.hasNext()}");
       eventTime = nextSource.getNextTime
       nextSource.advanceState()
       graph.fire(nextSource)
       if (nextSource.hasNext()) {
-        eventSourceQueue += nextSource
+        eventSourceQueue.enqueue( nextSource )
       } else {
         println(s"terminated ${nextSource}")
       }

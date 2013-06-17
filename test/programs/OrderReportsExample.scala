@@ -52,6 +52,13 @@ object OrderReportsExample extends App {
 //  var eventStream = impl.query(IteratorEvents(orderEventList))
 //  out("fills") { eventStream.by(_.orderId).filterType[Fill].map(_.qty.toInt) }
 //  out("Net fill") {eventStream.by(_.orderId).filterType[Fill].map(_.qty.toInt).fold_all2(new Sum)}
-  out("Rand") {impl.query( newRandom _)}
+
+//  out("Rand") {impl.query( newRandom _)}
+  var priceFactory = new PriceFactory(impl.env)
+  var universe = impl.query(IteratorEvents(List("MSFT", "IBM", "AAPL")))
+  var books = universe.valueSet[String]().joinf( priceFactory.getBBO )
+
+  out("Rand") {books}
+
   impl.run(20)
 }

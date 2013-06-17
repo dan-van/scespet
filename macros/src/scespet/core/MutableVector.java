@@ -11,12 +11,11 @@ import java.util.*;
  * @author: danvan
  */
 public class MutableVector<X> implements VectorStream<X,X> {
-    private Class<X> type;
     private Environment env;
     private ArrayList<X> values = new ArrayList<X>();
     private ArrayList<HasValue<X>> cells = new ArrayList<HasValue<X>>();
     private Set<X> uniqueness = new HashSet<X>();
-    boolean elementsListenable;
+    Boolean elementsListenable = null;
 
     final Function nullListenable = new Function() {
         public boolean calculate() {
@@ -24,10 +23,10 @@ public class MutableVector<X> implements VectorStream<X,X> {
         }
     };
 
-    final ReshapeSignal reshaped = new ReshapeSignal(env);
+    final ReshapeSignal reshaped;
 
-    public MutableVector(Class<X> type, Iterable<X> initial, Environment env) {
-        this(type, env);
+    public MutableVector(Iterable<X> initial, Environment env) {
+        this(env);
         Iterator<X> iterator = initial.iterator();
         while (iterator.hasNext()) {
             X next = iterator.next();
@@ -35,10 +34,9 @@ public class MutableVector<X> implements VectorStream<X,X> {
         }
     }
 
-    public MutableVector(Class<X> type, Environment env) {
-        this.type = type;
+    public MutableVector(Environment env) {
         this.env = env;
-        elementsListenable = EventGraphObject.class.isAssignableFrom(type);
+        reshaped = new ReshapeSignal(env);
         env.setStickyInGraph(reshaped, true);
     }
 
@@ -117,6 +115,9 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
         @Override
         public EventGraphObject getTrigger() {
+            if (elementsListenable == null) {
+                elementsListenable = EventGraphObject.class.isAssignableFrom(next.getClass());
+            }
             if (elementsListenable) {
                 return (EventGraphObject) next;
             } else {

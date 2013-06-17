@@ -71,7 +71,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   }
 
   def takef[Y](newGenerator:(X)=>HasVal[Y]) : VectTerm[X,Y] = {
-    this.by(x => x).mapk(newGenerator)
+    this.by(x => x).joinf(newGenerator)
   }
 
 // Take a stream of X (usually representing some collection), map X -> Collection[Y] and generate a new flattened set of Y (mainly used if X is some form of collection and you want to flatten it)
@@ -79,17 +79,38 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
 
 //  def distinct2[Y : ClassTag]() = values[Y](x => {Traversable[Y](x.asInstanceOf[Y])} )
 
-  def valueSet[Y : ClassTag](expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ) : VectTerm[Y,Y] = {
-    val initial = expand(input.value)
-    val typeY = reflect.classTag[Y]
-    val javaClass : Class[Y] = typeY.runtimeClass.asInstanceOf[Class[Y]]
-    val flattenedSet = new MutableVector[Y](javaClass, initial.toIterable.asJava, env) with types.MFunc {
+  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
+
+  /**
+   * generate a new vector, keyed by the values in this stream.
+   * optionally provide a function that takes a value in the stream and yields an iterator to be used for generating many keys from one value
+   * (this is especially useful if your values in the stream are Collections, as this allows you to flatten a Stream[Set[String]] -> Vect[String,String]
+   *
+   * @param expand
+   * @tparam Y
+   * @return
+   */
+  def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X,Y] ) : VectTerm[Y,Y] = {
+    // I doubt this is ever constructed with an initial value to be expanded
+    val initial = if (input.value != null) {
+      println("ODD, input seems to already be initialised")
+      expand(input.value)
+    } else {
+      List[Y]()
+    }
+
+//    val typeY = reflect.classTag[Y]
+//    val javaClass : Class[Y] = typeY.runtimeClass.asInstanceOf[Class[Y]]
+    val flattenedSet = new MutableVector[Y](initial.toIterable.asJava, env) with types.MFunc {
       env.addListener(input.trigger, this)
 
       def calculate(): Boolean = {
-        var toAdd = expand(input.value)
-        toAdd.foreach( add(_) )
-        false
+        var changed = false
+        if (input.value != null) {
+          var toAdd = expand(input.value)
+          changed = toAdd.map(add(_)).exists(_ == true)
+        }
+        changed
       }
     }
     return new VectTerm[Y, Y](env)(flattenedSet)

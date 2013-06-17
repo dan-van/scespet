@@ -22,7 +22,7 @@ class Scesspet {
     val leaves = collection.mutable.Set[AbsTerm[_,_]]()
     val allNodes = collection.mutable.Set[AbsTerm[_,_]]()
 
-    def query[X](data: TraversableOnce[X], timeFunc:(X)=>Long) : Term[X] = {
+    def query[X](data: TraversableOnce[X], timeFunc:(X, Int)=>Long) : Term[X] = {
       var root = new TraversableRoot[X](data, timeFunc)
       addNode(null, root)
       root
@@ -81,7 +81,7 @@ class Scesspet {
 //    }
 //  }
 
-  class TraversableRoot[X](val data: TraversableOnce[X], timeFunc:(X)=>Long) extends RootTerm[X] {
+  class TraversableRoot[X](val data: TraversableOnce[X], timeFunc:(X, Int)=>Long) extends RootTerm[X] {
     def buildHasVal(env: types.Env): HasVal[X] = {
       val events = new IteratorEvents[X](data, timeFunc)
       env.registerEventSource(events)

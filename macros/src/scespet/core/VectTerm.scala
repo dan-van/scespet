@@ -150,14 +150,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
    * used to build a set from the values in a vector
    * the new vector acts like a set (key == value), generated values are folded into it.
    */
-  def valueSet[Y : ClassTag]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y] = {
+  def valueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y] = {
     val initial = collection.mutable.Set[Y]()
     for (x <- input.getValues.asScala; y <- expand(x)) {
       initial += y
     }
-    val typeY = reflect.classTag[Y]
-    val javaClass : Class[Y] = typeY.runtimeClass.asInstanceOf[Class[Y]]
-    val flattenedSet = new MutableVector[Y](javaClass, initial.toIterable.asJava, env) with types.MFunc {
+    val flattenedSet = new MutableVector[Y](initial.toIterable.asJava, env) with types.MFunc {
       val newColumnsTrigger = input.getNewColumnTrigger
       env.addListener(newColumnsTrigger, this)
       var maxTriggerIdx = 0
@@ -197,7 +195,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
    * @tparam Y
    * @return
    */
-  def mapk[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
+  def joinf[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
     val output: VectorStream[K, Y] = new ChainedVector[K, EventGraphObject, Y](input, env) {
       def newCell(i: Int, key: K) = cellFromKey(key)
     }

@@ -26,15 +26,24 @@ package object programs {
     }
   }
 
-  case class BBO(name:String, var bid:Double, var ask:Double)
+//  class BBO(val name:String, mid:HasVal[Double], spread:HasVal[Double])(implicit env:types.Env) extends IsVal(this) {
+//    env.addListener()
+//  }
 
   class PriceFactory(val env:types.Env) {
     val nameToMidStream = Map[String, HasVal[Double]]()
+    val nameToBBO = Map[String, HasVal[Double]]()
     def getMids(name:String) = {
       var midStreamO = nameToMidStream.get(name)
-      if (midStreamO.isEmpty) {
+      midStreamO.getOrElse({
+        val mids = newRandom(env)
+        nameToMidStream + name -> mids
+        mids
+      })
+    }
 
-      }
+    def getBBO(name:String) = {
+      getMids(name)
     }
   }
 }

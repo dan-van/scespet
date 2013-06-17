@@ -74,7 +74,7 @@ object Program1 extends App {
     var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
     val tradeStream = impl.query(trades)
     def getTrades(name:String) = tradeStream.filter( _.name == name)
-    val nameVectTakeTrades: VectTerm[String, Trade] = namesExpr.by(x => x).mapk(k => getTrades(k).input)
+    val nameVectTakeTrades: VectTerm[String, Trade] = namesExpr.by(x => x).joinf(k => getTrades(k).input)
     out("name to trade") {nameVectTakeTrades}
   }
 

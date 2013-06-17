@@ -32,24 +32,31 @@ trait EventSourceX[X] extends gsa.esg.mekon.core.EventSource with HasVal[X] {
 
 object IteratorEvents {
   def apply[X](iterable:TraversableOnce[X]) = {
-    val eventCount = new Function1[Any, Long] { var i = 0L;  def apply(x:Any) : Long = {i +=1; i} }
+    val eventCount = new Function2[Any, Int,Long] {
+      var i = 0L;
+      def apply(x:Any, i:Int) : Long = {
+        i
+      }
+    }
     new IteratorEvents[X](iterable, eventCount)
   }
 }
 
-class IteratorEvents[X](val iterable:TraversableOnce[X], val timeGet:(X)=>Long) extends EventSourceX[X] {
+class IteratorEvents[X](val iterable:TraversableOnce[X], val timeGet:(X, Int)=>Long) extends EventSourceX[X] {
+  var nextI = 0
   var peek:X = _
   val iterator = iterable.toIterable.iterator
   if (iterator.hasNext) peek = iterator.next()
 
   def hasNext() = peek != null
 
-  def getNextTime: Long = timeGet(peek)
+  def getNextTime: Long = timeGet(peek, nextI)
 
   var value:X = _
   def trigger = this
   def advanceState() {
     value = peek
+    nextI += 1
     if (iterator.hasNext) {
       peek = iterator.next()
     } else {
