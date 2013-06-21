@@ -29,6 +29,15 @@ return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStre
 //    ???
   }
 
+  def all():MacroTerm[Y] = {
+    val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
+      def create(source: HasVal[X], reduce: Y, env:types.Env) = new types.MFunc {
+        def calculate() = false // never create a new bucket
+      }
+    }
+    return buildTermForBucketStream(newBFunc, bucketTrigger)
+  }
+
   def each(n: Int):MacroTerm[Y] = {
     val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
       def create(source: HasVal[X], reduce: Y, env:types.Env) = new NthEvent(n, source.trigger, env)

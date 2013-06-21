@@ -96,7 +96,7 @@ trait BucketBuilder[X,T] {
 
   def window(windowStream: MacroTerm[Boolean]) :MacroTerm[T]
 
-//  def all():MacroTerm[T]
+  def all():MacroTerm[T]
 //
 //  def window(n:Events):MacroTerm[T]
 //  def window(n:Time):MacroTerm[T]
