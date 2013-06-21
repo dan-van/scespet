@@ -3,23 +3,29 @@ package programs
 import java.util.logging.Level
 import scespet.core._
 import scespet.util._
-//import gsa.esg.mekon.run.{CoreServices, TestConfig, Configurator}
-//import gsa.esg.mekon.business.{BusinessDictionary, Region}
-//import scespet.EnvTermBuilder
-//import gsa.esg.mekon.run.TestConfig.Feeds
-//import gsa.esg.mekon.components.adapters.FeedRepository
-//import gsa.esg.mekon.components.adapters.FeedRepository.FeedConfig
-//import scespet.expression.{AbsTerm, Scesspet}
-//import scala.collection.JavaConverters._
-//import gsa.esg.mekon.business.id.GSACode
-//import scala.collection.parallel.mutable
-//import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
+import gsa.esg.mekon.run.TestConfig
+import gsa.esg.mekon.business.Region
+import gsa.esg.mekon.run.TestConfig.Feeds
+import gsa.esg.mekon.components.adapters.FeedRepository
+
+import gsa.esg.mekon.run.{CoreServices, TestConfig, Configurator}
+import gsa.esg.mekon.business.{BusinessDictionary, Region}
+import scespet.EnvTermBuilder
+import gsa.esg.mekon.run.TestConfig.Feeds
+import gsa.esg.mekon.components.adapters.FeedRepository
+import gsa.esg.mekon.components.adapters.FeedRepository.FeedConfig
+import scespet.expression.{AbsTerm, Scesspet}
+import scala.collection.JavaConverters._
+import gsa.esg.mekon.business.id.GSACode
+import scala.collection.parallel.mutable
+import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
+import gsa.esg.mekon.business.price.RawBook
 
 
 /**
  * @version $Id$
  */
-object TestMekon {
+//class TestMekon {
   // ---- executing term ----
 
   object Test extends App {
@@ -66,7 +72,7 @@ object TestMekon {
 //    val feedConfigs = env.getService(classOf[FeedRepository]).getFeedConfigs.asScala.filter(_.getGroupName.contains("Reuters-EU"))
 //    //    val feeds = feedConfigs.iterator().asScala.map(x => x.inflate(env))
 //    //    val feedDicts = feeds.map(_.getFeedDictionary)
-//    val vector = new MutableVector(classOf[FeedConfig], feedConfigs.asJava, env)
+//    val vector = new MutableVector(feedConfigs.asJava, env)
 //    val start = new VectTerm(env)(vector)
 //
 //    class Printer extends Reduce[AnyRef] {
@@ -79,6 +85,27 @@ object TestMekon {
 //
 //    //    new EnvTermBuilder(env).query(query.asInstanceOf[AbsTerm[_,_]])
 //    run.run()
-//
+
   }
-}
+
+  object PrintTrades extends App {
+//    java.util.logging.Logger.getLogger("gsa.naming").setLevel(Level.SEVERE)
+//    //    java.util.logging.Logger.getLogger("gsa.esg.mekon").setLevel(Level.WARNING)
+//    //    new SimpleEvaluator().run(prog)
+//    //    var env = new SimpleEnv
+//    //    val cfg = new Configurator()
+//    val cfg = new TestConfig()
+//    cfg.setTimeRange("yesterday", Region.EU)
+//    cfg.addFeeds("ReutersTrade-EU", Feeds.KEYFRAME)
+//    val run = cfg.newRunner()
+//    //    var env = new MekonEnv
+//    val env = run.getEnvironment
+//
+//    val trades = new EnvTermBuilder(env).queryE(env.getService(classOf[CoreServices]).acquireTradeSource(new GSACode("VOD.L")))
+//    val accvol = trades.map(_.getNewTrade).filter(_ != null).map(_.getAmount.intValue()).reduce(new Sum).all()
+//    run.run()
+//    // todo: need to trigger a bucket close on system shutdown
+//    println("Final ACCVOL = "+accvol.input.asInstanceOf[BucketMaintainer[Sum, _]].nextBucket)
+  }
+
+//}

@@ -13,7 +13,7 @@ import gsa.esg.mekon.core.EventGraphObject
  * To change this template use File | Settings | File Templates.
  */
 class EnvTermBuilder(val env :types.Env) {
-  def query[X](func: X) : MacroTerm[X] = {
+  def queryE[X <: EventGraphObject](func: X) : MacroTerm[X] = {
     var hasVal = new IsVal[X](func)
     return new MacroTerm[X](env)(hasVal)
   }
