@@ -3,14 +3,10 @@
   <component name="FacetManager">
     <facet type="scala" name="Scala">
       <configuration>
+        <option name="compileOrder" value="JavaThenScala" />
         <option name="compilerLibraryLevel" value="Global" />
         <option name="compilerLibraryName" value="scala-2.10" />
         <option name="compilerOptions" value="-Xexperimental" />
-        <option name="pluginPaths">
-          <array>
-            <option value="libs/annotations-2.0.1.jar" />
-          </array>
-        </option>
       </configuration>
     </facet>
   </component>

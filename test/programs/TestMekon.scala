@@ -20,6 +20,9 @@ import gsa.esg.mekon.business.id.GSACode
 import scala.collection.parallel.mutable
 import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
 import gsa.esg.mekon.business.price.RawBook
+import gsa.esg.mekon.components.trading.feeds.sirocco.SiroccoFeedFactory
+import gsa.esg.mekon.components.Timer
+import gsa.esg.mekon.components.trading.feeds.sirocco.SiroccoFeedFactory.Replay
 
 
 /**
@@ -94,16 +97,22 @@ import gsa.esg.mekon.business.price.RawBook
 //    //    new SimpleEvaluator().run(prog)
 //    //    var env = new SimpleEnv
 //    //    val cfg = new Configurator()
-//    val cfg = new TestConfig()
-//    cfg.setTimeRange("yesterday", Region.EU)
-//    cfg.addFeeds("ReutersTrade-EU", Feeds.KEYFRAME)
-//    val run = cfg.newRunner()
-//    //    var env = new MekonEnv
-//    val env = run.getEnvironment
-//
-//    val trades = new EnvTermBuilder(env).queryE(env.getService(classOf[CoreServices]).acquireTradeSource(new GSACode("VOD.L")))
+    val cfg = new TestConfig()
+    cfg.setTimeRange("today", Region.AP)
+    cfg.install(new SiroccoFeedFactory.Live().setFullPacketRetransEnabled(true))
+    cfg.install(new Replay())
+    cfg.setProperties("FeedFactory.feedFilter=SiroccoReuters-AP")
+
+    val run = cfg.newRunner()
+    val env = run.getEnvironment
+
+
+    val builder = new EnvTermBuilder(env)
+    val trades = builder.queryE(env.getService(classOf[CoreServices]).acquireTradeSource(new GSACode("4768.T")))
+    val tradesPerMinute = trades map(_.getNewTrade) filter(_ != null) reduce(new Counter2) reset_post( Timer.getMidnightAnchored(60000, 0, env) )
+    out( s"Trades per minute " ){tradesPerMinute}
 //    val accvol = trades.map(_.getNewTrade).filter(_ != null).map(_.getAmount.intValue()).reduce(new Sum).all()
-//    run.run()
+    run.run()
 //    // todo: need to trigger a bucket close on system shutdown
 //    println("Final ACCVOL = "+accvol.input.asInstanceOf[BucketMaintainer[Sum, _]].nextBucket)
   }

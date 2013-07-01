@@ -42,36 +42,36 @@ object Program1 extends App {
   var trades = IteratorEvents(tradeList)
 
   def v1 = {
-    var namesExpr: Term[String] = impl.query(names).asInstanceOf[Term[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     out("name:"){namesExpr}
   }
   def v1a = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     out(".N names:"){ namesExpr.filter(_.endsWith(".N")) }
   }
   // todo: more single tests, macros, etc
 
   // now some vector tests
   def v2 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     out("by length:") {namesExpr.by(x => x.length)}
   }
   def v3 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     out("by length, mapped") {namesExpr.by(x => x.length).map(x => "prefix"+x)}
   }
   def v4 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     out("by length, counted") {namesExpr.by(x => x.length).fold_all_noMacro(() => {new Counter[String]})}
   }
   def v5 = {
     // test multiple event sources
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     out("Trade:") { impl.query(trades) }
     out("Name:") { namesExpr }
   }
   def v6 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     val tradeStream = impl.query(trades)
     def getTrades(name:String) = tradeStream.filter( _.name == name)
     val nameVectTakeTrades: VectTerm[String, Trade] = namesExpr.by(x => x).joinf(k => getTrades(k).input)

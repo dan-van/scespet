@@ -104,7 +104,7 @@ trait BucketBuilder[X,T] {
 //
 //  // todo: add a parameter for the input stream
 //  def reset_pre(f:T=>Boolean):MacroTerm[T]
-//  def reset_post(f:T=>Boolean):MacroTerm[T]
+  def reset_post(trigger:EventGraphObject):MacroTerm[T]
 }
 
 trait BucketBuilderVect[K, X, T] {
