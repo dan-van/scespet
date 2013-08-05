@@ -13,6 +13,8 @@ import gsa.esg.mekon.core.EventGraphObject
  * To change this template use File | Settings | File Templates.
  */
 class EnvTermBuilder(val env :types.Env) {
+  // I'm sure there's some scala way of making this work without needing a unique method name.
+  // if I make this just "query" I get ambiguous method errors.
   def queryE[X <: EventGraphObject](func: X) : MacroTerm[X] = {
     var hasVal = new IsVal[X](func)
     return new MacroTerm[X](env)(hasVal)
