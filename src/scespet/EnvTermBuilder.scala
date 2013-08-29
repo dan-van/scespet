@@ -42,4 +42,8 @@ class EnvTermBuilder(val env :types.Env) {
     query(hasVal)
   }
 
+  def query[X <: EventGraphObject](elements:Iterable[X]) :VectTerm[X,X] = {
+    import scala.collection.JavaConverters._
+    new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
+  }
 }

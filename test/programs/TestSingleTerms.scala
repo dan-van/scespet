@@ -51,7 +51,8 @@ object TestSingleTerms extends App {
   }
   def v2 = {
     out("Vod trade bucket:") {
-      impl.query(trades).filter(_.name == "VOD.L").map(_.qty).reduce(new Sum).each(2)
+      var map: MacroTerm[Int] = impl.query(trades).filter(_.name == "VOD.L").map(_.qty)
+      map.reduce(new Sum).each(2)
     }
   }
   def v3 = {

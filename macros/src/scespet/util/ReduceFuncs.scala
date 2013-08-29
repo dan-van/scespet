@@ -1,7 +1,6 @@
 package scespet.util
 
 import scespet.core.Reduce
-import scala.math.ScalaNumericAnyConversions
 
 /**
  * Created with IntelliJ IDEA.
@@ -10,7 +9,10 @@ import scala.math.ScalaNumericAnyConversions
  * Time: 10:46
  * To change this template use File | Settings | File Templates.
  */
-class Sum[X:Numeric] extends Reduce[X]{
+class Sum extends SumN[Int]
+
+
+class SumN[X:Numeric] extends Reduce[X]{
   var s = 0
   def add(n:X):Unit = {s = s + implicitly[Numeric[X]].toInt(n)}
 

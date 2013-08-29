@@ -56,11 +56,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
     public boolean addAll(Iterable<X> xs) {
         boolean added = false;
         for (X x : xs) {
-            boolean add = uniqueness.add(x);
-            if (add) {
-                added = true;
-                values.add(x);
-            }
+            added |= add(x);
         }
         if (added) {
             env.wakeupThisCycle(reshaped);
@@ -98,7 +94,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
     @Override
     public HasValue<X> getValueHolder(int i) {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return cells.get(i);
     }
 
     private class Cell<X> implements HasValue<X> {
