@@ -99,21 +99,9 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return newIsomorphicVector(cellBuilder)
   }
 
-  def fold_all2[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
+  def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
     val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
       val value = reduceBuilder
-      def calculate():Boolean = {
-        val x: X = input.get(index)
-        value.add(x)
-        return true
-      }
-    }
-    return newIsomorphicVector(cellBuilder)
-  }
-
-  def fold_all_noMacro[Y <: Reduce[X]](reduceBuilder:() => Y):VectTerm[K,Y] = {
-    val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
-      val value = reduceBuilder.apply()
       def calculate():Boolean = {
         val x: X = input.get(index)
         value.add(x)
@@ -189,8 +177,9 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   }
 
   /**
-   * derive a new vector with the same keys as this one, but different values.
-   * ,aybe this should be called 'takef', or 'joinf' ? (i.e. we're 'taking' or 'joining' with a function?)
+   * derive a new vector by applying a function to the keys of the current vector.
+   * The new vector will have the same keys, but different values.
+   * todo: maybe this should be called 'takef', or 'joinf' ? (i.e. we're 'taking' or 'joining' with a function?)
    *@param cellFromKey
    * @tparam Y
    * @return
@@ -200,6 +189,21 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
       def newCell(i: Int, key: K) = cellFromKey(key)
     }
     return new VectTerm[K, Y](env)(output)
+  }
+
+  def sample(evt:EventGraphObject):VectTerm[K,X] = {
+    val output: VectorStream[K, X] = new ChainedVector[K, EventGraphObject, X](input, env) {
+      def newCell(i: Int, key: K) = new UpdatingHasVal[X] {
+        var value:X = _
+        env.addListener(evt, this)
+
+        def calculate() = {
+          value = input.get(i)
+          true
+        }
+      }
+    }
+    return new VectTerm[K, X](env)(output)
   }
 
   def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)

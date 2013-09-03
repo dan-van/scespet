@@ -161,14 +161,15 @@ object PrintStale extends App {
 }
 
 object RealtimePrint extends App {
+  import EnvTermBuilder.eventObjectToHasVal
   val cfg = new TestConfig()
   cfg.setTimeRange("today", Region.EU)
   cfg.addFeeds("SiroccoReuters-EU", Feeds.SIROCCO)
   cfg.install(new MekonProgram[Unit] {
     def initProgram(env: Environment) {
       val builder = new EnvTermBuilder(env)
-      val trades = builder.queryE( acquireTradeSource(new GSACode("VOD.L")) )
-      val accVol = trades.filter(_.getNewTrade != null).map(_.getNewTrade.getAmnt).fold_all(new SumN[Long])
+      val trades = builder.query( acquireTradeSource(new GSACode("VOD.L")) )
+      val accVol = trades.filter(_.getNewTrade != null).map(_.getNewTrade.getAmnt).fold_all(new Sum[Long])
       out( s"Trade at ${env.prettyPrintClockTime()}:" ){ trades.map(_.getNewTrade) }
       out(s"AccVol at ${env.prettyPrintClockTime()}:") {accVol}
     }
@@ -188,15 +189,17 @@ object RawTrades extends App {
   println("got "+tradeFeedDicts.size)
 
   var dictionaries = builder.query(tradeFeedDicts)
+  // add a printer for all added entries to all dictionaries:
   dictionaries.map(d => {println(s"${d.getFeed.getName} added entries: ${d.getAdded}")})
-  private var interstingKeys :VectTerm[FeedSymbolMetaData, FeedSymbolMetaData] = dictionaries.valueSet(_.getAdded.filter(_.getKey == "ADENE.S"))
-  out("keys"){interstingKeys}
-  private var tradeSource: VectTerm[FeedSymbolMetaData, FeedTradeSource] = interstingKeys.joinf(_ match {case (k:FeedSymbolMetaData) => {
-    new IsVal( k.getFeed.asInstanceOf[Feed[FeedTradeSource, FeedSymbolMetaData]].acquireEventSourceReference(k) )
-  }})
-  var tradeCount = tradeSource.fold_all2(new Counter2)
-  out("tradeCount"){
-    tradeCount }
+
+  // take a subset of keys that match a predicate
+  val interstingKeys = dictionaries.valueSet[FeedSymbolMetaData](_.getAdded.filter(_.getKey == "ADENE.S"))
+  out("keys")(interstingKeys)
+
+  // transform them into inflated tradeSources
+  val tradeSources = interstingKeys.joinf( x => new IsVal( x.getFeed.asInstanceOf[Feed[FeedTradeSource, FeedSymbolMetaData]].acquireEventSourceReference(x) ) )
+  var tradeCount = tradeSources.fold_all(new Counter2)
+  out("tradeCount"){ tradeCount }
   run.runTo("09:00")
   println(interstingKeys.input.getKeys)
 }

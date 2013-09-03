@@ -37,11 +37,11 @@ object Program2 extends App {
   var trades = IteratorEvents(tradeList)//  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
   def v1 = {
-    val namesExpr: MacroTerm[Sum] = impl.query(trades).map(_.qty).reduce(new Sum).each(3)
+    val namesExpr = impl.query(trades).map(_.qty).reduce(new Sum[Int]).each(3)
     out("sum each 3 elements:"){namesExpr}
   }
   def v2 = { // now with vectors
-    var namesExpr = impl.query(trades).by(_.name).map(_.qty).reduceNoMacro(new Sum).each(3)
+    var namesExpr = impl.query(trades).by(_.name).map(_.qty).reduceNoMacro(new Sum[Int]).each(3)
     out("ewma each 3 elements by name:"){namesExpr}
   }
 
@@ -58,7 +58,7 @@ object Program2 extends App {
   def v3 = {
 //    var start = impl.query(trades)
     val nameStream = impl.query(names)
-    val start = nameStream.takef(getTrades).fold_all_noMacro(() => new Collect)
+    val start = nameStream.takef(getTrades).fold_all(new Collect)
     impl.run()
     println("run finished. Final data = ")
     for (i <- 0 to start.input.getSize() - 1 ) {

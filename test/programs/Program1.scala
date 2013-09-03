@@ -62,7 +62,7 @@ object Program1 extends App {
   }
   def v4 = {
     var namesExpr: MacroTerm[String] = impl.query(names)
-    out("by length, counted") {namesExpr.by(x => x.length).fold_all_noMacro(() => {new Counter[String]})}
+    out("by length, counted") {namesExpr.by(x => x.length).fold_all(new Counter[String])}
   }
   def v5 = {
     // test multiple event sources

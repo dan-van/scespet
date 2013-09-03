@@ -50,6 +50,13 @@ trait HasVal[X] extends HasValue[X]{
   def getTrigger: EventGraphObject = trigger
 }
 
+object HasVal {
+  implicit def funcToHasVal[F <: EventGraphObject](f:F) = new HasVal[F] {
+    val value = f
+    def trigger = value.asInstanceOf[EventGraphObject]
+  }
+}
+
 trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
   /**
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
