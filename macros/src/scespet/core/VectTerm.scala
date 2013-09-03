@@ -3,6 +3,7 @@ package scespet.core
 import gsa.esg.mekon.core.EventGraphObject
 import scala.reflect.ClassTag
 import java.util.logging.Logger
+import scespet.core.VectorStream.ReshapeSignal
 
 /**
  * Created with IntelliJ IDEA.
@@ -16,6 +17,57 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   import scala.collection.JavaConverters._
 
   import scala.language.experimental.macros
+
+  def apply(k:K):MacroTerm[X] = {
+    val index: Int = input.getKeys.indexOf(k)
+    val cell:HasVal[X] = if (index >= 0) {
+      var holder: HasValue[X] = input.getValueHolder(index)
+      new HasVal[X] {
+        def value = holder.value
+        def trigger = holder.getTrigger
+       }
+    } else {
+      // construct an empty slot and bind it when the key appears
+      val valueHolder = new ChainedCell[X]
+      var newColumns: ReshapeSignal = input.getNewColumnTrigger
+      env.addListener(newColumns, new types.MFunc {
+        var searchedUpTo = input.getSize
+        def calculate():Boolean = {
+          for (i <- searchedUpTo to input.getSize - 1) {
+            if (input.getKey(i) == k) {
+              if (newColumns.newColumnHasValue(i)) {
+                valueHolder.calculate()
+              }
+              valueHolder.bindTo(input.getValueHolder(i))
+              env.removeListener(newColumns, this)
+              searchedUpTo = i
+              return true
+            }
+          }
+          searchedUpTo = input.getSize
+          false
+        }
+      })
+      valueHolder
+    }
+    new MacroTerm[X](env)(cell)
+  }
+
+
+  private class ChainedCell[C]() extends UpdatingHasVal[C] {
+    var source: HasValue[C] = _
+    var value = null.asInstanceOf[C]
+
+    def calculate() = {
+      value = source.value
+      true
+    }
+
+    def bindTo(newSource: HasValue[C]) {
+      this.source = newSource
+      env.addListener(newSource, this)
+    }
+  }
 
   /**
    * demultiplex operation. Want to think more about other facilities on this line
