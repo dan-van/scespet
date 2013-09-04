@@ -62,7 +62,7 @@ object Program1 extends App {
   }
   def v4 = {
     var namesExpr: MacroTerm[String] = impl.query(names)
-    out("by length, counted") {namesExpr.by(x => x.length).fold_all(new Counter[String])}
+    out("by length, counted") {namesExpr.by(x => x.length).fold_all(new Counter)}
   }
   def v5 = {
     // test multiple event sources
@@ -83,17 +83,17 @@ object Program1 extends App {
   // test vector windows
   def v7 = {
     val tradeStream = impl.query(trades)
-    val counter = tradeStream.fold_all(new Counter[Trade])
+    val counter = tradeStream.fold_all(new Counter)
     val windows = counter.map(_.c % 3 != 0)
     out("WindowState: open="){windows}
-    out("by name, count within window") {tradeStream.by(_.name).reduceNoMacro(new Counter[Trade]).window(windows)}
+    out("by name, count within window") {tradeStream.by(_.name).reduceNoMacro(new Counter).window(windows)}
   }
 
   // test per-element vector windows
   def v8 = {
     val tradeStream = impl.query(trades)
-    def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter[Trade]).map(_.c % 3 != 0).input
-    out("by name, window %3 count") {tradeStream.by(_.name).reduceNoMacro(new Counter[Trade]).window(windows _)}
+    def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter).map(_.c % 3 != 0).input
+    out("by name, window %3 count") {tradeStream.by(_.name).reduceNoMacro(new Counter).window(windows _)}
   }
 
   //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }

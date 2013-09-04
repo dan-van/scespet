@@ -55,7 +55,7 @@ object TradesExample extends App {
   }
 
   def v3 = {
-    val counter: MacroTerm[Counter[Trade]] = tradeExpr.fold_all(new Counter)
+    val counter: MacroTerm[Counter] = tradeExpr.fold_all(new Counter)
     val windowStream = counter.map(x => (x.c % 3) != 0)
     val tradeBuckets = tradeExpr.reduce(new TradePrint).window(windowStream)
     out("test="){counter.join(windowStream)}

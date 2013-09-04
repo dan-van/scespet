@@ -14,12 +14,6 @@ import gsa.esg.mekon.core.EventGraphObject
  */
 class EnvTermBuilder(val env :types.Env) {
 
-  // I'm sure there's some scala way of making this work without needing a unique method name.
-  // if I make this just "query" I get ambiguous method errors.
-  def queryE[X](data : HasVal[X]) : MacroTerm[X] = {
-    return new MacroTerm[X](env)(data)
-  }
-
   def query[X](data: HasVal[X]) : MacroTerm[X] = {
     return new MacroTerm[X](env)(data)
   }
@@ -42,7 +36,7 @@ class EnvTermBuilder(val env :types.Env) {
     query(hasVal)
   }
 
-  def query[X](elements:Iterable[X]) :VectTerm[X,X] = {
+  def asVector[X](elements:Iterable[X]) :VectTerm[X,X] = {
     import scala.collection.JavaConverters._
     new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
   }

@@ -32,9 +32,9 @@ class Collect extends Reduce[AnyRef] {
  * todo: how can we genericise Counter to allow type inference to fill in the type param here?
  * @tparam T
  */
-class Counter[T] extends Reduce[T] {
+class Counter extends Reduce[Any] {
   var c=0
-  def add(x: T) { c += 1 }
+  override def add(x: Any) { c += 1 }
 
   override def toString = String.valueOf(c)
 }

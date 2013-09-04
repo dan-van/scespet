@@ -65,7 +65,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 
     def bindTo(newSource: HasValue[C]) {
       this.source = newSource
-      env.addListener(newSource, this)
+      env.addListener(newSource.getTrigger, this)
     }
   }
 
@@ -231,8 +231,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   /**
    * derive a new vector by applying a function to the keys of the current vector.
    * The new vector will have the same keys, but different values.
-   * todo: maybe this should be called 'takef', or 'joinf' ? (i.e. we're 'taking' or 'joining' with a function?)
-   *@param cellFromKey
+   *
+   * TODO: naming
+   * this is related to "map", but "map" is a function of value, this is a function of key
+   * maybe this should be called 'mapkey', or 'takef'? (i.e. we're 'taking' cells from the domain 'cellFromKey'?)
+   * the reason I chose 'join' is that we're effectively doing a left join of this vector onto a vector[domain, cellFromKey]
+   @param cellFromKey
    * @tparam Y
    * @return
    */
