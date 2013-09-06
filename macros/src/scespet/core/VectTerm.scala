@@ -42,6 +42,9 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
       var value:Y = _
       def calculate() = {
         var in = input.get(index)
+        if (in == null) {
+          println("null input")
+        }
         value = f(in);
         true
       }
@@ -99,21 +102,9 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return newIsomorphicVector(cellBuilder)
   }
 
-  def fold_all2[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
+  def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
     val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
       val value = reduceBuilder
-      def calculate():Boolean = {
-        val x: X = input.get(index)
-        value.add(x)
-        return true
-      }
-    }
-    return newIsomorphicVector(cellBuilder)
-  }
-
-  def fold_all_noMacro[Y <: Reduce[X]](reduceBuilder:() => Y):VectTerm[K,Y] = {
-    val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
-      val value = reduceBuilder.apply()
       def calculate():Boolean = {
         val x: X = input.get(index)
         value.add(x)
@@ -190,7 +181,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 
   /**
    * derive a new vector with the same keys as this one, but different values.
-   * ,aybe this should be called 'takef', or 'joinf' ? (i.e. we're 'taking' or 'joining' with a function?)
+   * maybe this should be called 'takef', or 'joinf' ? (i.e. we're 'taking' or 'joining' with a function?)
+   * todo: I think this is misnamed, if it exists, it should generate tuples as the values
    *@param cellFromKey
    * @tparam Y
    * @return
@@ -202,9 +194,31 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return new VectTerm[K, Y](env)(output)
   }
 
-  def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
+  /**
+   * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
+   * e.g. we could have a vector of name->RandomStream and generate a derived
+   * @param cellFromEntry
+   * @tparam Y
+   * @return
+   */
+  def takekv[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y] = {
+    val output: VectorStream[K, Y] = new ChainedVector[K, EventGraphObject, Y](input, env) {
+      def newCell(i: Int, key: K) = {
+        val valuePresent = input.getNewColumnTrigger.newColumnHasValue(i)
+        if (!valuePresent) {
+          // not sure what to do
+          cellFromEntry(key, input.get(i))
+        } else {
+          cellFromEntry(key, input.get(i))
+        }
+      }
+    }
+    return new VectTerm[K, Y](env)(output)
+  }
 
-  def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
+
+//  def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
 
   def newBucketBuilder[B](newB: () => B): BucketBuilderVect[K, X, B] = {
     type Y = B with Reduce[X]

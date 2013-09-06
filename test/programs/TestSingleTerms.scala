@@ -36,8 +36,9 @@ object TestSingleTerms extends App {
   nameList += "BARC.L"
 
   val impl: SimpleEvaluator = new SimpleEvaluator()
-  var names = IteratorEvents(nameList)
-  var trades = IteratorEvents(tradeList)//  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
+  var names = IteratorEvents(nameList)((_,_) => 0L)
+  var trades = IteratorEvents(tradeList)((_,i) => i)
+  //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
 //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 

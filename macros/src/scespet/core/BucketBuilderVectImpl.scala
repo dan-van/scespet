@@ -22,11 +22,28 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:Ve
     return new VectTerm[K,Y](env)(chainedVector)
   }
 
-  def window(windowFunc: K=>HasVal[Boolean]) :VectTerm[K,Y] = {
+  def window(windowFunc: K=>HasValue[Boolean]) :VectTerm[K,Y] = {
     val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
         val sourcehasVal = inputVectorStream.getValueHolder(i)
         val perCellWindow = windowFunc(key)
+        new WindowedReduce[X,Y](sourcehasVal, perCellWindow, newBFunc, env)
+      }
+    }
+    return new VectTerm[K,Y](env)(chainedVector)
+  }
+
+  /**
+   * do a takef on the given vector to get hasValue[Boolean] for each key in this vector.
+   * if the other vector does not have the given key, the window will be assumed to be false (i.e. not open)
+   * @return
+   */
+  def window(windowVect: VectTerm[K, Boolean]): VectTerm[K, Y] = {
+    val chainedVector = new ChainedVector[K, WindowedReduce[X, Y], Y](inputVectorStream, env) {
+      def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
+        val sourcehasVal = inputVectorStream.getValueHolder(i)
+        val idx = windowVect.input.indexOf(key)
+        val perCellWindow = windowVect.input.getValueHolder(idx)
         new WindowedReduce[X,Y](sourcehasVal, perCellWindow, newBFunc, env)
       }
     }

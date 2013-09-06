@@ -22,14 +22,14 @@ object OrderReportsExample extends App {
 
   val orderEventList = new ArrayBuffer[OrderEvent]
   orderEventList += NewOrder(0, "ord1", "MSFT", 101, 100)
-  orderEventList += NewOrder(1, "ord2", "VOD", 1.2, 100)
-  orderEventList += Fill(10, "ord2", 1.3, 10)
-  orderEventList += Fill(11, "ord2", 1.3, 10)
-  orderEventList += Fill(12, "ord1", 101.3, 20)
-  orderEventList += Fill(15, "ord1", 101.1, 50)
-  orderEventList += Terminate(15, "ord1")
-  orderEventList += Fill(16, "ord2", 1.4, 20)
-  orderEventList += Terminate(15, "ord2")
+  orderEventList += NewOrder(1000, "ord2", "IBM", 1.2, 100)
+  orderEventList += Fill(20000, "ord2", 1.3, 10)
+  orderEventList += Fill(21000, "ord2", 1.3, 10)
+  orderEventList += Fill(22000, "ord1", 101.3, 20)
+  orderEventList += Fill(25000, "ord1", 101.1, 50)
+  orderEventList += Terminate(25000, "ord1")
+  orderEventList += Fill(26000, "ord2", 1.4, 20)
+  orderEventList += Terminate(27000, "ord2")
 
   class OrderState extends Reduce[OrderEvent] {
     var orderId:String = _
@@ -55,10 +55,22 @@ object OrderReportsExample extends App {
 
 //  out("Rand") {impl.query( newRandom _)}
   var priceFactory = new PriceFactory(impl.env)
-  var universe = impl.query(IteratorEvents(List("MSFT", "IBM", "AAPL")))
-  var books = universe.valueSet[String]().joinf( priceFactory.getBBO )
+//  var universe = impl.query(IteratorEvents(List("MSFT", "IBM", "AAPL")))
+//  var books = universe.valueSet[String]().joinf( priceFactory.getBBO )
+//  var trades = universe.valueSet().joinf( priceFactory.getTrades )
+  val orderEvents = impl.query(IteratorEvents(orderEventList)((o, _) => o.time))
+  val orderWindows = orderEvents.by(_.orderId).map(!_.isInstanceOf[Terminate])
+//  val orderIdToName = collection.mutable.HashMap[String, String]()
+//  orderEvents.filterType[NewOrder].map(o => orderIdToName.put(o.orderId, o.stock))
+  //  def orderIdToWindow(id:String) = orderWindows.input.getValueHolder(orderWindows.input.getKeys.indexOf(id))
+  //  val orderIdToTrades = orderEvents.by(_.orderId).filterType[NewOrder].joinf(o => priceFactory.getTrades(o.stock))
+  val orderIdToTrades = orderEvents.by(_.orderId).filterType[NewOrder].takekv((k,v) => priceFactory.getTrades(v.stock))
+//  out ("ordId:trades ") { orderIdToTrades.reduceNoMacro( new Sum ).window( orderWindows ) }
+  out ("ordId:trades ") { orderIdToTrades.map(_.qty.toInt).reduce( new Sum ).window( orderWindows ) }
+  //  orderIdToTrades.map(_.value.qty.toInt).reduceNoMacro(new Sum).window( x => orderIdToWindow(x)  )
+  //  orderIdToTrades.reduce(new Sum).window(id => orderWindows.get(id)) //todo
+  //  out("Rand") {trades}
+//  out("OrderOpen") {orderWindows}
 
-  out("Rand") {books}
-
-  impl.run(20)
+  impl.run(200)
 }

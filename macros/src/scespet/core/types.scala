@@ -121,7 +121,14 @@ trait BucketBuilderVect[K, X, T] {
    * window each element in the vector with the given window function
    * @return
    */
-  def window(windowFunc: K => HasVal[Boolean]) :VectTerm[K, T]
+  def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, T]
+
+  /**
+   * do a takef on the given vector to get hasValue[Boolean] for each key in this vector.
+   * if the other vector does not have the given key, the window will be assumed to be false (i.e. not open)
+   * @return
+   */
+  def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, T]
 }
 
 trait Reduce[-X] {

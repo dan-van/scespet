@@ -26,7 +26,7 @@ object TradesExample extends App {
   tradeList += new Trade("VOD", 8.12, 10000)
   tradeList += new Trade("MSFT", 9.12, 2000)
 
-  var trades = IteratorEvents(tradeList)
+  var trades = IteratorEvents(tradeList)((_,i) => i)
 
   class TradePrint extends Reduce[Trade]{
     var accVol = 0

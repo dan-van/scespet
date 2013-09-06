@@ -33,15 +33,16 @@ object Program2 extends App {
   nameList += "BARC.L"
 
   val impl: SimpleEvaluator = new SimpleEvaluator()
-  var names = IteratorEvents(nameList)
-  var trades = IteratorEvents(tradeList)//  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
+  var names = IteratorEvents(nameList)((_,_) => 0L)
+  var trades = IteratorEvents(tradeList)((_,i) => i)
+  //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
   def v1 = {
     val namesExpr: MacroTerm[Sum] = impl.query(trades).map(_.qty).reduce(new Sum).each(3)
     out("sum each 3 elements:"){namesExpr}
   }
   def v2 = { // now with vectors
-    var namesExpr = impl.query(trades).by(_.name).map(_.qty).reduceNoMacro(new Sum).each(3)
+    var namesExpr = impl.query(trades).by(_.name).map(_.qty).reduce(new Sum).each(3)
     out("ewma each 3 elements by name:"){namesExpr}
   }
 

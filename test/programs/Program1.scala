@@ -38,11 +38,11 @@ object Program1 extends App {
 
 //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
-  var names = IteratorEvents(nameList)
-  var trades = IteratorEvents(tradeList)
+  var names = IteratorEvents(nameList)( (_,_) => 0L)
+  var trades = IteratorEvents(tradeList)((_,i) => i)
 
   def v1 = {
-    var namesExpr: Term[String] = impl.query(names).asInstanceOf[Term[String]]
+    var namesExpr: MacroTerm[String] = impl.query(names)
     out("name:"){namesExpr}
   }
   def v1a = {
@@ -86,14 +86,14 @@ object Program1 extends App {
     val counter = tradeStream.fold_all(new Counter[Trade])
     val windows = counter.map(_.c % 3 != 0)
     out("WindowState: open="){windows}
-    out("by name, count within window") {tradeStream.by(_.name).reduceNoMacro(new Counter[Trade]).window(windows)}
+    out("by name, count within window") {tradeStream.by(_.name).reduce(new Counter[Trade]).window(windows)}
   }
 
   // test per-element vector windows
   def v8 = {
     val tradeStream = impl.query(trades)
     def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter[Trade]).map(_.c % 3 != 0).input
-    out("by name, window %3 count") {tradeStream.by(_.name).reduceNoMacro(new Counter[Trade]).window(windows _)}
+    out("by name, window %3 count") {tradeStream.by(_.name).reduce(new Counter[Trade]).window(windows _)}
   }
 
   //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }

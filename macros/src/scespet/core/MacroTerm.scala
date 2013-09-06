@@ -15,6 +15,13 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
 
 
   // this will be a synonym for fold(Y).all
+  /**
+   * Fold is a running reduction - the new state of the reduction is exposed after each element addition
+   * e.g. a running cumulative sum, as opposed to a sum
+   * @param y
+   * @tparam Y
+   * @return
+   */
   def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
     val listener = new AbsFunc[X,Y] {
       value = y
@@ -36,6 +43,10 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     }
     env.addListener(input.trigger, listener)
     return new MacroTerm[Y](env)(listener)
+  }
+
+  def filterType[Y : ClassTag]():MacroTerm[Y] = {
+    filter(_.isInstanceOf[Y]).map(_.asInstanceOf[Y])
   }
 
   def filter(accept: (X) => Boolean):MacroTerm[X] = {
@@ -79,7 +90,9 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
 
 //  def distinct2[Y : ClassTag]() = values[Y](x => {Traversable[Y](x.asInstanceOf[Y])} )
 
-  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
+  private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
+
+  def valueSet() : VectTerm[X,X] = valueSet(valueToSingleton[X])
 
   /**
    * generate a new vector, keyed by the values in this stream.
@@ -90,7 +103,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
    * @tparam Y
    * @return
    */
-  def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X,Y] ) : VectTerm[Y,Y] = {
+  def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X] ) : VectTerm[Y,Y] = {
     // I doubt this is ever constructed with an initial value to be expanded
     val initial = if (input.value != null) {
       println("ODD, input seems to already be initialised")
@@ -149,6 +162,14 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
 //  def reduce[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
   def reduce[Y](bucketFunc: Y):BucketBuilder[X,Y] = macro BucketMacro.bucket2Macro[X,Y]
 
+  /**
+   * This yields a partially built reduction, the next call determines when the reduction terminates (and yields a result)
+   * e.g. reduce( new Sum ) each (10)
+   * will yield the sum of every 10 elements
+   * @param newBFunc
+   * @tparam Y
+   * @return
+   */
   def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, env)
 
   def newBucketBuilder[B](newB: () => B):BucketBuilder[X, B] = {

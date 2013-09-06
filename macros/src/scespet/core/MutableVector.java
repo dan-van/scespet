@@ -5,12 +5,15 @@ import gsa.esg.mekon.core.EventGraphObject;
 import gsa.esg.mekon.core.Function;
 
 import java.util.*;
+import java.util.logging.Logger;
 
 /**
  * @version $Id$
  * @author: danvan
  */
 public class MutableVector<X> implements VectorStream<X,X> {
+    private final static Logger logger = Logger.getLogger(MutableVector.class.getName());
+
     private Environment env;
     private ArrayList<X> values = new ArrayList<X>();
     private ArrayList<HasValue<X>> cells = new ArrayList<HasValue<X>>();
@@ -78,6 +81,16 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
     public List<X> getValues() {
         return values;
+    }
+
+    @Override
+    public int indexOf(X key) {
+        logger.warning("This could be slow");
+        int idx = values.indexOf(key);
+        if (idx < 0) {
+            logger.warning(key+" not found");
+        }
+        return idx;
     }
 
     public X get(int i) {

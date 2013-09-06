@@ -11,6 +11,29 @@ import scespet.core.types
  * To change this template use File | Settings | File Templates.
  */
 package object programs {
+  case class Trade(name:String, price:Double, qty:Double)
+
+  abstract class EventGenerator[X](nextTime:Long) extends EventSourceX[X] {
+    var hasNext = true
+    var getNextTime = nextTime
+    var value:X = _
+
+    def trigger:scespet.core.types.EventGraphObject = this
+
+
+    def generate(): (X, Long)
+
+    def advanceState() {
+      var xAndNext = generate()
+      value = xAndNext._1
+      if (xAndNext._2 == Long.MaxValue) {
+        hasNext = false
+      } else {
+        getNextTime = xAndNext._2
+      }
+    }
+  }
+
   def newRandom(env:types.Env) = new EventSourceX[Double] {
     var getNextTime: Long = env.getEventTime()
     val random = new Random()
@@ -32,7 +55,9 @@ package object programs {
 
   class PriceFactory(val env:types.Env) {
     val nameToMidStream = Map[String, HasVal[Double]]()
+    val nameToTradeStream = Map[String, HasVal[Trade]]()
     val nameToBBO = Map[String, HasVal[Double]]()
+
     def getMids(name:String) = {
       var midStreamO = nameToMidStream.get(name)
       midStreamO.getOrElse({
@@ -44,6 +69,24 @@ package object programs {
 
     def getBBO(name:String) = {
       getMids(name)
+    }
+    def getTrades(name:String) = {
+      var tradeStreamO = nameToTradeStream.get(name)
+      tradeStreamO.getOrElse({
+        val rand = new Random()
+        val mids =  getMids(name)
+        val trades = new EventGenerator[Trade](env.getEventTime) {
+          override def generate(): (Trade, Long) = {
+            val mid = mids.value
+            val offset = (rand.nextDouble() - 0.5) / mid
+            val trade = new Trade(name, mid + offset, rand.nextInt(1000))
+            val nextTime = env.getEventTime + rand.nextInt(60000)
+            (trade, nextTime)
+          }
+        }
+        nameToTradeStream + name -> trades
+        trades
+      })
     }
   }
 }

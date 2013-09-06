@@ -38,10 +38,20 @@ public abstract class AbstractVectorStream<K, F extends EventGraphObject, V> imp
     }
 
     public HasValue<V> getValueHolder(int i) {
+        if (i < 0) {
+            throw new UnsupportedOperationException("Maybe vectors should allow a 'getOrCreate' for value holders to allow joins that become satisfied later?");
+        }
         return valueHolders.get(i);
     }
 
     public abstract HasValue<V> newCell(int i, K key);
+
+    @Override
+    public int indexOf(K key) {
+        Integer column = indicies.get(key);
+        if (column == null) return -1;
+        return column;
+    }
 
     @Override
     public V get(int i) {
