@@ -36,7 +36,7 @@ object TradesExample extends App {
 
 
   val impl: SimpleEvaluator = new SimpleEvaluator()
-  var tradeExpr: MacroTerm[Trade] = impl.query(trades).asInstanceOf[MacroTerm[Trade]]
+  var tradeExpr: MacroTerm[Trade] = impl.asStream(trades).asInstanceOf[MacroTerm[Trade]]
 
   def v1 = {
     tradeExpr map {_.qty} fold_all (new Sum[Int]) map { println(_) }

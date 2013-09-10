@@ -14,7 +14,7 @@ import gsa.esg.mekon.core.EventGraphObject
  */
 class EnvTermBuilder(val env :types.Env) {
 
-  def query[X](data: HasVal[X]) : MacroTerm[X] = {
+  def asStream[X](data: HasVal[X]) : MacroTerm[X] = {
     return new MacroTerm[X](env)(data)
   }
 
@@ -33,7 +33,7 @@ class EnvTermBuilder(val env :types.Env) {
 
   def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
     val hasVal = newHasVal(env)
-    query(hasVal)
+    asStream(hasVal)
   }
 
   def asVector[X](elements:Iterable[X]) :VectTerm[X,X] = {

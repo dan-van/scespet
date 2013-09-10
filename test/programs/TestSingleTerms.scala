@@ -42,23 +42,23 @@ object TestSingleTerms extends App {
 //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
   def v1 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.asStream(names).asInstanceOf[MacroTerm[String]]
     out("name:"){namesExpr}
   }
   def v1a = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.asStream(names).asInstanceOf[MacroTerm[String]]
     out(".N names:"){ namesExpr.filter(_.endsWith(".N")) }
   }
   def v2 = {
     out("Vod trade bucket:") {
-      var map: MacroTerm[Int] = impl.query(trades).filter(_.name == "VOD.L").map(_.qty)
+      var map: MacroTerm[Int] = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
       map.reduce(new Sum[Int]).each(2)
     }
   }
   def v3 = {
     // test multiple event sources
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
-    out("Trade:") { impl.query(trades) }
+    var namesExpr: MacroTerm[String] = impl.asStream(names).asInstanceOf[MacroTerm[String]]
+    out("Trade:") { impl.asStream(trades) }
     out("Name:") { namesExpr }
   }
 

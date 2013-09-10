@@ -55,7 +55,7 @@ object OrderReportsExample extends App {
 
 //  out("Rand") {impl.query( newRandom _)}
   var priceFactory = new PriceFactory(impl.env)
-  var universe = impl.query(IteratorEvents(List("MSFT", "IBM", "AAPL")))
+  var universe = impl.asStream(IteratorEvents(List("MSFT", "IBM", "AAPL")))
   var books = universe.valueSet[String]().joinf( priceFactory.getBBO )
 
   out("Rand") {books}

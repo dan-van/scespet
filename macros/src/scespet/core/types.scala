@@ -109,9 +109,8 @@ trait BucketBuilder[X,T] {
 //  def window(n:Time):MacroTerm[T]
 //  def window(windowStream:MacroTerm[Boolean]):MacroTerm[T]
 //
-//  // todo: add a parameter for the input stream
-//  def reset_pre(f:T=>Boolean):MacroTerm[T]
-  def reset_post(trigger:EventGraphObject):MacroTerm[T]
+  def slice_pre(trigger:EventGraphObject):MacroTerm[T]
+  def slice_post(trigger:EventGraphObject):MacroTerm[T]
 }
 
 trait BucketBuilderVect[K, X, T] {
@@ -128,7 +127,20 @@ trait BucketBuilderVect[K, X, T] {
    * window each element in the vector with the given window function
    * @return
    */
-  def window(windowFunc: K => HasVal[Boolean]) :VectTerm[K, T]
+  def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, T]
+
+  def slice_pre(trigger: EventGraphObject):VectTerm[K,T]
+
+  /**
+   * collect data into buckets that get 'closed' *after* the given event fires.
+   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
+   * e.g. bucket trades between trade events where the size is < median trade.
+   *
+   * @see reset_pre
+   * @param trigger
+   * @return
+   */
+  def slice_post(trigger: EventGraphObject):VectTerm[K,T]
 }
 
 trait Reduce[-X] {

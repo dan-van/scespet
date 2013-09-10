@@ -1,9 +1,10 @@
 package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
-import scala.reflect.ClassTag
 import java.util.logging.Logger
 import scespet.core.VectorStream.ReshapeSignal
+import scala.reflect.runtime.universe._
+import scala.reflect.ClassTag
 
 /**
  * Created with IntelliJ IDEA.
@@ -70,31 +71,36 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   }
 
   /**
-   * demultiplex operation. Want to think more about other facilities on this line
-   * how do we really want to do a demean-like operation to a vector?
-   * This approach allows us to treat it like a 'reduce' on a stream of vectors, but is that really the best way?
+   * This allows operations that operate on the entire vector rather than single cells (e.g. a demean operation, or a "unique value count")
+   * I want to think more about other facilities on this line
    *
-   * TODO: not happy with the return type, I think it should maybe be MacroTerm[Map[K,X]] ?
    * @return
    */
-  def collapse():MacroTerm[VectorStream[K,X]] = {
-    val collapsed = new UpdatingHasVal[VectorStream[K,X]] {
-      val value = input
-      def calculate() = true
+  def mapVector[Y](f:VectorStream[K,X] => Y):MacroTerm[Y] = {
+    val collapsed = new UpdatingHasVal[Y] {
+
+      val value:Y = f.apply(input)
+
+      def calculate() = {
+        f.apply(input)
+        true
+      }
     }
+    // build a vector where all cells share this single "collapsed" function
     val cellBuilder = (index:Int, key:K) => collapsed
-    // do the normal chained vector wiring, but don't return it
     newIsomorphicVector(cellBuilder)
-    return new MacroTerm[VectorStream[K, X]](env)(collapsed)
+    // now return a single stream of the collapsed value:
+    return new MacroTerm[Y](env)(collapsed)
   }
 
-  def map[Y](f:X=>Y):VectTerm[K,Y] = {
+  def map[Y: TypeTag](f:X=>Y):VectTerm[K,Y] = {
+    if ( (typeOf[Y] =:= typeOf[EventGraphObject]) ) println(s"WARNING: if you meant to listen to events from ${typeOf[Y]}, you should use joinf")
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
 //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
       var value:Y = _
       def calculate() = {
         var in = input.get(index)
-        value = f(in);
+        value = f(in)
         true
       }
     }
@@ -263,6 +269,17 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   }
 
   def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
+
+  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
+    val newBucketAsFunc = () => newBFunc
+    val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](input, env) {
+      def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
+        val sourceHasVal = input.getValueHolder(i)
+        new SlicedReduce[X, Y](sourceHasVal, null, false, newBucketAsFunc, env)
+      }
+    }
+    return new VectTerm[K,Y](env)(chainedVector)
+  }
 
   def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
 

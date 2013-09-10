@@ -10,10 +10,10 @@ import scespet.core.Reduce
  * To change this template use File | Settings | File Templates.
  */
 class Sum[X:Numeric] extends Reduce[X]{
-  var s = 0
-  def add(n:X):Unit = {s = s + implicitly[Numeric[X]].toInt(n)}
+  var sum = 0.0
+  def add(n:X):Unit = {sum = sum + implicitly[Numeric[X]].toDouble(n)}
 
-  override def toString = s"Sum=$s"
+  override def toString = s"Sum=$sum"
 }
 
 class EWMA(val lambda:Double = 0.98) extends Reduce[Int]{

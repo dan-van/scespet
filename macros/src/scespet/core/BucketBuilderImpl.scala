@@ -46,7 +46,13 @@ return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStre
     return new MacroTerm[Y](env)(slicer)
   }
 
-  def reset_post(trigger: EventGraphObject):MacroTerm[Y] = {
+  def slice_pre(trigger: EventGraphObject):MacroTerm[Y] = {
+    val sliceTrigger = trigger
+    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, true, newBFunc, env)
+    return new MacroTerm[Y](env)(slicer)
+  }
+
+  def slice_post(trigger: EventGraphObject):MacroTerm[Y] = {
     val sliceTrigger = trigger
     val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, false, newBFunc, env)
     return new MacroTerm[Y](env)(slicer)
