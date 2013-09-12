@@ -93,7 +93,7 @@ object Program2 extends App {
   def v6 = {
     //    var start = impl.query(trades)
     var nameSets : VectTerm[String, Set[String]] = impl.asStream(names).by( x => x ).map(_.dropRight(2)).map(name => Set(".L", ".O").map(name + _))
-    val universe = nameSets.valueSet[String](_.iterator)
+    val universe = nameSets.toValueSet[String](_.iterator)
     out("universe stream"){universe}
 
     impl.run()
