@@ -3,7 +3,6 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core.{SimpleEvaluator, IteratorEvents, MacroTerm, Reduce}
 import scespet.util._
-import org.junit.Test
 
 
 /**
@@ -37,26 +36,26 @@ object TradesExample extends App {
 
 
   val impl: SimpleEvaluator = new SimpleEvaluator()
-  var tradeExpr: MacroTerm[Trade] = impl.query(trades).asInstanceOf[MacroTerm[Trade]]
+  var tradeExpr: MacroTerm[Trade] = impl.asStream(trades).asInstanceOf[MacroTerm[Trade]]
 
   def v1 = {
-    tradeExpr map {_.qty} fold_all (new Sum) map { println(_) }
+    tradeExpr map {_.qty} fold_all (new Sum[Int]) map { println(_) }
   }
   def v2 = {
 //    tradeExpr map {_.qty} bucket2 (new Sum) each 2 map { println(_) }
 //    println(tradeExpr.initialTerm.bucketFoo(new TradePrint).each(2))
     val tradeBuckets = tradeExpr.reduce(new TradePrint).each(2)
     out("tradePrint fired="){tradeBuckets}
-    out("Sum="){ tradeBuckets.map(_.accVol).reduce(new Sum).each(2) }
+    out("Sum="){ tradeBuckets.map(_.accVol).reduce(new Sum[Int]).each(2) }
   }
 
   def v2a = {
     var qtyStream = tradeExpr map {_.qty}
-    out("sum bucket 2"){qtyStream.reduce(new Sum).each(2)}
+    out("sum bucket 2"){qtyStream.reduce(new Sum[Int]).each(2)}
   }
 
   def v3 = {
-    val counter: MacroTerm[Counter[Trade]] = tradeExpr.fold_all(new Counter)
+    val counter: MacroTerm[Counter] = tradeExpr.fold_all(new Counter)
     val windowStream = counter.map(x => (x.c % 3) != 0)
     val tradeBuckets = tradeExpr.reduce(new TradePrint).window(windowStream)
     out("test="){counter.join(windowStream)}

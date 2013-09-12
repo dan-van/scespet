@@ -50,6 +50,13 @@ trait HasVal[X] extends HasValue[X]{
   def getTrigger: EventGraphObject = trigger
 }
 
+object HasVal {
+  implicit def funcToHasVal[F <: EventGraphObject](f:F) = new HasVal[F] {
+    val value = f
+    def trigger = value.asInstanceOf[EventGraphObject]
+  }
+}
+
 trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
   /**
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
@@ -96,15 +103,14 @@ trait BucketBuilder[X,T] {
 
   def window(windowStream: MacroTerm[Boolean]) :MacroTerm[T]
 
-//  def all():MacroTerm[T]
+  def all():MacroTerm[T]
 //
 //  def window(n:Events):MacroTerm[T]
 //  def window(n:Time):MacroTerm[T]
 //  def window(windowStream:MacroTerm[Boolean]):MacroTerm[T]
 //
-//  // todo: add a parameter for the input stream
-//  def reset_pre(f:T=>Boolean):MacroTerm[T]
-//  def reset_post(f:T=>Boolean):MacroTerm[T]
+  def slice_pre(trigger:EventGraphObject):MacroTerm[T]
+  def slice_post(trigger:EventGraphObject):MacroTerm[T]
 }
 
 trait BucketBuilderVect[K, X, T] {
@@ -129,6 +135,19 @@ trait BucketBuilderVect[K, X, T] {
    * @return
    */
   def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, T]
+
+  def slice_pre(trigger: EventGraphObject):VectTerm[K,T]
+
+  /**
+   * collect data into buckets that get 'closed' *after* the given event fires.
+   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
+   * e.g. bucket trades between trade events where the size is < median trade.
+   *
+   * @see reset_pre
+   * @param trigger
+   * @return
+   */
+  def slice_post(trigger: EventGraphObject):VectTerm[K,T]
 }
 
 trait Reduce[-X] {

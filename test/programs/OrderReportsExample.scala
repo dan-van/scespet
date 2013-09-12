@@ -72,5 +72,6 @@ object OrderReportsExample extends App {
   //  out("Rand") {trades}
 //  out("OrderOpen") {orderWindows}
 
+  
   impl.run(200)
 }

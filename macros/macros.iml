@@ -3,6 +3,7 @@
   <component name="FacetManager">
     <facet type="scala" name="Scala">
       <configuration>
+        <option name="compileOrder" value="JavaThenScala" />
         <option name="compilerLibraryLevel" value="Global" />
         <option name="compilerLibraryName" value="scala-2.10" />
       </configuration>

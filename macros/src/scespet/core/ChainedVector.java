@@ -10,6 +10,8 @@ import gsa.esg.mekon.core.EventGraphObject;
  * Time: 09:51
  * To change this template use File | Settings | File Templates.
  */
+
+//TODO: public abstract class ChainedVector<K, F extends HasValue<V>, V> extends AbstractVectorStream<K, F, V> {
 public abstract class ChainedVector<K, F extends EventGraphObject, V> extends AbstractVectorStream<K, F, V> {
 
     private final VectorStream.ReshapeSignal reshapeSignal;
@@ -22,15 +24,17 @@ public abstract class ChainedVector<K, F extends EventGraphObject, V> extends Ab
 
         // this listens to the source reshaping, applies our new columns, then fires on that we have reshaped
         reshapeSignal = new ReshapeSignal(env) {
+            private int seenKeys = 0;
             private ReshapeSignal sourceVectorChanged = sourceVector.getNewColumnTrigger();
             {
                 env.addListener(sourceVectorChanged, this);
             }
             public boolean calculate() {
-                for (int i=getSize(); i<sourceVector.getSize(); i++) {
+                for (int i=seenKeys; i<sourceVector.getSize(); i++) {
                     K newKey = sourceVector.getKey(i);
                     add(newKey);
                 }
+                seenKeys = sourceVector.getSize();
                 return super.calculate();
             }
         };

@@ -42,37 +42,37 @@ object Program1 extends App {
   var trades = IteratorEvents(tradeList)((_,i) => i)
 
   def v1 = {
-    var namesExpr: MacroTerm[String] = impl.query(names)
+    var namesExpr: MacroTerm[String] = impl.asStream(names)
     out("name:"){namesExpr}
   }
   def v1a = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.asStream(names)
     out(".N names:"){ namesExpr.filter(_.endsWith(".N")) }
   }
   // todo: more single tests, macros, etc
 
   // now some vector tests
   def v2 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.asStream(names)
     out("by length:") {namesExpr.by(x => x.length)}
   }
   def v3 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
+    var namesExpr: MacroTerm[String] = impl.asStream(names)
     out("by length, mapped") {namesExpr.by(x => x.length).map(x => "prefix"+x)}
   }
   def v4 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
-    out("by length, counted") {namesExpr.by(x => x.length).fold_all_noMacro(() => {new Counter[String]})}
+    var namesExpr: MacroTerm[String] = impl.asStream(names)
+    out("by length, counted") {namesExpr.by(x => x.length).fold_all(new Counter)}
   }
   def v5 = {
     // test multiple event sources
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
-    out("Trade:") { impl.query(trades) }
+    var namesExpr: MacroTerm[String] = impl.asStream(names)
+    out("Trade:") { impl.asStream(trades) }
     out("Name:") { namesExpr }
   }
   def v6 = {
-    var namesExpr: MacroTerm[String] = impl.query(names).asInstanceOf[MacroTerm[String]]
-    val tradeStream = impl.query(trades)
+    var namesExpr: MacroTerm[String] = impl.asStream(names)
+    val tradeStream = impl.asStream(trades)
     def getTrades(name:String) = tradeStream.filter( _.name == name)
     val nameVectTakeTrades: VectTerm[String, Trade] = namesExpr.by(x => x).joinf(k => getTrades(k).input)
     out("name to trade") {nameVectTakeTrades}
@@ -82,18 +82,18 @@ object Program1 extends App {
 
   // test vector windows
   def v7 = {
-    val tradeStream = impl.query(trades)
-    val counter = tradeStream.fold_all(new Counter[Trade])
+    val tradeStream = impl.asStream(trades)
+    val counter = tradeStream.fold_all(new Counter)
     val windows = counter.map(_.c % 3 != 0)
     out("WindowState: open="){windows}
-    out("by name, count within window") {tradeStream.by(_.name).reduce(new Counter[Trade]).window(windows)}
+    out("by name, count within window") {tradeStream.by(_.name).reduceNoMacro(new Counter).window(windows)}
   }
 
   // test per-element vector windows
   def v8 = {
-    val tradeStream = impl.query(trades)
-    def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter[Trade]).map(_.c % 3 != 0).input
-    out("by name, window %3 count") {tradeStream.by(_.name).reduce(new Counter[Trade]).window(windows _)}
+    val tradeStream = impl.asStream(trades)
+    def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter).map(_.c % 3 != 0).input
+    out("by name, window %3 count") {tradeStream.by(_.name).reduceNoMacro(new Counter).window(windows _)}
   }
 
   //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }

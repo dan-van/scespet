@@ -1,8 +1,10 @@
 package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
-import scala.reflect.ClassTag
 import java.util.logging.Logger
+import scespet.core.VectorStream.ReshapeSignal
+import scala.reflect.runtime.universe._
+import scala.reflect.ClassTag
 
 /**
  * Created with IntelliJ IDEA.
@@ -18,25 +20,132 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   import scala.language.experimental.macros
 
   /**
-   * demultiplex operation. Want to think more about other facilities on this line
-   * how do we really want to do a demean-like operation to a vector?
-   * This approach allows us to treat it like a 'reduce' on a stream of vectors, but is that really the best way?
-   *
-   * TODO: not happy with the return type, I think it should maybe be MacroTerm[Map[K,X]] ?
-   * @return
+   * todo: call this "filterKey" ?
    */
-  def collapse():MacroTerm[VectorStream[K,X]] = {
-    val collapsed = new UpdatingHasVal[VectorStream[K,X]] {
-      val value = input
-      def calculate() = true
+  def subset(predicate:K=>Boolean):VectTerm[K,X] = {
+    val output: VectorStream[K, X] = new ChainedVector[K, UpdatingHasVal[X], X](input, env) {
+      val sourceIndicies = collection.mutable.ArrayBuffer[Integer]()
+
+      override def add(key: K) {
+        if (predicate.apply(key)) {
+          val sourceIndex = input.getKeys.indexOf(key)
+          if (getIndex(key) == -1) {
+            sourceIndicies += sourceIndex
+            super.add(key)
+          }
+        }
+      }
+
+      def newCell(newIndex: Int, key: K): UpdatingHasVal[X] = {
+        val sourceCell = input.getValueHolder(newIndex)
+        val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
+        class MapCell(index:Int) extends UpdatingHasVal[X] {
+          //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+          var value:X = _
+          def calculate() = {
+            value = sourceCell.value()
+            true
+          }
+        }
+        val cellFunc = new MapCell(newIndex)
+        env.addListener(sourceTrigger, cellFunc)
+        // initialise the cell
+        val sourceIndex = sourceIndicies(newIndex)
+        val hasInputValue = input.getNewColumnTrigger.newColumnHasValue(sourceIndex)
+        val hasChanged = env.hasChanged(sourceTrigger)
+        if (hasChanged && !hasInputValue) {
+          println("WARN: didn't expect this")
+        }
+        if (hasInputValue || hasChanged) {
+          val hasInitialOutput = cellFunc.calculate()
+          getNewColumnTrigger.newColumnAdded(newIndex, hasInitialOutput)
+        }
+        return cellFunc
+      }
     }
-    val cellBuilder = (index:Int, key:K) => collapsed
-    // do the normal chained vector wiring, but don't return it
-    newIsomorphicVector(cellBuilder)
-    return new MacroTerm[VectorStream[K, X]](env)(collapsed)
+    return new VectTerm[K, X](env)(output)
   }
 
-  def map[Y](f:X=>Y):VectTerm[K,Y] = {
+  def apply(k:K):MacroTerm[X] = {
+    val index: Int = input.getKeys.indexOf(k)
+    val cell:HasVal[X] = if (index >= 0) {
+      var holder: HasValue[X] = input.getValueHolder(index)
+      new HasVal[X] {
+        def value = holder.value
+        def trigger = holder.getTrigger
+       }
+    } else {
+      // construct an empty slot and bind it when the key appears
+      val valueHolder = new ChainedCell[X]
+      var newColumns: ReshapeSignal = input.getNewColumnTrigger
+      env.addListener(newColumns, new types.MFunc {
+        var searchedUpTo = input.getSize
+        def calculate():Boolean = {
+          for (i <- searchedUpTo to input.getSize - 1) {
+            if (input.getKey(i) == k) {
+              if (newColumns.newColumnHasValue(i)) {
+                valueHolder.calculate()
+              }
+              valueHolder.bindTo(input.getValueHolder(i))
+              env.removeListener(newColumns, this)
+              searchedUpTo = i
+              return true
+            }
+          }
+          searchedUpTo = input.getSize
+          false
+        }
+      })
+      valueHolder
+    }
+    new MacroTerm[X](env)(cell)
+  }
+
+  def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X] = {
+    // todo: I've not finished the impl of ReKeyedVector
+    new VectTerm[K2, X](env)(new ReKeyedVector[K, X, K2](input, keyMap, env))
+  }
+
+  private class ChainedCell[C]() extends UpdatingHasVal[C] {
+    var source: HasValue[C] = _
+    var value = null.asInstanceOf[C]
+
+    def calculate() = {
+      value = source.value
+      true
+    }
+
+    def bindTo(newSource: HasValue[C]) {
+      this.source = newSource
+      env.addListener(newSource.getTrigger, this)
+    }
+  }
+
+  /**
+   * This allows operations that operate on the entire vector rather than single cells (e.g. a demean operation, or a "unique value count")
+   * I want to think more about other facilities on this line
+   *
+   * @return
+   */
+  def mapVector[Y](f:VectorStream[K,X] => Y):MacroTerm[Y] = {
+    val collapsed = new UpdatingHasVal[Y] {
+
+      val value:Y = f.apply(input)
+
+      def calculate() = {
+        f.apply(input)
+        true
+      }
+    }
+    // build a vector where all cells share this single "collapsed" function
+    val cellBuilder = (index:Int, key:K) => collapsed
+    newIsomorphicVector(cellBuilder)
+    // now return a single stream of the collapsed value:
+    return new MacroTerm[Y](env)(collapsed)
+  }
+
+  def map[Y: TypeTag](f:X=>Y):VectTerm[K,Y] = {
+    if ( (typeOf[Y] =:= typeOf[EventGraphObject]) ) println(s"WARNING: if you meant to listen to events from ${typeOf[Y]}, you should use joinf")
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
 //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
       var value:Y = _
@@ -140,8 +249,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   /**
    * used to build a set from the values in a vector
    * the new vector acts like a set (key == value), generated values are folded into it.
+   *
+   * todo: maybe call this "flatten", "asSet" ?
    */
-  def valueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y] = {
+  def toValueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y] = {
     val initial = collection.mutable.Set[Y]()
     for (x <- input.getValues.asScala; y <- expand(x)) {
       initial += y
@@ -180,10 +291,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   }
 
   /**
-   * derive a new vector with the same keys as this one, but different values.
-   * maybe this should be called 'takef', or 'joinf' ? (i.e. we're 'taking' or 'joining' with a function?)
-   * todo: I think this is misnamed, if it exists, it should generate tuples as the values
-   *@param cellFromKey
+   * derive a new vector by applying a function to the keys of the current vector.
+   * The new vector will have the same keys, but different values.
+   *
+   * TODO: naming
+   * this is related to "map", but "map" is a function of value, this is a function of key
+   * maybe this should be called 'mapkey', or 'takef'? (i.e. we're 'taking' cells from the domain 'cellFromKey'?)
+   * the reason I chose 'join' is that we're effectively doing a left join of this vector onto a vector[domain, cellFromKey]
+   @param cellFromKey
    * @tparam Y
    * @return
    */
@@ -194,6 +309,33 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return new VectTerm[K, Y](env)(output)
   }
 
+  def sample(evt:EventGraphObject):VectTerm[K,X] = {
+    val output: VectorStream[K, X] = new ChainedVector[K, EventGraphObject, X](input, env) {
+      def newCell(i: Int, key: K) = new UpdatingHasVal[X] {
+        var value:X = _
+        env.addListener(evt, this)
+
+        def calculate() = {
+          value = input.get(i)
+          true
+        }
+      }
+    }
+    return new VectTerm[K, X](env)(output)
+  }
+
+  def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
+
+  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
+    val newBucketAsFunc = () => newBFunc
+    val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](input, env) {
+      def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
+        val sourceHasVal = input.getValueHolder(i)
+        new SlicedReduce[X, Y](sourceHasVal, null, false, newBucketAsFunc, env)
+      }
+    }
+    return new VectTerm[K,Y](env)(chainedVector)
+  }
   /**
    * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
    * e.g. we could have a vector of name->RandomStream and generate a derived

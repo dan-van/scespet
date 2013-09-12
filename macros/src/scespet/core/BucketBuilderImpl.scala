@@ -1,5 +1,7 @@
 package scespet.core
 
+import gsa.esg.mekon.core.EventGraphObject
+
 /**
  * Created with IntelliJ IDEA.
  * User: danvan
@@ -29,11 +31,31 @@ return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStre
 //    ???
   }
 
-  def each(n: Int):MacroTerm[Y] = {
+  def all():MacroTerm[Y] = {
     val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
-      def create(source: HasVal[X], reduce: Y, env:types.Env) = new NthEvent(n, source.trigger, env)
+      def create(source: HasVal[X], reduce: Y, env:types.Env) = new types.MFunc {
+        def calculate() = false // never create a new bucket
+      }
     }
     return buildTermForBucketStream(newBFunc, bucketTrigger)
+  }
+
+  def each(n: Int):MacroTerm[Y] = {
+    val sliceTrigger = new NthEvent(n, inputTerm.input.getTrigger, env)
+    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, false, newBFunc, env)
+    return new MacroTerm[Y](env)(slicer)
+  }
+
+  def slice_pre(trigger: EventGraphObject):MacroTerm[Y] = {
+    val sliceTrigger = trigger
+    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, true, newBFunc, env)
+    return new MacroTerm[Y](env)(slicer)
+  }
+
+  def slice_post(trigger: EventGraphObject):MacroTerm[Y] = {
+    val sliceTrigger = trigger
+    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, false, newBFunc, env)
+    return new MacroTerm[Y](env)(slicer)
   }
 
   def buildTermForBucketStream[Y <: Reduce[X]](newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y]):MacroTerm[Y] = {

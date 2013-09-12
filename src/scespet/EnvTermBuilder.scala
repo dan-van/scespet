@@ -13,12 +13,8 @@ import gsa.esg.mekon.core.EventGraphObject
  * To change this template use File | Settings | File Templates.
  */
 class EnvTermBuilder(val env :types.Env) {
-  def query[X](func: X) : MacroTerm[X] = {
-    var hasVal = new IsVal[X](func)
-    return new MacroTerm[X](env)(hasVal)
-  }
 
-  def query[X](data: HasVal[X]) : MacroTerm[X] = {
+  def asStream[X](data: HasVal[X]) : MacroTerm[X] = {
     return new MacroTerm[X](env)(data)
   }
 
@@ -37,7 +33,15 @@ class EnvTermBuilder(val env :types.Env) {
 
   def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
     val hasVal = newHasVal(env)
-    query(hasVal)
+    asStream(hasVal)
   }
 
+  def asVector[X](elements:Iterable[X]) :VectTerm[X,X] = {
+    import scala.collection.JavaConverters._
+    new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
+  }
+}
+
+object EnvTermBuilder {
+  implicit def eventObjectToHasVal[X <: EventGraphObject](evtObj:X) :HasVal[X] = new IsVal(evtObj)
 }

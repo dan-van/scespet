@@ -1,7 +1,6 @@
 package scespet.util
 
 import scespet.core.Reduce
-import scala.math.ScalaNumericAnyConversions
 
 /**
  * Created with IntelliJ IDEA.
@@ -10,20 +9,12 @@ import scala.math.ScalaNumericAnyConversions
  * Time: 10:46
  * To change this template use File | Settings | File Templates.
  */
-class Sum extends Reduce[Int]{
-  var s = 0
-  def add(n:Int):Unit = {s = n + s}
+class Sum[X:Numeric] extends Reduce[X]{
+  var sum = 0.0
+  def add(n:X):Unit = {sum = sum + implicitly[Numeric[X]].toDouble(n)}
 
-  override def toString = s"Sum=$s"
+  override def toString = s"Sum=$sum"
 }
-
-class SumN extends Reduce[ScalaNumericAnyConversions]{
-  var s = 0
-  def add(n:ScalaNumericAnyConversions):Unit = {s = n.intValue() + s;}
-
-  override def toString = s"Sum=$s"
-}
-
 
 class EWMA(val lambda:Double = 0.98) extends Reduce[Int]{
   var s:Double = 0;
@@ -41,9 +32,9 @@ class Collect extends Reduce[AnyRef] {
  * todo: how can we genericise Counter to allow type inference to fill in the type param here?
  * @tparam T
  */
-class Counter[T] extends Reduce[T] {
+class Counter extends Reduce[Any] {
   var c=0
-  def add(x: T) { c += 1 }
+  override def add(x: Any) { c += 1 }
 
   override def toString = String.valueOf(c)
 }

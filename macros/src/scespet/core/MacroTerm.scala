@@ -3,6 +3,7 @@ package scespet.core
 import scespet.core._
 import reflect.macros.Context
 import scala.reflect.ClassTag
+import gsa.esg.mekon.core.EventGraphObject
 
 
 /**
@@ -129,6 +130,9 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new VectTerm[Y, Y](env)(flattenedSet)
   }
 
+  /**
+   * emit an updated tuples of (this.value, y) when either series fires
+   */
   def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
     val listener = new UpdatingHasVal[(X,Y)] {
       var value:(X,Y) = _
@@ -144,6 +148,9 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[(X,Y)](env)(listener)
   }
 
+  /**
+   * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+   */
   def take[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)] = {
     val listener = new UpdatingHasVal[(X,Y)] {
       var value:(X,Y) = _
@@ -157,7 +164,16 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[(X,Y)](env)(listener)
   }
 
-//  def reduce[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.reduce[X,Y]
+  /**
+   * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+   */
+  def sample(evt:EventGraphObject):MacroTerm[X] = {
+    val listener = new Generator[X](null.asInstanceOf[X], input.value)
+    env.addListener(evt, listener)
+    return new MacroTerm[X](env)(listener)
+  }
+
+  //  def reduce[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.reduce[X,Y]
 
 //  def reduce[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
   def reduce[Y](bucketFunc: Y):BucketBuilder[X,Y] = macro BucketMacro.bucket2Macro[X,Y]
