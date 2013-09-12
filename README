@@ -1,1 +1,10 @@
-This file was created by IntelliJ IDEA 11.1.2 for binding GitHub repository
+SCala Event Stream Processing Expression Toolkit
+
+experiments in building "stream processing" expressions (i.e. functional reactive programming).
+a core goal was that an expression on a single stream (e.g. of Double) would be applicable to a 'multi-stream' (i.e. a map of Key->Stream[Double])
+
+
+My first proper bit of scala - warning: lots of code litter abound as I mess around with macros and anything new
+Put on github to allow me to mess around with ideas on the train and at home, and have them integrate with my code at work
+
+

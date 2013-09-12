@@ -19,6 +19,53 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 
   import scala.language.experimental.macros
 
+  /**
+   * todo: call this "filterKey" ?
+   */
+  def subset(predicate:K=>Boolean):VectTerm[K,X] = {
+    val output: VectorStream[K, X] = new ChainedVector[K, UpdatingHasVal[X], X](input, env) {
+      val sourceIndicies = collection.mutable.ArrayBuffer[Integer]()
+
+      override def add(key: K) {
+        if (predicate.apply(key)) {
+          val sourceIndex = input.getKeys.indexOf(key)
+          if (getIndex(key) == -1) {
+            sourceIndicies += sourceIndex
+            super.add(key)
+          }
+        }
+      }
+
+      def newCell(newIndex: Int, key: K): UpdatingHasVal[X] = {
+        val sourceCell = input.getValueHolder(newIndex)
+        val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
+        class MapCell(index:Int) extends UpdatingHasVal[X] {
+          //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+          var value:X = _
+          def calculate() = {
+            value = sourceCell.value()
+            true
+          }
+        }
+        val cellFunc = new MapCell(newIndex)
+        env.addListener(sourceTrigger, cellFunc)
+        // initialise the cell
+        val sourceIndex = sourceIndicies(newIndex)
+        val hasInputValue = input.getNewColumnTrigger.newColumnHasValue(sourceIndex)
+        val hasChanged = env.hasChanged(sourceTrigger)
+        if (hasChanged && !hasInputValue) {
+          println("WARN: didn't expect this")
+        }
+        if (hasInputValue || hasChanged) {
+          val hasInitialOutput = cellFunc.calculate()
+          getNewColumnTrigger.newColumnAdded(newIndex, hasInitialOutput)
+        }
+        return cellFunc
+      }
+    }
+    return new VectTerm[K, X](env)(output)
+  }
+
   def apply(k:K):MacroTerm[X] = {
     val index: Int = input.getKeys.indexOf(k)
     val cell:HasVal[X] = if (index >= 0) {
@@ -54,6 +101,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     new MacroTerm[X](env)(cell)
   }
 
+  def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X] = {
+    // todo: I've not finished the impl of ReKeyedVector
+    new VectTerm[K2, X](env)(new ReKeyedVector[K, X, K2](input, keyMap, env))
+  }
 
   private class ChainedCell[C]() extends UpdatingHasVal[C] {
     var source: HasValue[C] = _
@@ -195,8 +246,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   /**
    * used to build a set from the values in a vector
    * the new vector acts like a set (key == value), generated values are folded into it.
+   *
+   * todo: maybe call this "flatten", "asSet" ?
    */
-  def valueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y] = {
+  def toValueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y] = {
     val initial = collection.mutable.Set[Y]()
     for (x <- input.getValues.asScala; y <- expand(x)) {
       initial += y
