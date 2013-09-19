@@ -12,6 +12,7 @@ import org.jfree.chart.plot.XYPlot
 import java.awt.event.{ActionEvent, ActionListener}
 import org.jfree.chart.{ChartPanel, JFreeChart}
 import java.awt.Dimension
+import gsa.esg.mekon.core.EventGraphObject
 
 /**
  * @version $Id$
@@ -23,7 +24,7 @@ object Plot {
   }
 
   object TimeSeriesDataset {
-    def apply[X:Numeric](name:String, stream:MacroTerm[X]) :TimeSeriesDataset = {
+    def apply[X:Numeric](stream:MacroTerm[X], name:String) :TimeSeriesDataset = {
       val dataset = new TimeSeriesDataset()
       dataset.addSeries(name)
       stream.map(v => {
@@ -117,9 +118,10 @@ object Plot {
 
   // ------------------------------
 
-  def plot[X:Numeric](series:MacroTerm[X])(keyRender:String = "Series" ) {
-    val dataset:TimeSeriesDataset = TimeSeriesDataset(keyRender, series)
+  def plot[X:Numeric](series:MacroTerm[X]) {
+    val dataset:TimeSeriesDataset = TimeSeriesDataset(series, "Series")
     plotDataset(dataset)
+    new Options[String,X](dataset)
   }
 
   def plot[K,X:Numeric](series:VectTerm[K,X]) = {
@@ -131,6 +133,7 @@ object Plot {
   class Options[K,X](dataset:TimeSeriesDataset) {
     def seriesNames(keyRender:K=>String = {k:K => k.toString}) {dataset.seriesNameFunc = keyRender.asInstanceOf[Any => String]}
   }
+
   private def plotDataset[X: Numeric](dataset: Plot.TimeSeriesDataset) {
     var renderer: XYItemRenderer = new XYStepRenderer()
     var range: NumberAxis = new NumberAxis()
@@ -142,7 +145,6 @@ object Plot {
         dataset.fireupdate()
       }
     }).start()
-
     val chart = new JFreeChart("Plot", plot)
     val chartPanel = new ChartPanel(chart)
     top.contents = Component.wrap(chartPanel)
