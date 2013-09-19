@@ -14,6 +14,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   import scala.language.experimental.macros
   import scala.collection.JavaConverters._
 
+  def value = input.value
 
   // this will be a synonym for fold(Y).all
   def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {

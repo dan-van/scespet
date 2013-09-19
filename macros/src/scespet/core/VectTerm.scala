@@ -20,6 +20,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   import scala.language.experimental.macros
 
   /**
+   * for symmetry with MacroTerm.value
+   * @return
+   */
+  def value = input.getValues
+
+  /**
    * todo: call this "filterKey" ?
    */
   def subset(predicate:K=>Boolean):VectTerm[K,X] = {
