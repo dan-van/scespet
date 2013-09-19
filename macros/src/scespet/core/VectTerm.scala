@@ -306,6 +306,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return new VectTerm[K, Y](env)(output)
   }
 
+  def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)] = {
+    return new VectTerm(env)(new VectorJoin[K, X, Y](input, other.input, env))
+  }
+
   def sample(evt:EventGraphObject):VectTerm[K,X] = {
     val output: VectorStream[K, X] = new ChainedVector[K, EventGraphObject, X](input, env) {
       def newCell(i: Int, key: K) = new UpdatingHasVal[X] {

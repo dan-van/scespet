@@ -39,6 +39,10 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[Y](env)(listener)
   }
 
+  def filterType[T:ClassTag]():MacroTerm[T] = {
+    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
+  }
+
   def filter(accept: (X) => Boolean):MacroTerm[X] = {
     class FilteredValue extends UpdatingHasVal[X] {
       var value = null.asInstanceOf[X]
@@ -67,7 +71,6 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
    */
   def by[K](f: X => K) : VectTerm[K,X] = {
     val vFunc: GroupFunc[K, X] = new GroupFunc[K, X](input, f, env)
-    env.addListener(input.trigger, vFunc)
     return new VectTerm[K, X](env)(vFunc)
   }
 
