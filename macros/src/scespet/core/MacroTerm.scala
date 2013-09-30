@@ -40,10 +40,6 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[Y](env)(listener)
   }
 
-  def filterType[T:ClassTag]():MacroTerm[T] = {
-    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
-  }
-
   def filter(accept: (X) => Boolean):MacroTerm[X] = {
     class FilteredValue extends UpdatingHasVal[X] {
       var value = null.asInstanceOf[X]
@@ -164,12 +160,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[X](env)(listener)
   }
 
-  //  def reduce[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.reduce[X,Y]
-
-//  def reduce[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
-  def reduce[Y](bucketFunc: Y):BucketBuilder[X,Y] = macro BucketMacro.bucket2Macro[X,Y]
-
-  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, env)
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, env)
 
   def newBucketBuilder[B](newB: () => B):BucketBuilder[X, B] = {
     type Y = B with Reduce[X]

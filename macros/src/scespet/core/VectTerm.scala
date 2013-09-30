@@ -331,7 +331,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return new VectTerm[K, X](env)(output)
   }
 
-  def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
 
   def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
     val newBucketAsFunc = () => newBFunc
@@ -343,8 +343,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     }
     return new VectTerm[K,Y](env)(chainedVector)
   }
-
-  def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
 
   def newBucketBuilder[B](newB: () => B): BucketBuilderVect[K, X, B] = {
     type Y = B with Reduce[X]

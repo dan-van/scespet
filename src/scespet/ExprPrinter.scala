@@ -1,6 +1,6 @@
 package scespet
 
-import core.Term
+import scespet.core.{Reduce, Term}
 import reflect.ClassTag
 import scespet.expression.{AbsTerm, RootTerm}
 
@@ -20,6 +20,12 @@ class ExprPrinter() extends Builder {
     def map[Y](f: (X) => Y): Term[Y] = new StopTerm[Y]
 
     def filter(accept: (X) => Boolean): Term[X] = this
+
+    def fold_all[Y <: Reduce[X]](y: Y) = ???
+
+    def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
+
+    def value = ???
   }
 
   class ExecutingTerm[X](x:X) extends Term[X] {
@@ -39,6 +45,12 @@ class ExprPrinter() extends Builder {
         new StopTerm[X]
       }
     }
+
+    def fold_all[Y <: Reduce[X]](y: Y) = ???
+
+    def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
+
+    def value = ???
   }
 
 }

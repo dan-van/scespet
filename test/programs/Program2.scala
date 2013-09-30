@@ -41,7 +41,7 @@ object Program2 extends App {
     out("sum each 3 elements:"){namesExpr}
   }
   def v2 = { // now with vectors
-    var namesExpr = impl.asStream(trades).by(_.name).map(_.qty).reduceNoMacro(new Sum[Int]).each(3)
+    var namesExpr = impl.asStream(trades).by(_.name).map(_.qty).reduce(new Sum[Int]).each(3)
     out("ewma each 3 elements by name:"){namesExpr}
   }
 
