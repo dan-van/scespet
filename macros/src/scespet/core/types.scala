@@ -165,7 +165,8 @@ trait Term[X] {
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
 
   def filterType[T:ClassTag]():Term[T] = {
-    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
+//    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
+    filter( _.isInstanceOf[T] ).map(v => v.asInstanceOf[T])
   }
 }
 

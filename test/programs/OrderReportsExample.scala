@@ -58,7 +58,7 @@ object OrderReportsExample extends App {
 //  var universe = impl.query(IteratorEvents(List("MSFT", "IBM", "AAPL")))
 //  var books = universe.valueSet[String]().joinf( priceFactory.getBBO )
 //  var trades = universe.valueSet().joinf( priceFactory.getTrades )
-  val orderEvents = impl.query(IteratorEvents(orderEventList)((o, _) => o.time))
+  val orderEvents = impl.asStream(IteratorEvents(orderEventList)((o, _) => o.time))
   val orderWindows = orderEvents.by(_.orderId).map(!_.isInstanceOf[Terminate])
 //  val orderIdToName = collection.mutable.HashMap[String, String]()
 //  orderEvents.filterType[NewOrder].map(o => orderIdToName.put(o.orderId, o.stock))
@@ -66,7 +66,7 @@ object OrderReportsExample extends App {
   //  val orderIdToTrades = orderEvents.by(_.orderId).filterType[NewOrder].joinf(o => priceFactory.getTrades(o.stock))
   val orderIdToTrades = orderEvents.by(_.orderId).filterType[NewOrder].takekv((k,v) => priceFactory.getTrades(v.stock))
 //  out ("ordId:trades ") { orderIdToTrades.reduceNoMacro( new Sum ).window( orderWindows ) }
-  out ("ordId:trades ") { orderIdToTrades.map(_.qty.toInt).reduce( new Sum ).window( orderWindows ) }
+  out ("ordId:trades ") { orderIdToTrades.map(_.qty.toInt).reduce( new Sum[Int] ).window( orderWindows ) }
   //  orderIdToTrades.map(_.value.qty.toInt).reduceNoMacro(new Sum).window( x => orderIdToWindow(x)  )
   //  orderIdToTrades.reduce(new Sum).window(id => orderWindows.get(id)) //todo
   //  out("Rand") {trades}

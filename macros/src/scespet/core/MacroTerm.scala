@@ -47,10 +47,6 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[Y](env)(listener)
   }
 
-  def filterType[Y : ClassTag]():MacroTerm[Y] = {
-    filter(_.isInstanceOf[Y]).map(_.asInstanceOf[Y])
-  }
-
   def filter(accept: (X) => Boolean):MacroTerm[X] = {
     class FilteredValue extends UpdatingHasVal[X] {
       var value = null.asInstanceOf[X]
@@ -106,7 +102,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
    * @tparam Y
    * @return
    */
-  def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X] ) : VectTerm[Y,Y] = {
+  def valueSet[Y](expand: (X=>TraversableOnce[Y])) : VectTerm[Y,Y] = {
 //    def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X,Y] ) : VectTerm[Y,Y] = {
     // I doubt this is ever constructed with an initial value to be expanded
     val initial = if (input.value != null) {
