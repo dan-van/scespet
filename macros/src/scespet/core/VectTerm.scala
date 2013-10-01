@@ -20,6 +20,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   import scala.language.experimental.macros
 
   /**
+   * for symmetry with MacroTerm.value
+   * @return
+   */
+  def value = input.getValues
+
+  /**
    * todo: call this "filterKey" ?
    */
   def subset(predicate:K=>Boolean):VectTerm[K,X] = {
@@ -309,6 +315,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return new VectTerm[K, Y](env)(output)
   }
 
+  def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)] = {
+    return new VectTerm(env)(new VectorJoin[K, X, Y](input, other.input, env))
+  }
+
   def sample(evt:EventGraphObject):VectTerm[K,X] = {
     val output: VectorStream[K, X] = new ChainedVector[K, EventGraphObject, X](input, env) {
       def newCell(i: Int, key: K) = new UpdatingHasVal[X] {
@@ -324,7 +334,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return new VectTerm[K, X](env)(output)
   }
 
-  def reduceNoMacro[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
 
   def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
     val newBucketAsFunc = () => newBFunc
@@ -336,6 +346,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     }
     return new VectTerm[K,Y](env)(chainedVector)
   }
+  
   /**
    * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
    * e.g. we could have a vector of name->RandomStream and generate a derived
@@ -357,10 +368,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     }
     return new VectTerm[K, Y](env)(output)
   }
-
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, env)
-
-//  def reduce[Y <: Reduce[X]](bucketFunc:Y):BucketBuilderVect[K, X, Y] = macro BucketMacro.bucket2MacroVect[K,X,Y]
 
   def newBucketBuilder[B](newB: () => B): BucketBuilderVect[K, X, B] = {
     type Y = B with Reduce[X]

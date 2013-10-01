@@ -86,14 +86,14 @@ object Program1 extends App {
     val counter = tradeStream.fold_all(new Counter)
     val windows = counter.map(_.c % 3 != 0)
     out("WindowState: open="){windows}
-    out("by name, count within window") {tradeStream.by(_.name).reduceNoMacro(new Counter).window(windows)}
+    out("by name, count within window") {tradeStream.by(_.name).reduce(new Counter).window(windows)}
   }
 
   // test per-element vector windows
   def v8 = {
     val tradeStream = impl.asStream(trades)
     def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter).map(_.c % 3 != 0).input
-    out("by name, window %3 count") {tradeStream.by(_.name).reduceNoMacro(new Counter).window(windows _)}
+    out("by name, window %3 count") {tradeStream.by(_.name).reduce(new Counter).window(windows _)}
   }
 
   //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }

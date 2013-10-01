@@ -14,6 +14,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   import scala.language.experimental.macros
   import scala.collection.JavaConverters._
 
+  def value = input.value
 
   // this will be a synonym for fold(Y).all
   /**
@@ -78,7 +79,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
    */
   def by[K](f: X => K) : VectTerm[K,X] = {
     val vFunc: GroupFunc[K, X] = new GroupFunc[K, X](input, f, env)
-    env.addListener(input.trigger, vFunc)
+//    env.addListener(input.trigger, vFunc)
     return new VectTerm[K, X](env)(vFunc)
   }
 
@@ -91,6 +92,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
 
 //  def distinct2[Y : ClassTag]() = values[Y](x => {Traversable[Y](x.asInstanceOf[Y])} )
 
+//  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 
   def valueSet() : VectTerm[X,X] = valueSet(valueToSingleton[X])
@@ -105,6 +107,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
    * @return
    */
   def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X] ) : VectTerm[Y,Y] = {
+//    def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X,Y] ) : VectTerm[Y,Y] = {
     // I doubt this is ever constructed with an initial value to be expanded
     val initial = if (input.value != null) {
       println("ODD, input seems to already be initialised")
@@ -173,10 +176,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[X](env)(listener)
   }
 
-  //  def reduce[Y <: Reduce[X]](bucketFunc: Y, window: Window):Term[Y] = macro BucketMacro.reduce[X,Y]
-
-//  def reduce[Y <: Reduce[X]](bucketFunc: Y):BucketBuilder[MacroTerm[Y]] = macro BucketMacro.bucket2Macro[MacroTerm[Y],Y]
-  def reduce[Y](bucketFunc: Y):BucketBuilder[X,Y] = macro BucketMacro.bucket2Macro[X,Y]
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, env)
 
   /**
    * This yields a partially built reduction, the next call determines when the reduction terminates (and yields a result)

@@ -2,6 +2,7 @@ package scespet.core
 
 import reflect.macros.Context
 import gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
+import scala.reflect.ClassTag
 
 package object types {
   type Env = gsa.esg.mekon.core.Environment
@@ -103,7 +104,7 @@ trait BucketBuilder[X,T] {
 
   def window(windowStream: MacroTerm[Boolean]) :MacroTerm[T]
 
-  def all():MacroTerm[T]
+  def all():Term[T]
 //
 //  def window(n:Events):MacroTerm[T]
 //  def window(n:Time):MacroTerm[T]
@@ -150,14 +151,24 @@ trait BucketBuilderVect[K, X, T] {
   def slice_post(trigger: EventGraphObject):VectTerm[K,T]
 }
 
-trait Reduce[-X] {
+trait Reduce[-X] extends Serializable {
   def add(x:X)
 }
 
-trait Term[+X] {
+trait Term[X] {
+  def value:X
+
+  def fold_all[Y <: Reduce[X]](y: Y):Term[Y]
   def map[Y](f: (X) => Y):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
+
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
+
+  def filterType[T:ClassTag]():Term[T] = {
+    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
+  }
 }
+
 
 trait BucketTerm[X] extends Term[X] {
   def newBucketBuilder[B](newB:()=>B):BucketBuilder[X, B]

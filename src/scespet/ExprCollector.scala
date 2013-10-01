@@ -28,7 +28,7 @@ class Scesspet {
       root
     }
 
-    def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
+    def query[X](newHasVal :(types.Env) => HasVal[X]) : AbsTerm[X, X] = {
       var root = new HasValRoot[X](newHasVal)
       addNode( null, root )
       root
@@ -46,7 +46,7 @@ class Scesspet {
     }
   }
 
-  abstract class AbsTerm[IN, X](val source:AbsTerm[_, IN]) extends Term[X] {
+  abstract class AbsTerm[IN, X](val source:AbsTerm[_, IN]) extends Term[X] with Serializable {
     // are joins multi parent?
     val parent :AbsTerm[_, IN] = source
     if (source != null) {
@@ -65,9 +65,16 @@ class Scesspet {
      */
     def applyTo(term :Term[IN]):Term[X]
 
-    def map[Y](f: (X) => Y): Term[Y] = new MapTerm[X, Y](this, f)
 
-    def filter(accept: (X) => Boolean): Term[X] = new FilterTerm[X](this, accept)
+    def value = ???
+
+    def map[Y](f: (X) => Y) = new MapTerm[X, Y](this, f)
+
+    def filter(accept: (X) => Boolean) = new FilterTerm[X](this, accept)
+
+    def reduce[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](false, this, newBFunc)
+
+    def fold_all[Y <: Reduce[X]](y: Y) = new FoldAllTerm[X,Y](this, y)
   }
 
 //  object RootTerm {
@@ -112,4 +119,40 @@ class Scesspet {
       term.filter(accept)
     }
   }
+
+  @deprecated("This should be unnecessary when bucketBuilder supports fold")
+  class FoldAllTerm[X, Y <: Reduce[X] ](source:AbsTerm[_, X], val fold: Y) extends AbsTerm[X, Y](source) {
+    def applyTo(term: Term[X]): Term[Y] = {
+      term.fold_all(fold)
+    }
+  }
+
+
+  class CollectTerm[IN, X <: Reduce[IN]](collectCapture:CollectCapture[X, IN]) (bucketBuilderCall:(BucketBuilder[IN, X]) => Term[X]) extends AbsTerm[IN, X](collectCapture.input) {
+
+    def applyTo(term: Term[IN]): Term[X] = {
+      if (collectCapture.continuousOutput) {
+//        val bucketBuilder = term.fold(collectCapture.reduce)
+//        bucketBuilderCall.apply(bucketBuilder)
+        ??? //actuall, bucketBuilder is only bound to "reduce" not "fold" right now
+      } else {
+        val bucketBuilder = term.reduce(collectCapture.reduce)
+        bucketBuilderCall.apply(bucketBuilder)
+      }
+    }
+  }
+
+  class CollectCapture[T <: Reduce[X], X](val continuousOutput:Boolean, val input:AbsTerm[_, X], val reduce:T) extends BucketBuilder[X,T] {
+    def each(n: Int) = ???
+
+    def window(windowStream: MacroTerm[Boolean]) = ???
+
+    def all() = new CollectTerm[X, T](this)( _.all() )
+
+    //
+    def slice_pre(trigger: EventGraphObject) = ???
+
+    def slice_post(trigger: EventGraphObject) = ???
+  }
+
 }
