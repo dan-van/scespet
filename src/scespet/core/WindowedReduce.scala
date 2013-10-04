@@ -7,7 +7,7 @@ package scespet.core
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :()=>Y, env :types.Env) extends UpdatingHasVal[Y] {
+class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] {
     env.addListener(dataEvents.getTrigger, this)
     env.addListener(windowEvents.getTrigger, this)
 
@@ -18,11 +18,11 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowE
 
     var completedReduce : Y = _
 
-    def value = completedReduce
+    def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
 
   def calculate():Boolean = {
     // add data before window close
-    var fire = false
+    var fire = emitType == ReduceType.CUMULATIVE
 
     var isNowOpen = inWindow
     if (env.hasChanged(windowEvents.getTrigger)) {
@@ -38,8 +38,6 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowE
       // i.e. window close takes precedence
       if (isNowOpen) {
         nextReduce.add(dataEvents.value)
-        // TODO: for 'fold' mode, we'd need
-        // if (fireOnEvent) fire = true
       }
     }
     if (inWindow && !isNowOpen) {

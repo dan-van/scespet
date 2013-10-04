@@ -117,7 +117,8 @@ object Plot {
   }
 
   // ------------------------------
-
+// todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
+// todo: rather than relying on MacroTerm being passed here
   def plot[X:Numeric](series:MacroTerm[X]) {
     val dataset:TimeSeriesDataset = TimeSeriesDataset(series, "Series")
     plotDataset(dataset)

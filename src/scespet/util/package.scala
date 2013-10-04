@@ -12,6 +12,11 @@ import java.util.Date
  */
 package object util {
   class TermPrint(val prefix:String) {
+    // todo: errrm, think about whether Term should get a 'time' field
+    def apply[X](term:Term[X]) :Term[X] = {
+      var count = 0
+      term.map(x => {println( "Event "+count+" "+prefix + String.valueOf(x)); count += 1; x} )
+    }
     def apply[X](term:MacroTerm[X]) :Term[X] = term.map(x => {println( new Date(term.env.getEventTime) + ": " + prefix + String.valueOf(x)); x} )
     def apply[K,X](term:VectTerm[K,X]):VectTerm[K,X] = { term.mapVector(x => println(prefix + String.valueOf(x))); term }
   }

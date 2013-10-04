@@ -12,7 +12,7 @@ import scespet.util._
 * Time: 09:29
 * To change this template use File | Settings | File Templates.
 */
-object TradesExample extends App {
+class TradesExample {
   case class Trade(name:String, price:Double, qty:Int)
   var tradeList = new ArrayBuffer[Trade]()
   tradeList += new Trade("VOD", 1.12, 1)
@@ -34,43 +34,38 @@ object TradesExample extends App {
     override def toString = s"TradeAccVol:$accVol"
   }
 
-
   val impl: SimpleEvaluator = new SimpleEvaluator()
   var tradeExpr: MacroTerm[Trade] = impl.asStream(trades).asInstanceOf[MacroTerm[Trade]]
+}
 
-  def v1 = {
-    tradeExpr map {_.qty} fold_all (new Sum[Int]) map { println(_) }
-  }
-  def v2 = {
-//    tradeExpr map {_.qty} bucket2 (new Sum) each 2 map { println(_) }
-//    println(tradeExpr.initialTerm.bucketFoo(new TradePrint).each(2))
-    val tradeBuckets = tradeExpr.reduce(new TradePrint).each(2)
-    out("tradePrint fired="){tradeBuckets}
-    out("Sum="){ tradeBuckets.map(_.accVol).reduce(new Sum[Int]).each(2) }
-  }
-
-  def v2a = {
-    var qtyStream = tradeExpr map {_.qty}
-    out("sum bucket 2"){qtyStream.reduce(new Sum[Int]).each(2)}
-  }
-
-  def v3 = {
-    val counter: MacroTerm[Counter] = tradeExpr.fold_all(new Counter)
-    val windowStream = counter.map(x => (x.c % 3) != 0)
-    val tradeBuckets = tradeExpr.reduce(new TradePrint).window(windowStream)
-    out("test="){counter.join(windowStream)}
-    out("tradeBucket="){tradeBuckets}
-//    output("window="){windowStream}
-
-  }
-
-  def v4 = {
-    // vector mapK
-
-  }
-//  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
-//  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
-  //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
-  v3
+object testFoldAll extends TradesExample with App {
+  tradeExpr map {_.qty} fold_all (new Sum[Int]) map { println(_) }
   impl.run()
 }
+
+object testReduceEach extends TradesExample with App {
+  // bucket pairs of trades into a TradePrint
+  val tradeBuckets = tradeExpr.reduce(new TradePrint).each(2)
+  out("tradePrint fired="){tradeBuckets}
+  // bucket pairs of TradePrint into a sum (i.e. accVol of 4 trades)
+  out("Sum="){ tradeBuckets.map(_.accVol).reduce(new Sum[Int]).each(2) }
+  impl.run()
+}
+
+
+object testWindowCausal extends TradesExample with App {
+  val counter: MacroTerm[Counter] = tradeExpr.fold_all(new Counter)
+  // window defined to be open for the first and last 3 trades
+  val windowStream = counter.map(x => (x.c <= 3 ||  (x.c >= (tradeList.size - 4) && x.c < tradeList.size)))
+  out("test="){counter.join(windowStream)}  // print this window stream as it evolves
+
+  // bucket trades into this window definition
+  val tradeBuckets = tradeExpr.reduce(new TradePrint).window(windowStream)
+  out("tradeBucket="){tradeBuckets}
+  impl.run()
+}
+
+
+//  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
+//  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
+//  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )

@@ -9,7 +9,7 @@ import gsa.esg.mekon.core.EventGraphObject
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], env:types.Env) extends BucketBuilder[X, Y] {
+class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], emitType:ReduceType, env:types.Env) extends BucketBuilder[X, Y] {
 
   def window(windowStream: MacroTerm[Boolean]) :MacroTerm[Y] = {
     // two ways of doing this. Use Mekon primitives, or Reactive
@@ -27,7 +27,7 @@ class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm
 //    }
 //    inputTerm.join(windowStream).reduce()
 //    val bucketMaintainer = new HasVal[Y] with types.MFunc
-return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStream.input, newBFunc, env))
+    return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStream.input, newBFunc, emitType, env))
 //    ???
   }
 
@@ -42,19 +42,20 @@ return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStre
 
   def each(n: Int):MacroTerm[Y] = {
     val sliceTrigger = new NthEvent(n, inputTerm.input.getTrigger, env)
-    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, false, newBFunc, env)
+    val sliceBefore = emitType == ReduceType.CUMULATIVE
+    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, sliceBefore, newBFunc, emitType, env)
     return new MacroTerm[Y](env)(slicer)
   }
 
   def slice_pre(trigger: EventGraphObject):MacroTerm[Y] = {
     val sliceTrigger = trigger
-    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, true, newBFunc, env)
+    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, true, newBFunc, emitType, env)
     return new MacroTerm[Y](env)(slicer)
   }
 
   def slice_post(trigger: EventGraphObject):MacroTerm[Y] = {
     val sliceTrigger = trigger
-    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, false, newBFunc, env)
+    val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, false, newBFunc, emitType, env)
     return new MacroTerm[Y](env)(slicer)
   }
 

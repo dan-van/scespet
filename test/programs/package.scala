@@ -56,7 +56,6 @@ package object programs {
   class PriceFactory(val env:types.Env) {
     val nameToMidStream = Map[String, HasVal[Double]]()
     val nameToTradeStream = Map[String, HasVal[Trade]]()
-    val nameToBBO = Map[String, HasVal[Double]]()
 
     def getMids(name:String) = {
       var midStreamO = nameToMidStream.get(name)
@@ -67,9 +66,6 @@ package object programs {
       })
     }
 
-    def getBBO(name:String) = {
-      getMids(name)
-    }
     def getTrades(name:String) = {
       var tradeStreamO = nameToTradeStream.get(name)
       tradeStreamO.getOrElse({

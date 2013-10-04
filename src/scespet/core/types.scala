@@ -3,6 +3,9 @@ package scespet.core
 import reflect.macros.Context
 import gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
 import scala.reflect.ClassTag
+import scala.reflect.runtime.universe._
+import scala.reflect.ClassTag
+
 
 package object types {
   type Env = gsa.esg.mekon.core.Environment
@@ -99,6 +102,13 @@ trait Func[X,Y] extends UpdatingHasVal[Y] {
 case class Events(n:Int)
 case class Time(n:Int)
 
+// sealed, enum, blah blah
+class ReduceType(val name:String) {}
+object ReduceType {
+  val CUMULATIVE = new ReduceType("Fold")
+  val LAST = new ReduceType("Fold")
+}
+
 trait BucketBuilder[X,T] {
   def each(n:Int):MacroTerm[T]
 
@@ -164,13 +174,91 @@ trait Term[X] {
 
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
 
+  def by[K](f: X => K) :MultiTerm[K,X]
+
+  def valueSet[Y](expand: (X=>TraversableOnce[Y])) : VectTerm[Y,Y]
+
+  def valueSet() : VectTerm[X,X] = valueSet(valueToSingleton[X])
+
+  /**
+   * emit an updated tuples of (this.value, y) when either series fires
+   */
+  def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)]
+
+  /**
+   * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+   */
+  def take[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)]
+
+  /**
+   * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+   */
+  def sample(evt:EventGraphObject):MacroTerm[X]
+
   def filterType[T:ClassTag]():Term[T] = {
-//    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
-    filter( _.isInstanceOf[T] ).map(v => v.asInstanceOf[T])
+    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
   }
+
+  //  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
+  private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
+trait MultiTerm[K,X] {
+  /**
+   * for symmetry with MacroTerm.value
+   * @return
+   */
+  def value:List[X]
 
+  def apply(k:K):MacroTerm[X]
+
+  /**
+   * todo: call this "filterKey" ?
+   */
+  def subset(predicate:K=>Boolean):VectTerm[K,X]
+
+  def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X]
+
+  /**
+   * This allows operations that operate on the entire vector rather than single cells (e.g. a demean operation, or a "unique value count")
+   * I want to think more about other facilities on this line
+   *
+   * @return
+   */
+  def mapVector[Y](f:VectorStream[K,X] => Y):MacroTerm[Y]
+
+  def map[Y: TypeTag](f:X=>Y):VectTerm[K,Y]
+
+  def filterType[Y : ClassTag]():VectTerm[K,Y]
+
+  def filter(accept: (X) => Boolean):VectTerm[K,X]
+
+  /**
+   * used to build a set from the values in a vector
+   * the new vector acts like a set (key == value), generated values are folded into it.
+   *
+   * todo: maybe call this "flatten", "asSet" ?
+   */
+  def toValueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y]
+
+  def derive[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y]
+  def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)]
+  def sample(evt:EventGraphObject):VectTerm[K,X]
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
+  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y]
+
+  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
+  def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]
+
+  /**
+   * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
+   * e.g. we could have a vector of name->RandomStream and generate a derived
+   * @param cellFromEntry
+   * @tparam Y
+   * @return
+   */
+  def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y]
+}
 trait BucketTerm[X] extends Term[X] {
   def newBucketBuilder[B](newB:()=>B):BucketBuilder[X, B]
 }

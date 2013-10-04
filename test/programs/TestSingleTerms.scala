@@ -12,8 +12,12 @@ import scespet.util._
 * Time: 09:29
 * To change this template use File | Settings | File Templates.
 */
-object TestSingleTerms extends App {
+import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
+import org.junit.runner.RunWith
+import org.scalatest.junit.JUnitRunner
 
+@RunWith(classOf[JUnitRunner])
+class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest {
   case class Trade(name:String, price:Double, qty:Int)
   var tradeList = new ArrayBuffer[Trade]()
   tradeList += new Trade("VOD.L", 1.12, 1)
@@ -35,12 +39,22 @@ object TestSingleTerms extends App {
   nameList += "IBM.N"
   nameList += "BARC.L"
 
-  val impl: SimpleEvaluator = new SimpleEvaluator()
+  var impl: SimpleEvaluator = new SimpleEvaluator()
+
+  override protected def beforeEach() {
+    impl = new SimpleEvaluator
+  }
+
   var names = IteratorEvents(nameList)((_,_) => 0L)
   var trades = IteratorEvents(tradeList)((_,i) => i)
+
   //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
 //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
+
+  override protected def afterEach() {
+    impl.run()
+  }
 
   def v1 = {
     var namesExpr: MacroTerm[String] = impl.asStream(names).asInstanceOf[MacroTerm[String]]
@@ -74,6 +88,50 @@ object TestSingleTerms extends App {
   //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
   //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
-  remoteRun
+//  remoteRun
 //  impl.run
+
+  class StreamTest[X](name:String, expected:Iterable[X], stream:Term[X]) {
+    var eventI = 0
+    val expectIter = expected.iterator
+    stream.map(next => {
+      val expect = expectIter.next()
+      assertResult(expect, s"Stream $name, Event $eventI was not expected")(next)
+      eventI += 1
+    })
+  }
+
+  test("stream increment") {
+    val elements = 0 to 20
+    val expectedOut = elements.map( _ * 1000 ).toArray
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+    val mult10 = stream.map(_ * 1000)
+    new StreamTest("mult10", expectedOut, mult10)
+  }
+
+  test("stream reduce") {
+    val elements = 0 to 20
+    val expectedOut = elements.toList.grouped(3).map( _.reduce( _+_ )).toList
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+    val mult10 = stream.map(_ * 1000)
+    new StreamTest("mult10", expectedOut, mult10)
+  }
+
+  test("Simple reduce each") {
+    out("Vod trade bucket:") {
+      var qty: MacroTerm[Int] = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
+      qty.reduce(new Sum[Int]).each(2)
+    }
+  }
+
+  test("Simple fold each") {
+    val vodTrades = impl.asStream(trades).filter(_.name == "VOD.L")
+    out("Vod Trade")(vodTrades)
+    out("Vod trade bucket:") {
+      var qty: MacroTerm[Int] = vodTrades.map(_.qty)
+      qty.fold(new Sum[Int]).each(2)
+    }
+  }
 }
