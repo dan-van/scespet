@@ -98,7 +98,7 @@ class SimpleEnv() extends Environment {
 
   def removeWakeupReceiver(provider: Any, consumer: Function) {}
 
-  def addListener[T](provider: T, consumer: Function) {addListener(provider.asInstanceOf[Any], consumer.asInstanceOf[types.EventGraphObject]); provider}
+  def addListener[T](provider: T, consumer: Function) = {addListener(provider.asInstanceOf[Any], consumer.asInstanceOf[types.EventGraphObject]); provider}
 
   def removeListener(provider: Any, consumer: Function) {}
 
@@ -123,6 +123,8 @@ class SimpleEnv() extends Environment {
   def getEndTime = ???
 
   def isRealtime = ???
+
+  def isShuttingDown = ???
 
   def isCurrentThreadWithinFire = ???
 

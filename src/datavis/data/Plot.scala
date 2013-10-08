@@ -137,6 +137,8 @@ object Plot {
   private def plotDataset[X: Numeric](dataset: Plot.TimeSeriesDataset) {
     var renderer: XYItemRenderer = new XYStepRenderer()
     var range: NumberAxis = new NumberAxis()
+    range.setAutoRangeIncludesZero(false)
+
     var domain: DateAxis = new DateAxis("Time")
     var plot: XYPlot = new XYPlot(dataset, domain, range, renderer)
 
