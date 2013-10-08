@@ -10,6 +10,7 @@ import gsa.esg.mekon.core.EventGraphObject.Lifecycle
  * To change this template use File | Settings | File Templates.
  */
 class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] with Lifecycle {
+  var newSliceNextEvent = false
 
   env.addListener(dataEvents.getTrigger, this)
   if (sliceEvents != null) env.addListener(sliceEvents, this)
@@ -28,23 +29,21 @@ class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEven
   }
 
   def calculate():Boolean = {
-    // add data before window close
-    var fire = emitType == ReduceType.CUMULATIVE
+    var fire = emitType == ReduceType.CUMULATIVE // every cumulative event is exposed
 
-    if (sliceBefore) {
-      if (sliceEvents != null && env.hasChanged(sliceEvents)) {
-        completedReduce = nextReduce
-        nextReduce = newReduce()
-        fire = true
-      }
+    val sliceTrigger = (sliceEvents != null && env.hasChanged(sliceEvents))
+    if (newSliceNextEvent || (sliceBefore && sliceTrigger)) {
+      completedReduce = nextReduce
+      nextReduce = newReduce()
+      newSliceNextEvent = false
     }
     if (env.hasChanged(dataEvents.getTrigger)) {
       nextReduce.add(dataEvents.value)
     }
-    if (!sliceBefore) {
-      if (sliceEvents != null && env.hasChanged(sliceEvents)) {
+    if (!sliceBefore && sliceTrigger) {
+      newSliceNextEvent = true
+      if (emitType == ReduceType.LAST) {
         completedReduce = nextReduce
-        nextReduce = newReduce()
         fire = true
       }
     }

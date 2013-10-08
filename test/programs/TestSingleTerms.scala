@@ -3,6 +3,7 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
+import org.junit.Test
 
 
 /**
@@ -12,12 +13,12 @@ import scespet.util._
 * Time: 09:29
 * To change this template use File | Settings | File Templates.
 */
-import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
+import org.scalatest.{Matchers, OneInstancePerTest, BeforeAndAfterEach, FunSuite}
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
+import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
 @RunWith(classOf[JUnitRunner])
-class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest {
+class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with Matchers {
   case class Trade(name:String, price:Double, qty:Int)
   var tradeList = new ArrayBuffer[Trade]()
   tradeList += new Trade("VOD.L", 1.12, 1)
@@ -97,6 +98,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     stream.map(next => {
       val expect = expectIter.next()
       assertResult(expect, s"Stream $name, Event $eventI was not expected")(next)
+      println(s"Observed event: $eventI \t $next as expected")
       eventI += 1
     })
   }
@@ -110,13 +112,25 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     new StreamTest("mult10", expectedOut, mult10)
   }
 
-  test("stream reduce") {
-    val elements = 0 to 20
+  test("reduce each") {
+    val elements = 0 to 10
     val expectedOut = elements.toList.grouped(3).map( _.reduce( _+_ )).toList
+    expectedOut should be(List(3, 12, 21, 19))
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.map(_ * 1000)
+    val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)
     new StreamTest("mult10", expectedOut, mult10)
+  }
+
+//  @Test
+  test("fold each") {
+    val elements = List.fill(11)(2)
+    val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
+    expectedOut should be(List(List(2, 4, 6), List(2, 4, 6), List(2, 4, 6), List(2, 4)).flatten)
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+    val mult10 = stream.fold(new Sum[Int]).each(3).map(_.sum.toInt)
+    new StreamTest("fold each", expectedOut, mult10)
   }
 
   test("Simple reduce each") {

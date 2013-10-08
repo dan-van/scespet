@@ -68,7 +68,9 @@ abstract class OrderReportsExample extends App {
 
 object Test1 extends OrderReportsExample {
   def doBody() {
-    Plot.plot(impl.asStream(priceFactory.getMids("MSFT.O")))
+    val msft = impl.asStream(priceFactory.getMids("MSFT.O"))
+    val vod = impl.asStream(priceFactory.getMids("VOD.L"))
+    Plot.plot(msft).plot(vod)
   }
 }
 object Test2 extends OrderReportsExample {

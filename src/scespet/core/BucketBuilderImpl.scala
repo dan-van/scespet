@@ -42,7 +42,7 @@ class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm
 
   def each(n: Int):MacroTerm[Y] = {
     val sliceTrigger = new NthEvent(n, inputTerm.input.getTrigger, env)
-    val sliceBefore = emitType == ReduceType.CUMULATIVE
+    val sliceBefore = false // always slice after the event has been added to the bucket
     val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, sliceBefore, newBFunc, emitType, env)
     return new MacroTerm[Y](env)(slicer)
   }
