@@ -180,10 +180,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   def filterType[Y : ClassTag]():VectTerm[K,Y] = {
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
       //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+      val classTag = reflect.classTag[Y]
       var value:Y = _
       def calculate() = {
         val inputVal = input.get(index)
-        val oy = reflect.classTag[Y].unapply(inputVal)
+        val oy = classTag.unapply(inputVal)
         if (oy.isDefined) {
           value = oy.get
           true
