@@ -31,14 +31,8 @@ trait EventSourceX[X] extends gsa.esg.mekon.core.EventSource with HasVal[X] {
 }
 
 object IteratorEvents {
-  def apply[X](iterable:TraversableOnce[X]) = {
-    val eventCount = new Function2[Any, Int,Long] {
-      var i = 0L;
-      def apply(x:Any, i:Int) : Long = {
-        i
-      }
-    }
-    new IteratorEvents[X](iterable, eventCount)
+  def apply[X](iterable:TraversableOnce[X])(timeGet:(X, Int)=>Long) = {
+    new IteratorEvents[X](iterable, timeGet)
   }
 }
 

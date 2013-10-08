@@ -38,8 +38,8 @@ object Program1 extends App {
 
 //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
-  var names = IteratorEvents(nameList)
-  var trades = IteratorEvents(tradeList)
+  var names = IteratorEvents(nameList)( (_,_) => 0L)
+  var trades = IteratorEvents(tradeList)((_,i) => i)
 
   def v1 = {
     var namesExpr: MacroTerm[String] = impl.asStream(names)
@@ -74,7 +74,7 @@ object Program1 extends App {
     var namesExpr: MacroTerm[String] = impl.asStream(names)
     val tradeStream = impl.asStream(trades)
     def getTrades(name:String) = tradeStream.filter( _.name == name)
-    val nameVectTakeTrades: VectTerm[String, Trade] = namesExpr.by(x => x).joinf(k => getTrades(k).input)
+    val nameVectTakeTrades: VectTerm[String, Trade] = namesExpr.by(x => x).derive(k => getTrades(k).input)
     out("name to trade") {nameVectTakeTrades}
   }
 

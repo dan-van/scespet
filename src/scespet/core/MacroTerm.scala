@@ -17,6 +17,13 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   def value = input.value
 
   // this will be a synonym for fold(Y).all
+  /**
+   * Fold is a running reduction - the new state of the reduction is exposed after each element addition
+   * e.g. a running cumulative sum, as opposed to a sum
+   * @param y
+   * @tparam Y
+   * @return
+   */
   def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
     val listener = new AbsFunc[X,Y] {
       value = y
@@ -68,11 +75,12 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
    */
   def by[K](f: X => K) : VectTerm[K,X] = {
     val vFunc: GroupFunc[K, X] = new GroupFunc[K, X](input, f, env)
+//    env.addListener(input.trigger, vFunc)
     return new VectTerm[K, X](env)(vFunc)
   }
 
   def takef[Y](newGenerator:(X)=>HasVal[Y]) : VectTerm[X,Y] = {
-    this.by(x => x).joinf(newGenerator)
+    this.by(x => x).derive(newGenerator)
   }
 
 // Take a stream of X (usually representing some collection), map X -> Collection[Y] and generate a new flattened set of Y (mainly used if X is some form of collection and you want to flatten it)
@@ -80,18 +88,19 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
 
 //  def distinct2[Y : ClassTag]() = values[Y](x => {Traversable[Y](x.asInstanceOf[Y])} )
 
-  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
-
   /**
    * generate a new vector, keyed by the values in this stream.
    * optionally provide a function that takes a value in the stream and yields an iterator to be used for generating many keys from one value
    * (this is especially useful if your values in the stream are Collections, as this allows you to flatten a Stream[Set[String]] -> Vect[String,String]
    *
+   * todo: hmm, with identity as the expansion, this is the same as .by(_)
+   *
    * @param expand
    * @tparam Y
    * @return
    */
-  def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X,Y] ) : VectTerm[Y,Y] = {
+  def valueSet[Y](expand: (X=>TraversableOnce[Y])) : VectTerm[Y,Y] = {
+//    def valueSet[Y](expand: (X=>TraversableOnce[Y]) = valueToSingleton[X,Y] ) : VectTerm[Y,Y] = {
     // I doubt this is ever constructed with an initial value to be expanded
     val initial = if (input.value != null) {
       println("ODD, input seems to already be initialised")
@@ -160,8 +169,21 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     return new MacroTerm[X](env)(listener)
   }
 
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, env)
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.LAST, env)
 
+  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.CUMULATIVE, env)
+
+//  /**
+//   * This yields a partially built reduction, the next call determines when the reduction terminates (and yields a result)
+//   * e.g. reduce( new Sum ) each (10)
+//   * will yield the sum of every 10 elements
+//   * @param newBFunc
+//   * @tparam Y
+//   * @return
+//   */
+//  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, env)
+
+  @deprecated
   def newBucketBuilder[B](newB: () => B):BucketBuilder[X, B] = {
     type Y = B with Reduce[X]
     val reduceGenerator = newB.asInstanceOf[() => Y]
@@ -169,6 +191,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
     var aY = reduceGenerator.apply()
     println("Reducer in MacroTerm generates "+aY)
 //    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    new BucketBuilderImpl[X, Y](reduceGenerator, new MacroTerm[X](env)(input), env).asInstanceOf[BucketBuilder[X, B]]
+    val term = new MacroTerm[X](env)(input)
+    new BucketBuilderImpl[X, Y](reduceGenerator, term, ReduceType.LAST, env).asInstanceOf[BucketBuilder[X, B]]
   }
 }

@@ -33,8 +33,9 @@ object Program2 extends App {
   nameList += "BARC.L"
 
   val impl: SimpleEvaluator = new SimpleEvaluator()
-  var names = IteratorEvents(nameList)
-  var trades = IteratorEvents(tradeList)//  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
+  var names = IteratorEvents(nameList)((_,_) => 0L)
+  var trades = IteratorEvents(tradeList)((_,i) => i)
+  //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
   def v1 = {
     val namesExpr = impl.asStream(trades).map(_.qty).reduce(new Sum[Int]).each(3)
@@ -58,7 +59,7 @@ object Program2 extends App {
   def v3 = {
 //    var start = impl.query(trades)
     val nameStream = impl.asStream(names)
-    val start = nameStream.takef(getTrades).fold_all(new Collect)
+    val start = nameStream.by(x => x).derive(getTrades).fold_all(new Collect)
     impl.run()
     println("run finished. Final data = ")
     for (i <- 0 to start.input.getSize() - 1 ) {

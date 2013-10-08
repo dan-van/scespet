@@ -3,7 +3,6 @@ package scespet
 import core._
 import core.types
 import scespet.expression.{HasValRoot, RootTerm, AbsTerm}
-import gsa.esg.mekon.core.EventGraphObject
 
 /**
  * Created with IntelliJ IDEA.
@@ -43,5 +42,5 @@ class EnvTermBuilder(val env :types.Env) {
 }
 
 object EnvTermBuilder {
-  implicit def eventObjectToHasVal[X <: EventGraphObject](evtObj:X) :HasVal[X] = new IsVal(evtObj)
+  implicit def eventObjectToHasVal[X <: types.EventGraphObject](evtObj:X) :HasVal[X] = new IsVal(evtObj)
 }

@@ -5,7 +5,7 @@ import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
 import org.jfree.data.general.AbstractSeriesDataset
 import org.jfree.data.xy.XYDataset
 import org.jfree.data.DomainOrder
-import scespet.core.{VectTerm, MacroTerm}
+import scespet.core.{HasVal, VectTerm, MacroTerm}
 import org.jfree.chart.renderer.xy.{XYStepRenderer, XYItemRenderer}
 import org.jfree.chart.axis.{DateAxis, NumberAxis}
 import org.jfree.chart.plot.XYPlot
@@ -13,6 +13,8 @@ import java.awt.event.{ActionEvent, ActionListener}
 import org.jfree.chart.{ChartPanel, JFreeChart}
 import java.awt.Dimension
 import gsa.esg.mekon.core.EventGraphObject
+
+import scala.collection.JavaConverters._
 
 /**
  * @version $Id$
@@ -24,114 +26,96 @@ object Plot {
   }
 
   object TimeSeriesDataset {
-    def apply[X:Numeric](stream:MacroTerm[X], name:String) :TimeSeriesDataset = {
-      val dataset = new TimeSeriesDataset()
-      dataset.addSeries(name)
-      stream.map(v => {
-        val asDouble = implicitly[Numeric[X]].toDouble( v )
-        dataset.add(stream.env.getEventTime, asDouble)
-      })
-      dataset
-    }
-
-    def apply[K,X:Numeric](stream:VectTerm[K,X]) :TimeSeriesDataset = {
-      import scala.collection.JavaConversions._
-      val dataset = new TimeSeriesDataset()
-      for (k <- stream.input.getKeys) {
-        dataset.addSeries( k )
-      }
-      stream.mapVector(v => {
-        if (v.getSize > dataset.getSeriesCount) {
-          for (i <- dataset.getSeriesCount to v.getSize - 1 ) {
-            dataset.addSeries( v.getKey(i) )
-          }
-        }
-        dataset.beginAddRow(stream.env.getEventTime)
-        for (y <- v.getValues) {
-          dataset.addCell(implicitly[Numeric[X]].toDouble(y))
-        }
-      })
-      dataset
-    }
   }
 
   class TimeSeriesDataset() extends AbstractSeriesDataset with XYDataset {
-    val data_x:TLongArrayList = new TLongArrayList()
+    val datas_x = collection.mutable.MutableList[TLongArrayList]()
     val seriesKeys = collection.mutable.MutableList[Any]()
     val datas_y = collection.mutable.MutableList[TDoubleArrayList]()
-    var currentCount = 0
+    var currentCounts = collection.mutable.MutableList[Int]() // this avoids us exposing new points outside of awt thread
     var cellIndex = 0
 
     var seriesNameFunc:Any => String = String.valueOf
 
-    def addSeries(key:Any) {
+    def addSeries(key:Any):Int = {
       seriesKeys += key
-      val newCol = new TDoubleArrayList(data_x.size())
-      for (i <- 0 to data_x.size()) newCol.add(Double.NaN)
-      datas_y += newCol
+      val newXCol = new TLongArrayList(2000)
+      val newYCol = new TDoubleArrayList(2000)
+      datas_x += newXCol
+      datas_y += newYCol
+      currentCounts += 0
+      seriesKeys.size - 1
     }
 
-    def beginAddRow(x:Long) {
-      if (cellIndex != 0) throw new IllegalStateException("Did not previously call addCell for a complete row: "+getSeriesCount)
-      data_x.add(x)
+    def add(series:Int, x:Long, y:Double) = {
+      datas_x(series).add(x)
+      datas_y(series).add(y)
     }
 
-    def addCell(y:Double) {
-      datas_y(cellIndex).add(y)
-      cellIndex = if (cellIndex == datas_y.size - 1) 0 else cellIndex + 1
-    }
+    def getDomainOrder = DomainOrder.ASCENDING
 
-    def add(x:Long, y:Double) = {
-      data_x.add(x)
-      if (getSeriesCount != 1) throw new IllegalArgumentException("This dataset has "+getSeriesCount+" series, but only 1 values given")
-      datas_y(0).add(y)
-    }
+    def getItemCount(series: Int) = currentCounts(series)
+    def getX(series: Int, item: Int) = datas_x(series).get(item)
 
-    def add(x:Long, ys:Array[Double]) = {
-      data_x.add(x)
-      if (ys.size != datas_y.size) throw new IllegalArgumentException("This dataset has "+getSeriesCount+" series, but only "+ys.size+" values given")
-      for (i <- 0 to ys.size - 1) datas_y(i).add(ys(i))
-    }
-
-    def getDomainOrder = DomainOrder.NONE
-
-    def getItemCount(series: Int) = currentCount
-    def getX(series: Int, item: Int) = data_x.get(item)
-
-    def getXValue(series: Int, item: Int) = data_x.get(item)
+    def getXValue(series: Int, item: Int) = datas_x(series).get(item)
 
     def getY(series: Int, item: Int) = datas_y(series).get(item)
 
     def getYValue(series: Int, item: Int) = datas_y(series).get(item)
 
-    def getSeriesCount = datas_y.size
+    def getSeriesCount = datas_x.size
 
     def getSeriesKey(series: Int) = seriesNameFunc(seriesKeys(series))
 
     def fireupdate() = {
-      if (data_x.size() > currentCount) {
-        currentCount = data_x.size()
+      var fire = false
+      for (i <- 0 to getSeriesCount - 1 ) {
+        val newCount = Math.min(datas_x(i).size, datas_y(i).size)
+        if (currentCounts(i) < newCount) {
+          fire = true
+          currentCounts(i) = newCount
+        }
+      }
+      if (fire) {
         fireDatasetChanged()
       }
     }
   }
 
   // ------------------------------
-
-  def plot[X:Numeric](series:MacroTerm[X]) {
-    val dataset:TimeSeriesDataset = TimeSeriesDataset(series, "Series")
+// todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
+// todo: rather than relying on MacroTerm being passed here
+  def plot[X:Numeric](series:MacroTerm[X]) = {
+    val dataset = new TimeSeriesDataset()
+    val options = new Options[String,X](dataset)
+    options.plot(series)
     plotDataset(dataset)
-    new Options[String,X](dataset)
+    options
   }
 
   def plot[K,X:Numeric](series:VectTerm[K,X]) = {
-    val dataset:TimeSeriesDataset = TimeSeriesDataset(series)
+    val dataset = new TimeSeriesDataset()
+    val options = new Options[String,X](dataset)
+    for (k <- series.input.getKeys.asScala) {
+      options.plot( series(k), k.toString )
+    }
     plotDataset(dataset)
-    new Options[K,X](dataset)
+    options
   }
 
-  class Options[K,X](dataset:TimeSeriesDataset) {
+  class Options[K,X:Numeric](dataset:TimeSeriesDataset) {
     def seriesNames(keyRender:K=>String = {k:K => k.toString}) {dataset.seriesNameFunc = keyRender.asInstanceOf[Any => String]}
+
+    def plot(stream: MacroTerm[X]) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1))
+
+    def plot(stream: MacroTerm[X], name:String) :Options[K,X] = {
+      val seriesId = dataset.addSeries(name)
+      stream.map(v => {
+        val asDouble = implicitly[Numeric[X]].toDouble( v )
+        dataset.add(seriesId, stream.env.getEventTime, asDouble)
+      })
+      this
+    }
   }
 
   private def plotDataset[X: Numeric](dataset: Plot.TimeSeriesDataset) {

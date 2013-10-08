@@ -13,6 +13,10 @@ public interface VectorStream<K, V> {
     int getSize();
     List<K> getKeys();
     List<V> getValues();
+
+    // I don't think we'll need to call this often, only on join. I reckon an acceptable
+    // implementation is just getKeys.indexOf(k)
+    int indexOf(K key);
     V get(int i);
     K getKey(int i);
 

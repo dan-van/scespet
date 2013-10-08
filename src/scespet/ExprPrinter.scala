@@ -1,8 +1,9 @@
 package scespet
 
-import scespet.core.{Reduce, Term}
+import scespet.core._
 import reflect.ClassTag
 import scespet.expression.{AbsTerm, RootTerm}
+import gsa.esg.mekon.core.EventGraphObject
 
 /**
  * Created with IntelliJ IDEA.
@@ -26,6 +27,25 @@ class ExprPrinter() extends Builder {
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
 
     def value = ???
+
+    def by[K](f: (X) => K): MultiTerm[K, X] = ???
+
+    def valueSet[Y](expand: (X) => TraversableOnce[Y]): VectTerm[Y, Y] = ???
+
+    /**
+     * emit an updated tuples of (this.value, y) when either series fires
+     */
+    def join[Y](y: MacroTerm[Y]): MacroTerm[(X, Y)] = ???
+
+    /**
+     * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+     */
+    def take[Y](y: MacroTerm[Y]): MacroTerm[(X, Y)] = ???
+
+    /**
+     * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+     */
+    def sample(evt: EventGraphObject): MacroTerm[X] = ???
   }
 
   class ExecutingTerm[X](x:X) extends Term[X] {
@@ -51,6 +71,25 @@ class ExprPrinter() extends Builder {
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
 
     def value = ???
+
+    def by[K](f: (X) => K): MultiTerm[K, X] = ???
+
+    def valueSet[Y](expand: (X) => TraversableOnce[Y]): VectTerm[Y, Y] = ???
+
+    /**
+     * emit an updated tuples of (this.value, y) when either series fires
+     */
+    def join[Y](y: MacroTerm[Y]): MacroTerm[(X, Y)] = ???
+
+    /**
+     * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+     */
+    def take[Y](y: MacroTerm[Y]): MacroTerm[(X, Y)] = ???
+
+    /**
+     * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+     */
+    def sample(evt: EventGraphObject): MacroTerm[X] = ???
   }
 
 }

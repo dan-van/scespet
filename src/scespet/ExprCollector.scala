@@ -75,6 +75,27 @@ class Scesspet {
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](false, this, newBFunc)
 
     def fold_all[Y <: Reduce[X]](y: Y) = new FoldAllTerm[X,Y](this, y)
+
+    def by[K](f: (X) => K): MultiTerm[K, X] = ???
+
+    def valueSet[Y](expand: (X) => TraversableOnce[Y]): VectTerm[Y, Y] = ???
+
+    /**
+     * emit an updated tuples of (this.value, y) when either series fires
+     */
+    def join[Y](y: MacroTerm[Y]): MacroTerm[(X, Y)] = ???
+
+    /**
+     * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+     */
+    def take[Y](y: MacroTerm[Y]): MacroTerm[(X, Y)] = ???
+
+    /**
+     * Sample this series each time {@see y} fires, and emit tuples of (this.value, y)
+     */
+    def sample(evt: EventGraphObject): MacroTerm[X] = ???
+
+
   }
 
 //  object RootTerm {
