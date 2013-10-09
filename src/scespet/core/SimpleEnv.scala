@@ -4,6 +4,7 @@ import collection.mutable
 import gsa.esg.mekon.core._
 import scespet.expression.{Scesspet, RootTerm, AbsTerm}
 import java.util.TimeZone
+import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 
 /**
  * Created with IntelliJ IDEA.
@@ -59,6 +60,15 @@ class SimpleEnv() extends Environment {
         eventSourceQueue.enqueue( nextSource )
       } else {
         println(s"terminated ${nextSource}")
+      }
+    }
+    import collection.JavaConverters._
+    if (eventSourceQueue.isEmpty) {
+      for (n <- graph.getAllNodes.asScala) {
+        val graphObject = n.getGraphObject
+        if (graphObject.isInstanceOf[Lifecycle]) {
+          graphObject.asInstanceOf[Lifecycle].destroy()
+        }
       }
     }
   }

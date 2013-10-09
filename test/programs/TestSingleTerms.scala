@@ -41,9 +41,13 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
   nameList += "BARC.L"
 
   var impl: SimpleEvaluator = new SimpleEvaluator()
-
+  val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
     impl = new SimpleEvaluator
+  }
+
+  def addPostCheck(name:String)(check: => Unit) {
+    postRunChecks.append(() => { check })
   }
 
   var names = IteratorEvents(nameList)((_,_) => 0L)
@@ -55,6 +59,9 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 
   override protected def afterEach() {
     impl.run()
+    for (r <- postRunChecks) {
+      r()
+    }
   }
 
   def v1 = {
@@ -98,7 +105,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     stream.map(next => {
       val expect = expectIter.next()
       expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
-      println(s"Observed event: $eventI \t $next as expected")
+      println(s"Observed event: $name-$eventI \t $next as expected")
       eventI += 1
     })
   }
@@ -113,16 +120,15 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
   }
 
   test("reduce each") {
-    val elements = 0 to 10
+    val elements = List.fill(11)(2)
     val expectedOut = elements.toList.grouped(3).map( _.reduce( _+_ )).toList
-    expectedOut should be(List(3, 12, 21, 19))
+    expectedOut should be(List(6, 6, 6, 4))
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)
     new StreamTest("mult10", expectedOut, mult10)
   }
 
-//  @Test
   test("fold each") {
     val elements = List.fill(11)(2)
     val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
@@ -131,6 +137,50 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val mult10 = stream.fold(new Sum[Int]).each(3).map(_.sum.toInt)
     new StreamTest("fold each", expectedOut, mult10)
+  }
+
+  test("slice before") {
+    val elements = List.fill(3)(1) ::: (10 :: List.fill(3)(1))
+    val expectReduce = List(3, 13)
+    val expectScan = List(List(1, 2, 3), List(10, 11, 12, 13)).flatten
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+    val sliceTrigger = stream.filter(_ == 10)
+    val scan = stream.fold(new Sum[Int]).slice_pre( sliceTrigger ).map(_.sum.toInt)
+    val reduce = stream.reduce(new Sum[Int]).slice_pre( sliceTrigger ).map(_.sum.toInt)
+    new StreamTest("scan", expectScan, scan)
+    new StreamTest("reduce", expectReduce, reduce)
+  }
+
+  test("slice after") {
+    val elements = List.fill(3)(1) ::: (10 :: List.fill(3)(1))
+    val expectReduce = List(13, 3)
+    val expectScan = List(List(1, 2, 3, 13), List(1, 2, 3)).flatten
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+    val sliceTrigger = stream.filter(_ == 10)
+    val scan = stream.fold(new Sum[Int]).slice_post( sliceTrigger ).map(_.sum.toInt)
+    val reduce = stream.reduce(new Sum[Int]).slice_post( sliceTrigger ).map(_.sum.toInt)
+    new StreamTest("scan", expectScan, scan)
+    new StreamTest("reduce", expectReduce, reduce)
+  }
+
+  test("by") {
+    val elements = "aaAbAB".toCharArray
+    val expectOut = Map('A' -> 4, 'B' -> 2)
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+    val countByLetter = stream.by(_.toUpper).reduce_all(new Counter)
+    addPostCheck("Counts") {
+      import collection.JavaConverters._
+      expectResult(expectOut.keySet, "Keyset mismatch")(countByLetter.input.getKeys.asScala.toSet)
+      for (e <- expectOut) {
+        var i = countByLetter.input.indexOf(e._1)
+        val reduce = countByLetter.input.get(i)
+        val value = reduce.c
+        expectResult(e._2, s"Value mismatch for key ${e._1}, index: $i")(value)
+      }
+    }
   }
 
   test("Simple reduce each") {

@@ -47,10 +47,18 @@ class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm
     return new MacroTerm[Y](env)(slicer)
   }
 
+  def slice_pre(trigger: MacroTerm[_]):MacroTerm[Y] = {
+    slice_pre(trigger.input.trigger)
+  }
+
   def slice_pre(trigger: EventGraphObject):MacroTerm[Y] = {
     val sliceTrigger = trigger
     val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, true, newBFunc, emitType, env)
     return new MacroTerm[Y](env)(slicer)
+  }
+
+  def slice_post(trigger: MacroTerm[_]):MacroTerm[Y] = {
+    slice_post(trigger.input.trigger)
   }
 
   def slice_post(trigger: EventGraphObject):MacroTerm[Y] = {

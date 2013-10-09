@@ -125,8 +125,12 @@ trait BucketBuilder[X,T] {
 //  def window(n:Time):MacroTerm[T]
 //  def window(windowStream:MacroTerm[Boolean]):MacroTerm[T]
 //
+  // todo: think about how to build an implicit conversion from eventGraphObject -> Term
+  // todo: if we have a Builder instance in scope, then it is possible with implicits
   def slice_pre(trigger:EventGraphObject):MacroTerm[T]
   def slice_post(trigger:EventGraphObject):MacroTerm[T]
+  def slice_pre(trigger:MacroTerm[_]):MacroTerm[T]
+  def slice_post(trigger:MacroTerm[_]):MacroTerm[T]
 }
 
 trait BucketBuilderVect[K, X, T] {

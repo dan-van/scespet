@@ -171,8 +171,10 @@ class Scesspet {
     def all() = new CollectTerm[X, T](this)( _.all() )
 
     //
+    def slice_pre(trigger: MacroTerm[_]) = ???
     def slice_pre(trigger: EventGraphObject) = ???
 
+    def slice_post(trigger: MacroTerm[_]) = ???
     def slice_post(trigger: EventGraphObject) = ???
   }
 

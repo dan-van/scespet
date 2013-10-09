@@ -25,6 +25,7 @@ class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEven
 
   def destroy() {
     // todo: maybe it would be better to have a terminationEvent that this sort of thing could listen to?
+    // todo: not sure if we should *always* expose next bucket on terminate? maybe only on reduce-all?
     completedReduce = nextReduce
   }
 

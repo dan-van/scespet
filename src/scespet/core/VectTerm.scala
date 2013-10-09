@@ -358,6 +358,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, ReduceType.LAST, env)
 
+  // TODO: this should probably return Future[(K,Y)], i.e. it should be impossible to chain onto the back of it
   def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
     // todo: why isn't this the same shape as fold_all?
     val newBucketAsFunc = () => newBFunc
