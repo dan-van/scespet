@@ -13,12 +13,12 @@ import org.junit.Test
 * Time: 09:29
 * To change this template use File | Settings | File Templates.
 */
-import org.scalatest.{Matchers, OneInstancePerTest, BeforeAndAfterEach, FunSuite}
+import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
 import org.junit.runner.RunWith
 import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
 @RunWith(classOf[JUnitRunner])
-class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with Matchers {
+class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
   case class Trade(name:String, price:Double, qty:Int)
   var tradeList = new ArrayBuffer[Trade]()
   tradeList += new Trade("VOD.L", 1.12, 1)
@@ -97,7 +97,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val expectIter = expected.iterator
     stream.map(next => {
       val expect = expectIter.next()
-      assertResult(expect, s"Stream $name, Event $eventI was not expected")(next)
+      expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
       println(s"Observed event: $eventI \t $next as expected")
       eventI += 1
     })

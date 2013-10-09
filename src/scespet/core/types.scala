@@ -61,6 +61,11 @@ object HasVal {
   }
 }
 
+class IsVal[F <: EventGraphObject](f:F) extends HasVal[F] {
+  val value = f
+  def trigger = f
+}
+
 trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
   /**
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
