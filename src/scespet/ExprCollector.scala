@@ -168,7 +168,7 @@ class Scesspet {
   class CollectCapture[T <: Reduce[X], X](val continuousOutput:Boolean, val input:AbsTerm[_, X], val reduce:T) extends BucketBuilder[X,T] {
     def each(n: Int) = ???
 
-    def window(windowStream: MacroTerm[Boolean]) = ???
+    def window(windowStream: Term[Boolean]) = ???
 
     def all() = new CollectTerm[X, T](this)( _.all() )
 

@@ -115,7 +115,7 @@ object ReduceType {
 }
 
 trait BucketBuilder[X,T] {
-  def each(n:Int):MacroTerm[T]
+  def each(n:Int):Term[T]
 
   /**
    * define buckets by transitions from true->false in a boolean stream.
@@ -128,7 +128,7 @@ trait BucketBuilder[X,T] {
    * @param windowStream
    * @return
    */
-  def window(windowStream: MacroTerm[Boolean]) :MacroTerm[T]
+  def window(windowStream: Term[Boolean]) :Term[T]
 
   def all():Term[T]
 //

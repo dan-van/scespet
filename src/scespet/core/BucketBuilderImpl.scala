@@ -11,24 +11,9 @@ import gsa.esg.mekon.core.EventGraphObject
  */
 class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], emitType:ReduceType, env:types.Env) extends BucketBuilder[X, Y] {
 
-  def window(windowStream: MacroTerm[Boolean]) :MacroTerm[Y] = {
-    // two ways of doing this. Use Mekon primitives, or Reactive
-    // actually, reactive doesn't have 'who fired' semantics, which means that we can't distinguish between window fire
-    // or window and event
-//    class WindowFold extends Reduce[(Y,Boolean)] {
-//      var lastState:Boolean = false
-//      var nextReduce:Y = _
-//      def add(valAndWindow: (Y, Boolean)) = {
-//        if (valAndWindow._2 && !lastState) {
-//          // window started
-//          nextReduce = newBFunc.apply()
-//        }
-//      }
-//    }
-//    inputTerm.join(windowStream).reduce()
-//    val bucketMaintainer = new HasVal[Y] with types.MFunc
-    return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowStream.input, newBFunc, emitType, env))
-//    ???
+  def window(windowStream: Term[Boolean]) :MacroTerm[Y] = {
+    val windowHasVal = windowStream.asInstanceOf[MacroTerm[Boolean]].input
+    return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowHasVal, newBFunc, emitType, env))
   }
 
   def all():MacroTerm[Y] = {
