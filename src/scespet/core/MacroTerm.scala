@@ -10,7 +10,6 @@ import gsa.esg.mekon.core.EventGraphObject
  * This wraps an input HasVal with API to provide typesafe reactive expression building
  */
 class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
-  import scala.reflect.macros.Context
   import scala.language.experimental.macros
   import scala.collection.JavaConverters._
 

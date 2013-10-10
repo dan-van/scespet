@@ -117,6 +117,17 @@ object ReduceType {
 trait BucketBuilder[X,T] {
   def each(n:Int):MacroTerm[T]
 
+  /**
+   * define buckets by transitions from true->false in a boolean stream.
+   * i.e. while 'windowStream' value is true, add to bucket.
+   * Close the bucket on true -> false transition.
+   * Open a new bucket on false ->  true transition
+   *
+   * this is useful for effectively constructing 'while' aggregations.
+   * e.g. tradeSize.reduce(new Sum).window( continuousTrading )
+   * @param windowStream
+   * @return
+   */
   def window(windowStream: MacroTerm[Boolean]) :MacroTerm[T]
 
   def all():Term[T]
@@ -183,6 +194,8 @@ trait Term[X] {
 
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
 
+  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
+
   def by[K](f: X => K) :MultiTerm[K,X]
 
   def valueSet[Y](expand: (X=>TraversableOnce[Y])) : VectTerm[Y,Y]
@@ -207,6 +220,10 @@ trait Term[X] {
   def filterType[T:ClassTag]():Term[T] = {
     filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
   }
+
+//  def filterType[T:Integer]():Term[T] = {
+//    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
+//  }
 
   //  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])

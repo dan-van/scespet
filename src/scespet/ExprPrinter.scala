@@ -26,6 +26,8 @@ class ExprPrinter() extends Builder {
 
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
 
+    def fold[Y <: Reduce[X]](newBFunc: => Y) = ???
+
     def value = ???
 
     def by[K](f: (X) => K): MultiTerm[K, X] = ???
@@ -69,6 +71,8 @@ class ExprPrinter() extends Builder {
     def fold_all[Y <: Reduce[X]](y: Y) = ???
 
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
+
+    def fold[Y <: Reduce[X]](newBFunc: => Y) = ???
 
     def value = ???
 

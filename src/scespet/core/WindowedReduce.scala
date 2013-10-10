@@ -11,14 +11,13 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowE
     env.addListener(dataEvents.getTrigger, this)
     env.addListener(windowEvents.getTrigger, this)
 
-    var inWindow = windowEvents.value
+  var inWindow = windowEvents.value
 
-    var nextReduce : Y = _
-    if (inWindow) nextReduce = newReduce()
+  var nextReduce : Y = newReduce()
 
-    var completedReduce : Y = _
+  var completedReduce : Y = _
 
-    def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
+  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
 
   def calculate():Boolean = {
     // add data before window close
@@ -43,7 +42,6 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowE
     if (inWindow && !isNowOpen) {
       // window closed. snap the current reduction and get ready for a new one
       completedReduce = nextReduce
-      nextReduce = null.asInstanceOf[Y]
       inWindow = false
       fire = true
     }

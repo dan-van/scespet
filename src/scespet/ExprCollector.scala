@@ -74,6 +74,8 @@ class Scesspet {
 
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](false, this, newBFunc)
 
+    def fold[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](true, this, newBFunc)
+
     def fold_all[Y <: Reduce[X]](y: Y) = new FoldAllTerm[X,Y](this, y)
 
     def by[K](f: (X) => K): MultiTerm[K, X] = ???

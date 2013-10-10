@@ -165,6 +165,37 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     new StreamTest("reduce", expectReduce, reduce)
   }
 
+  test("filterType") {
+    val elements = List(1, 2, 4, "Open", 8, 16, "Open", 32, 64, "Close", 128, "Close", "Open", 256, "Close", "Open", 512)
+    val expectFiltered = List[Integer](1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+// umm, don't understand this type error....
+//    val intStream = stream.filterType[Integer]()
+    val intStream = stream.filter(_.isInstanceOf[Integer]).map(_.asInstanceOf[Integer])
+    new StreamTest("Filtered", expectFiltered, intStream)
+  }
+
+  test("reduce while") {
+    val elements = List(1, 2, 4, "Open", 8, 16, "Open", 32, 64, "Close", 128, "Close", "Open", 256, "Close", "Open", 512)
+    val expectReduce = List(120, 256)
+//    val expectScan = List(0, 8, 24, 56, 130, 0, 256)
+
+    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+    // umm, don't understand this type error....
+    //    val intStream = stream.filterType[Integer]()
+    val numberStream = stream.filter(_.isInstanceOf[Integer]).map(_.asInstanceOf[Integer].intValue())
+//    val numberStream = stream.filterType[Integer].map(_.intValue())
+    val stringStream = stream.filterType[String]
+
+    val isOpen = stringStream.map(_ == "Open").asInstanceOf[MacroTerm[Boolean]]
+
+//    val scan = numberStream.fold(new Sum[Int]).window( isOpen ).map(_.sum.toInt)
+    val reduce = numberStream.reduce(new Sum[Int]).window( isOpen ).map(_.sum.toInt)
+//    new StreamTest("scan", expectScan, scan)
+    new StreamTest("reduce", expectReduce, reduce)
+  }
+
   test("by") {
     val elements = "aaAbAB".toCharArray
     val expectOut = Map('A' -> 4, 'B' -> 2)
