@@ -9,7 +9,7 @@ import gsa.esg.mekon.core.EventGraphObject
 /**
  * This wraps an input HasVal with API to provide typesafe reactive expression building
  */
-class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X] {
+class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
   import scala.reflect.macros.Context
   import scala.language.experimental.macros
   import scala.collection.JavaConverters._
@@ -172,26 +172,4 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.LAST, env)
 
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.CUMULATIVE, env)
-
-//  /**
-//   * This yields a partially built reduction, the next call determines when the reduction terminates (and yields a result)
-//   * e.g. reduce( new Sum ) each (10)
-//   * will yield the sum of every 10 elements
-//   * @param newBFunc
-//   * @tparam Y
-//   * @return
-//   */
-//  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, env)
-
-  @deprecated
-  def newBucketBuilder[B](newB: () => B):BucketBuilder[X, B] = {
-    type Y = B with Reduce[X]
-    val reduceGenerator = newB.asInstanceOf[() => Y]
-//    val reduceGenerator = newB
-    var aY = reduceGenerator.apply()
-    println("Reducer in MacroTerm generates "+aY)
-//    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    val term = new MacroTerm[X](env)(input)
-    new BucketBuilderImpl[X, Y](reduceGenerator, term, ReduceType.LAST, env).asInstanceOf[BucketBuilder[X, B]]
-  }
 }

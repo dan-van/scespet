@@ -217,7 +217,10 @@ trait MultiTerm[K,X] {
    * for symmetry with MacroTerm.value
    * @return
    */
-  def value:List[X]
+  def value = values
+
+  def values:List[X]
+  def keys:List[K]
 
   def apply(k:K):MacroTerm[X]
 
@@ -267,13 +270,6 @@ trait MultiTerm[K,X] {
    * @return
    */
   def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y]
-}
-trait BucketTerm[X] extends Term[X] {
-  def newBucketBuilder[B](newB:()=>B):BucketBuilder[X, B]
-}
-
-trait BucketVectTerm[K,X] {
-  def newBucketBuilder[B](newB:()=>B):BucketBuilderVect[K, X, B]
 }
 
 

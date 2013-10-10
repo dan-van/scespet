@@ -13,16 +13,13 @@ import scala.reflect.ClassTag
  * Time: 21:10
  * To change this template use File | Settings | File Templates.
  */
-class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends BucketVectTerm[K,X] with MultiTerm[K,X] {
+class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends MultiTerm[K,X] {
   import scala.reflect.macros.Context
   import scala.collection.JavaConverters._
   import scala.collection.JavaConversions._
 
-  /**
-   * for symmetry with MacroTerm.value
-   * @return
-   */
-  def value = input.getValues.toList
+  def keys = input.getKeys.toList
+  def values = input.getValues.toList
 
   /**
    * todo: call this "filterKey" ?
@@ -372,16 +369,4 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
   }
 
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
-
-  def newBucketBuilder[B](newB: () => B): BucketBuilderVect[K, X, B] = {
-    type Y = B with Reduce[X]
-    val reduceGenerator: ()=>Y = newB.asInstanceOf[() => Y]
-    //    val reduceGenerator = newB
-    var aY = reduceGenerator.apply()
-    println("Reducer in VectTerm generates "+aY)
-    //    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    val term = new VectTerm[K, X](env)(input)
-    return new BucketBuilderVectImpl[K, X, Y](reduceGenerator, term, ReduceType.LAST, env).asInstanceOf[BucketBuilderVect[K, X, B]]
-  }
-
 }
