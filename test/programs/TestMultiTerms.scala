@@ -3,7 +3,6 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
-import org.junit.Test
 
 
 /**
@@ -18,27 +17,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
 @RunWith(classOf[JUnitRunner])
-class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
-  case class Trade(name:String, price:Double, qty:Int)
-  var tradeList = new ArrayBuffer[Trade]()
-  tradeList += new Trade("VOD.L", 1.12, 1)
-  tradeList += new Trade("VOD.L", 2.12, 10)
-  tradeList += new Trade("MSFT.O", 3.12, 2)
-  tradeList += new Trade("VOD.L", 4.12, 100)
-  tradeList += new Trade("MSFT.O", 5.12, 20)
-  tradeList += new Trade("VOD.L", 6.12, 1000)
-  tradeList += new Trade("MSFT.O", 7.12, 200)
-  tradeList += new Trade("VOD.L", 8.12, 10000)
-  tradeList += new Trade("MSFT.O", 9.12, 2000)
-
-  val nameList = new ArrayBuffer[String]()
-  nameList += "MSFT.O"
-  nameList += "VOD.L"
-  nameList += "IBM.N"
-  nameList += "IBM.N"
-  nameList += "LLOY.L"
-  nameList += "IBM.N"
-  nameList += "BARC.L"
+class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
 
   var impl: SimpleEvaluator = new SimpleEvaluator()
   val postRunChecks = collection.mutable.Buffer[() => Unit]()
@@ -50,12 +29,9 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     postRunChecks.append(() => { check })
   }
 
-  var names = IteratorEvents(nameList)((_,_) => 0L)
-  var trades = IteratorEvents(tradeList)((_,i) => i)
-
-  //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
-
-//  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
+  val eventsA = IteratorEvents(  0 to 5 ) ( (x,i) => (10 * i) + 1)
+  val eventsB = IteratorEvents( 10 to 15 )( (x,i) => (10 * i) + 2)
+  val eventsC = IteratorEvents( 20 to 25 )( (x,i) => (10 * i) + 3)
 
   override protected def afterEach() {
     impl.run()
@@ -64,46 +40,10 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     }
   }
 
-  def v1 = {
-    var namesExpr: MacroTerm[String] = impl.asStream(names).asInstanceOf[MacroTerm[String]]
-    out("name:"){namesExpr}
-  }
-  def v1a = {
-    var namesExpr: MacroTerm[String] = impl.asStream(names).asInstanceOf[MacroTerm[String]]
-    out(".N names:"){ namesExpr.filter(_.endsWith(".N")) }
-  }
-  def v2 = {
-    out("Vod trade bucket:") {
-      var map: MacroTerm[Int] = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
-      map.reduce(new Sum[Int]).each(2)
-    }
-  }
-  def v3 = {
-    // test multiple event sources
-    var namesExpr: MacroTerm[String] = impl.asStream(names).asInstanceOf[MacroTerm[String]]
-    out("Trade:") { impl.asStream(trades) }
-    out("Name:") { namesExpr }
-  }
-
-  def remoteRun = {
-//    var myProgrm = out(".N names:"){ new TermBuilder().query(names).filter(_.endsWith(".N")) }.eval.asInstanceOf[TermBuilder]
-//
-//    val newProg = new SimpleEvaluator()
-//    myProgrm.copyInto(newProg)
-//
-//    newProg.run()
-  }
-  //  val v3 = tradeExpr map {_.qty} reduce (new Sum, 2.samples ) map { println(_) }
-//  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
-  //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
-//  remoteRun
-//  impl.run
-
   class StreamTest[X](name:String, expected:Iterable[X], stream:Term[X]) {
     var eventI = 0
     val expectIter = expected.iterator
     stream.map(next => {
-      assert(expectIter.hasNext, s"Stream $name, Event $eventI with value $next was additional to expected")
       val expect = expectIter.next()
       expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
       println(s"Observed event: $name-$eventI \t $next as expected")
@@ -111,13 +51,18 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     })
   }
 
-  test("stream increment") {
-    val elements = 0 to 20
-    val expectedOut = elements.map( _ * 1000 ).toArray
+  test("derive") {
+    val set = impl.asVector( List("A", "B", "C") )
+    val eventStreams = Map(
+      "A" ->  impl.asStream( eventsA )
+      ,"B" -> impl.asStream( eventsB )
+      ,"C" -> impl.asStream( eventsC )
+    )
 
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.map(_ * 1000)
-    new StreamTest("mult10", expectedOut, mult10)
+    val multiStream = set.derive(key => eventStreams(key).input)
+    new StreamTest("A", (0 to 5).toList, multiStream("A"))
+    new StreamTest("B", (10 to 15).toList, multiStream("B"))
+    new StreamTest("C", (20 to 25).toList, multiStream("C"))
   }
 
   test("reduce each") {
@@ -128,15 +73,6 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)
     new StreamTest("mult10", expectedOut, mult10)
-  }
-
-  test("reduce_all") {
-    // fail: for this to work I need to add support for env.addListener(env.getTerminationEvent, function)
-    val elements = "aaAbAB".toCharArray
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val count = stream.reduce_all(new Counter).map(_.c)
-    new StreamTest("mult10", List(6), count)
   }
 
   test("fold each") {
@@ -211,12 +147,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val expectOut = Map('A' -> 4, 'B' -> 2)
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val byUpper = stream.by(_.toUpper)
-    out("by upper")(byUpper)
-
-    val countByLetter = byUpper.reduce_all(new Counter)
-//    val countByLetter = byUpper.fold_all(new Counter)
-    out("count")(countByLetter)
+    val countByLetter = stream.by(_.toUpper).reduce_all(new Counter)
     addPostCheck("Counts") {
       import collection.JavaConverters._
       expectResult(expectOut.keySet, "Keyset mismatch")(countByLetter.input.getKeys.asScala.toSet)
@@ -226,22 +157,6 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
         val value = reduce.c
         expectResult(e._2, s"Value mismatch for key ${e._1}, index: $i")(value)
       }
-    }
-  }
-
-  test("Simple reduce each") {
-    out("Vod trade bucket:") {
-      var qty: MacroTerm[Int] = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
-      qty.reduce(new Sum[Int]).each(2)
-    }
-  }
-
-  test("Simple fold each") {
-    val vodTrades = impl.asStream(trades).filter(_.name == "VOD.L")
-    out("Vod Trade")(vodTrades)
-    out("Vod trade bucket:") {
-      var qty: MacroTerm[Int] = vodTrades.map(_.qty)
-      qty.fold(new Sum[Int]).each(2)
     }
   }
 }

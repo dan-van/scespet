@@ -274,7 +274,7 @@ trait MultiTerm[K,X] {
   def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)]
   def sample(evt:EventGraphObject):VectTerm[K,X]
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
-  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y]
+  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K,Y]
 
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
   def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]

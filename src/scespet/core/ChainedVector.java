@@ -38,8 +38,9 @@ public abstract class ChainedVector<K, F extends EventGraphObject, V> extends Ab
                 return super.calculate();
             }
         };
-//        env.fireAfterChangingListeners()
-        env.wakeupThisCycle(reshapeSignal);
+        // we've just done some listener linkage, ripple an event after listeners established
+        env.fireAfterChangingListeners(reshapeSignal);
+//        env.wakeupThisCycle(reshapeSignal);
 //        reshapeSignal.calculate();
     }
 

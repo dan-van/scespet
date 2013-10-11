@@ -4,6 +4,7 @@ import scespet.core._
 import reflect.macros.Context
 import scala.reflect.ClassTag
 import gsa.esg.mekon.core.EventGraphObject
+import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 
 
 /**
@@ -29,6 +30,35 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
       def calculate() = {
         y.add(input.value);
         true
+      }
+    }
+    env.addListener(input.trigger, listener)
+    return new MacroTerm[Y](env)(listener)
+  }
+
+  /**
+   * Fold is a running reduction - the new state of the reduction is exposed after each element addition
+   * e.g. a running cumulative sum, as opposed to a sum
+   * @param y
+   * @tparam Y
+   * @return
+   */
+  def reduce_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
+    val listener = new AbsFunc[X,Y] {
+      val reduction = y
+      value = null.asInstanceOf[Y]
+
+      val termination = env.getTerminationEvent()
+      env.addListener(termination, this)
+
+      def calculate() = {
+        if (env.hasChanged(termination)) {
+          value = reduction
+          true
+        } else {
+          y.add(input.value)
+          false
+        }
       }
     }
     env.addListener(input.trigger, listener)
