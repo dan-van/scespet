@@ -1,7 +1,6 @@
 package scespet.core
 
 import scespet.core.VectorStream.ReshapeSignal
-import scespet.core.UpdatingHasVal
 
 /**
  * This takes a Stream and demultiplexes it into a VectorStream using a value -> key function

@@ -74,6 +74,8 @@ class Scesspet {
 
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](false, this, newBFunc)
 
+    def fold[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](true, this, newBFunc)
+
     def fold_all[Y <: Reduce[X]](y: Y) = new FoldAllTerm[X,Y](this, y)
 
     def by[K](f: (X) => K): MultiTerm[K, X] = ???
@@ -166,13 +168,15 @@ class Scesspet {
   class CollectCapture[T <: Reduce[X], X](val continuousOutput:Boolean, val input:AbsTerm[_, X], val reduce:T) extends BucketBuilder[X,T] {
     def each(n: Int) = ???
 
-    def window(windowStream: MacroTerm[Boolean]) = ???
+    def window(windowStream: Term[Boolean]) = ???
 
     def all() = new CollectTerm[X, T](this)( _.all() )
 
     //
+    def slice_pre(trigger: MacroTerm[_]) = ???
     def slice_pre(trigger: EventGraphObject) = ???
 
+    def slice_post(trigger: MacroTerm[_]) = ???
     def slice_post(trigger: EventGraphObject) = ???
   }
 

@@ -4,6 +4,7 @@ import collection.mutable
 import gsa.esg.mekon.core._
 import scespet.expression.{Scesspet, RootTerm, AbsTerm}
 import java.util.TimeZone
+import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 
 /**
  * Created with IntelliJ IDEA.
@@ -19,6 +20,13 @@ class SimpleEnv() extends Environment {
   val graph = new SlowGraphWalk
 
   val eventSources = mutable.Set[EventSource]()
+
+  val terminationEvent = new types.MFunc {
+    def calculate(): Boolean = {
+      println("Termination event firing")
+      true
+    }
+  }
 
   val eventSourceQueue = {
     var ordering = new Ordering[EventSource] {
@@ -47,6 +55,8 @@ class SimpleEnv() extends Environment {
   def run() {run(1000)}
 
   def run(n:Int) {
+    graph.applyChanges()
+
     val stopAt = eventI + n
     while (! eventSourceQueue.isEmpty && eventI < stopAt) {
       eventI += 1
@@ -61,6 +71,16 @@ class SimpleEnv() extends Environment {
         println(s"terminated ${nextSource}")
       }
     }
+    graph.fire(terminationEvent)
+    import collection.JavaConverters._
+    if (eventSourceQueue.isEmpty) {
+      for (n <- graph.getAllNodes.asScala) {
+        val graphObject = n.getGraphObject
+        if (graphObject.isInstanceOf[Lifecycle]) {
+          graphObject.asInstanceOf[Lifecycle].destroy()
+        }
+      }
+    }
   }
 
   def wakeupThisCycle(target: types.MFunc) {
@@ -69,6 +89,9 @@ class SimpleEnv() extends Environment {
 
   @Override
   def getEventTime = eventTime
+
+
+  def getTerminationEvent: EventGraphObject = terminationEvent
 
   def addListener[T](source: Any, sink: types.EventGraphObject) {
     if (source.isInstanceOf[EventSource]) {
@@ -98,7 +121,10 @@ class SimpleEnv() extends Environment {
 
   def removeWakeupReceiver(provider: Any, consumer: Function) {}
 
-  def addListener[T](provider: T, consumer: Function) = {addListener(provider.asInstanceOf[Any], consumer.asInstanceOf[types.EventGraphObject]); provider}
+  def addListener[T](provider: T, consumer: Function) {
+    addListener(provider.asInstanceOf[Any], consumer.asInstanceOf[types.EventGraphObject]);
+    provider
+  }
 
   def removeListener(provider: Any, consumer: Function) {}
 
@@ -150,9 +176,13 @@ class SimpleEnv() extends Environment {
 
   def substitute(valueString: String) = ???
 
-  def wakeupThisCycle(graphObject: EventGraphObject) {}
+  def wakeupThisCycle(graphObject: EventGraphObject) {
+    graph.wakeup(graphObject)
+  }
 
-  def fireAfterChangingListeners(function: Function) {}
+  def fireAfterChangingListeners(function: Function) {
+    graph.fireAfterChangingListeners(function)
+  }
 
   def getDelayedExecutor(wakeupTarget: Function) = ???
 

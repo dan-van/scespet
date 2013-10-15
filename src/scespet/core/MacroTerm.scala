@@ -4,13 +4,13 @@ import scespet.core._
 import reflect.macros.Context
 import scala.reflect.ClassTag
 import gsa.esg.mekon.core.EventGraphObject
+import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 
 
 /**
  * This wraps an input HasVal with API to provide typesafe reactive expression building
  */
-class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X] {
-  import scala.reflect.macros.Context
+class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
   import scala.language.experimental.macros
   import scala.collection.JavaConverters._
 
@@ -30,6 +30,35 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
       def calculate() = {
         y.add(input.value);
         true
+      }
+    }
+    env.addListener(input.trigger, listener)
+    return new MacroTerm[Y](env)(listener)
+  }
+
+  /**
+   * Fold is a running reduction - the new state of the reduction is exposed after each element addition
+   * e.g. a running cumulative sum, as opposed to a sum
+   * @param y
+   * @tparam Y
+   * @return
+   */
+  def reduce_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
+    val listener = new AbsFunc[X,Y] {
+      val reduction = y
+      value = null.asInstanceOf[Y]
+
+      val termination = env.getTerminationEvent()
+      env.addListener(termination, this)
+
+      def calculate() = {
+        if (env.hasChanged(termination)) {
+          value = reduction
+          true
+        } else {
+          y.add(input.value)
+          false
+        }
       }
     }
     env.addListener(input.trigger, listener)
@@ -172,26 +201,4 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends BucketTerm[X]
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.LAST, env)
 
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.CUMULATIVE, env)
-
-//  /**
-//   * This yields a partially built reduction, the next call determines when the reduction terminates (and yields a result)
-//   * e.g. reduce( new Sum ) each (10)
-//   * will yield the sum of every 10 elements
-//   * @param newBFunc
-//   * @tparam Y
-//   * @return
-//   */
-//  def bucket2NoMacro[Y <: Reduce[X]](newBFunc:() => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](newBFunc, MacroTerm.this, env)
-
-  @deprecated
-  def newBucketBuilder[B](newB: () => B):BucketBuilder[X, B] = {
-    type Y = B with Reduce[X]
-    val reduceGenerator = newB.asInstanceOf[() => Y]
-//    val reduceGenerator = newB
-    var aY = reduceGenerator.apply()
-    println("Reducer in MacroTerm generates "+aY)
-//    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    val term = new MacroTerm[X](env)(input)
-    new BucketBuilderImpl[X, Y](reduceGenerator, term, ReduceType.LAST, env).asInstanceOf[BucketBuilder[X, B]]
-  }
 }

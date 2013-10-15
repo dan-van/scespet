@@ -3,6 +3,7 @@ package scespet
 import core._
 import core.types
 import scespet.expression.{HasValRoot, RootTerm, AbsTerm}
+import gsa.esg.mekon.core.EventSource
 
 /**
  * Created with IntelliJ IDEA.
@@ -14,6 +15,9 @@ import scespet.expression.{HasValRoot, RootTerm, AbsTerm}
 class EnvTermBuilder(val env :types.Env) {
 
   def asStream[X](data: HasVal[X]) : MacroTerm[X] = {
+    if (data.isInstanceOf[EventSource]) {
+      env.registerEventSource(data.asInstanceOf[EventSource])
+    }
     return new MacroTerm[X](env)(data)
   }
 

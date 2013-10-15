@@ -91,6 +91,11 @@ public class SlowGraphWalk {
     });
     private IdentityHashMap<EventGraphObject, Node> nodes = new IdentityHashMap<EventGraphObject, Node>();
     private int cycleCount = -1;
+    private boolean isFiring = false;
+    private boolean isChanging = false;
+    // graph changes should occur between propagations to avoid very complex behaviour semantics
+    private Deque<Runnable> deferredChanges = new ArrayDeque<Runnable>();
+    private List<EventGraphObject> deferredFires = new ArrayList<>();
 
     public Collection<Node> getAllNodes() {
         Set<Node> allNodes = new HashSet<Node>();
@@ -111,19 +116,35 @@ public class SlowGraphWalk {
         }
     }
 
-    public void addTrigger(EventGraphObject source, Function target) {
-        Node sourceNode = getNode(source);
-        Node targetNode = getNode(target);
-        sourceNode.addOut(targetNode);
-        targetNode.addIn(sourceNode);
-        propagateOrder(targetNode, sourceNode.order);
+    public void addTrigger(final EventGraphObject source, final Function target) {
+        if (isFiring) {
+            deferredChanges.add(new Runnable() {
+                public void run() {
+                    addTrigger(source, target);
+                }
+            });
+        } else {
+            Node sourceNode = getNode(source);
+            Node targetNode = getNode(target);
+            sourceNode.addOut(targetNode);
+            targetNode.addIn(sourceNode);
+            propagateOrder(targetNode, sourceNode.order);
+        }
     }
 
-    public void removeTrigger(EventGraphObject source, Function target) {
-        Node sourceNode = getNode(source);
-        Node targetNode = getNode(target);
-        sourceNode.removeOut(targetNode);
-        targetNode.removeIn(sourceNode);
+    public void removeTrigger(final EventGraphObject source, final Function target) {
+        if (isFiring) {
+            deferredChanges.add(new Runnable() {
+                public void run() {
+                    removeTrigger(source, target);
+                }
+            });
+        } else {
+            Node sourceNode = getNode(source);
+            Node targetNode = getNode(target);
+            sourceNode.removeOut(targetNode);
+            targetNode.removeIn(sourceNode);
+        }
     }
 
     public boolean hasChanged(EventGraphObject obj) {
@@ -151,12 +172,40 @@ public class SlowGraphWalk {
     }
 
     public void fire(EventGraphObject graphObject) {
+        doFire(graphObject);
+
+        // now process graph wiring
+        applyChanges();
+    }
+
+    private void doFire(EventGraphObject graphObject) {
+        isFiring = true;
         cycleCount++;
         Node node = getNode(graphObject);
         joinNodes.add(node);
         while (!joinNodes.isEmpty()) {
             Node next = joinNodes.remove();
             next.execute();
+        }
+        isFiring = false;
+    }
+
+    public void applyChanges() {
+        if (!isChanging) {
+            isChanging = true;
+            while (!deferredChanges.isEmpty() || !deferredFires.isEmpty()) {
+                for (Runnable deferredChange : deferredChanges) {
+                    deferredChange.run();
+                }
+                deferredChanges.clear();
+                for (EventGraphObject deferredFire : deferredFires) {
+                    doFire(deferredFire);
+                }
+                deferredFires.clear();
+            }
+            isChanging = false;
+        } else {
+            throw new UnsupportedOperationException("Don't think I need to apply changes in nested fire");
         }
     }
 
@@ -165,5 +214,9 @@ public class SlowGraphWalk {
         if (!joinNodes.contains(node)) {
             joinNodes.add(node);
         }
+    }
+
+    public void fireAfterChangingListeners(EventGraphObject graphObject) {
+        deferredFires.add(graphObject);
     }
 }

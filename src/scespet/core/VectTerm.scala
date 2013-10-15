@@ -5,6 +5,7 @@ import java.util.logging.Logger
 import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
+import scespet.core.UpdatingHasVal
 
 /**
  * Created with IntelliJ IDEA.
@@ -13,16 +14,13 @@ import scala.reflect.ClassTag
  * Time: 21:10
  * To change this template use File | Settings | File Templates.
  */
-class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends BucketVectTerm[K,X] with MultiTerm[K,X] {
+class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends MultiTerm[K,X] {
   import scala.reflect.macros.Context
   import scala.collection.JavaConverters._
   import scala.collection.JavaConversions._
 
-  /**
-   * for symmetry with MacroTerm.value
-   * @return
-   */
-  def value = input.getValues.toList
+  def keys = input.getKeys.toList
+  def values = input.getValues.toList
 
   /**
    * todo: call this "filterKey" ?
@@ -229,6 +227,45 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
     return newIsomorphicVector(cellBuilder)
   }
 
+  // todo: isn't this identical to the single Term reduceAll implementation?
+  class ReduceCell[Y <: Reduce[X]](index:Int, key:K, reduceBuilder : => Y) extends UpdatingHasVal[Y] {
+    val termination = env.getTerminationEvent
+    env.addListener(termination, this)
+
+    var value:Y = null.asInstanceOf[Y]
+    val reduction = reduceBuilder
+
+    def calculate():Boolean = {
+      if (env.hasChanged(termination)) {
+        value = reduction
+        true
+      } else {
+        val x: X = input.get(index)
+        reduction.add(x)
+        false
+      }
+    }
+  }
+
+
+  def reduce_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
+    val cellBuilder = (index:Int, key:K) => new ReduceCell[Y](index, key, reduceBuilder)
+    return newIsomorphicVector(cellBuilder)
+  }
+
+//  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
+//    // todo: why isn't this the same shape as fold_all?
+//    val newBucketAsFunc = () => newBFunc
+//    val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](input, env) {
+//      def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
+//        val sourceHasVal = input.getValueHolder(i)
+//        new SlicedReduce[X, Y](sourceHasVal, null, false, newBucketAsFunc, ReduceType.LAST, env)
+//      }
+//    }
+//    return new VectTerm[K,Y](env)(chainedVector)
+//  }
+
+
   private def newIsomorphicVector[Y](cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
     val output: VectorStream[K, Y] = new ChainedVector[K, UpdatingHasVal[Y], Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
@@ -359,29 +396,5 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Buck
 
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, ReduceType.LAST, env)
 
-  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
-    // todo: why isn't this the same shape as fold_all?
-    val newBucketAsFunc = () => newBFunc
-    val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](input, env) {
-      def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
-        val sourceHasVal = input.getValueHolder(i)
-        new SlicedReduce[X, Y](sourceHasVal, null, false, newBucketAsFunc, ReduceType.LAST, env)
-      }
-    }
-    return new VectTerm[K,Y](env)(chainedVector)
-  }
-
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
-
-  def newBucketBuilder[B](newB: () => B): BucketBuilderVect[K, X, B] = {
-    type Y = B with Reduce[X]
-    val reduceGenerator: ()=>Y = newB.asInstanceOf[() => Y]
-    //    val reduceGenerator = newB
-    var aY = reduceGenerator.apply()
-    println("Reducer in VectTerm generates "+aY)
-    //    new BucketBuilderImpl[X, B](reduceGenerator, input, eval).asInstanceOf[BucketBuilder[T]]
-    val term = new VectTerm[K, X](env)(input)
-    return new BucketBuilderVectImpl[K, X, Y](reduceGenerator, term, ReduceType.LAST, env).asInstanceOf[BucketBuilderVect[K, X, B]]
-  }
-
 }

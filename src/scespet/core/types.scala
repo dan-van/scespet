@@ -61,6 +61,11 @@ object HasVal {
   }
 }
 
+class IsVal[F <: EventGraphObject](f:F) extends HasVal[F] {
+  val value = f
+  def trigger = f
+}
+
 trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
   /**
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
@@ -110,9 +115,20 @@ object ReduceType {
 }
 
 trait BucketBuilder[X,T] {
-  def each(n:Int):MacroTerm[T]
+  def each(n:Int):Term[T]
 
-  def window(windowStream: MacroTerm[Boolean]) :MacroTerm[T]
+  /**
+   * define buckets by transitions from true->false in a boolean stream.
+   * i.e. while 'windowStream' value is true, add to bucket.
+   * Close the bucket on true -> false transition.
+   * Open a new bucket on false ->  true transition
+   *
+   * this is useful for effectively constructing 'while' aggregations.
+   * e.g. tradeSize.reduce(new Sum).window( continuousTrading )
+   * @param windowStream
+   * @return
+   */
+  def window(windowStream: Term[Boolean]) :Term[T]
 
   def all():Term[T]
 //
@@ -120,8 +136,12 @@ trait BucketBuilder[X,T] {
 //  def window(n:Time):MacroTerm[T]
 //  def window(windowStream:MacroTerm[Boolean]):MacroTerm[T]
 //
+  // todo: think about how to build an implicit conversion from eventGraphObject -> Term
+  // todo: if we have a Builder instance in scope, then it is possible with implicits
   def slice_pre(trigger:EventGraphObject):MacroTerm[T]
   def slice_post(trigger:EventGraphObject):MacroTerm[T]
+  def slice_pre(trigger:MacroTerm[_]):MacroTerm[T]
+  def slice_post(trigger:MacroTerm[_]):MacroTerm[T]
 }
 
 trait BucketBuilderVect[K, X, T] {
@@ -174,6 +194,8 @@ trait Term[X] {
 
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
 
+  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
+
   def by[K](f: X => K) :MultiTerm[K,X]
 
   def valueSet[Y](expand: (X=>TraversableOnce[Y])) : VectTerm[Y,Y]
@@ -199,6 +221,10 @@ trait Term[X] {
     filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
   }
 
+//  def filterType[T:Integer]():Term[T] = {
+//    filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
+//  }
+
   //  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
@@ -208,7 +234,10 @@ trait MultiTerm[K,X] {
    * for symmetry with MacroTerm.value
    * @return
    */
-  def value:List[X]
+  def value = values
+
+  def values:List[X]
+  def keys:List[K]
 
   def apply(k:K):MacroTerm[X]
 
@@ -245,7 +274,7 @@ trait MultiTerm[K,X] {
   def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)]
   def sample(evt:EventGraphObject):VectTerm[K,X]
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
-  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y]
+  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K,Y]
 
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
   def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]
@@ -258,13 +287,6 @@ trait MultiTerm[K,X] {
    * @return
    */
   def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y]
-}
-trait BucketTerm[X] extends Term[X] {
-  def newBucketBuilder[B](newB:()=>B):BucketBuilder[X, B]
-}
-
-trait BucketVectTerm[K,X] {
-  def newBucketBuilder[B](newB:()=>B):BucketBuilderVect[K, X, B]
 }
 
 
