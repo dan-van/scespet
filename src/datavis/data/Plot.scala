@@ -5,14 +5,14 @@ import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
 import org.jfree.data.general.AbstractSeriesDataset
 import org.jfree.data.xy.XYDataset
 import org.jfree.data.DomainOrder
-import scespet.core.{HasVal, VectTerm, MacroTerm}
+import scespet.core.{Term, HasVal, VectTerm, MacroTerm}
 import org.jfree.chart.renderer.xy.{XYStepRenderer, XYItemRenderer}
 import org.jfree.chart.axis.{DateAxis, NumberAxis}
 import org.jfree.chart.plot.XYPlot
 import java.awt.event.{ActionEvent, ActionListener}
 import org.jfree.chart.{ChartPanel, JFreeChart}
 import java.awt.Dimension
-import gsa.esg.mekon.core.EventGraphObject
+import gsa.esg.mekon.core.{Environment, EventGraphObject}
 
 import scala.collection.JavaConverters._
 
@@ -85,6 +85,15 @@ object Plot {
   // ------------------------------
 // todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
 // todo: rather than relying on MacroTerm being passed here
+  def plot[X:Numeric](series:Term[X], env:Environment) = {
+    val dataset = new TimeSeriesDataset()
+    val options = new Options[String,X](dataset)
+    options.plot(series, env)
+    plotDataset(dataset)
+    options
+  }
+
+
   def plot[X:Numeric](series:MacroTerm[X]) = {
     val dataset = new TimeSeriesDataset()
     val options = new Options[String,X](dataset)
@@ -97,7 +106,7 @@ object Plot {
     val dataset = new TimeSeriesDataset()
     val options = new Options[String,X](dataset)
     for (k <- series.input.getKeys.asScala) {
-      options.plot( series(k), k.toString )
+      options.plot( series(k), k.toString, series.env )
     }
     plotDataset(dataset)
     options
@@ -106,13 +115,15 @@ object Plot {
   class Options[K,X:Numeric](dataset:TimeSeriesDataset) {
     def seriesNames(keyRender:K=>String = {k:K => k.toString}) {dataset.seriesNameFunc = keyRender.asInstanceOf[Any => String]}
 
-    def plot(stream: MacroTerm[X]) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1))
+    def plot(stream: MacroTerm[X]) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1), stream.env)
 
-    def plot(stream: MacroTerm[X], name:String) :Options[K,X] = {
+    def plot(stream: Term[X], env:Environment) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1), env)
+
+    def plot(stream: Term[X], name:String, env:Environment) :Options[K,X] = {
       val seriesId = dataset.addSeries(name)
       stream.map(v => {
         val asDouble = implicitly[Numeric[X]].toDouble( v )
-        dataset.add(seriesId, stream.env.getEventTime, asDouble)
+        dataset.add(seriesId, env.getEventTime, asDouble)
       })
       this
     }

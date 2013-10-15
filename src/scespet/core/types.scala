@@ -192,6 +192,7 @@ trait Term[X] {
   def map[Y](f: (X) => Y):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
+  def reduce_all[Y <: Reduce[X]](y: Y):Term[Y]
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
 
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]

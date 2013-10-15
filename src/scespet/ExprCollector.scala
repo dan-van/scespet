@@ -72,6 +72,8 @@ class Scesspet {
 
     def filter(accept: (X) => Boolean) = new FilterTerm[X](this, accept)
 
+    def reduce_all[Y <: Reduce[X]](y: Y) = reduce(y).all()
+
     def reduce[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](false, this, newBFunc)
 
     def fold[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](true, this, newBFunc)

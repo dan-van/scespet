@@ -4,6 +4,7 @@ import collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
 import org.junit.Test
+import org.scalatest.matchers.Matchers
 
 
 /**
