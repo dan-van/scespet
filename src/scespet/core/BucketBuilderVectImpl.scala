@@ -9,7 +9,9 @@ import gsa.esg.mekon.core.EventGraphObject
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:VectTerm[K, X], emitType:ReduceType,  env:types.Env) extends BucketBuilderVect[K, X, Y] {
+class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFuncFromKey:(K) => Y, inputTerm:VectTerm[K, X], emitType:ReduceType,  env:types.Env) extends BucketBuilderVect[K, X, Y] {
+  val newBFunc = () => newBFuncFromKey(null.asInstanceOf[K])
+
   val inputVectorStream: VectorStream[K, X] = inputTerm.input
 
 //  private class HasValueImpl[V](val h:HasValue[V]) extends HasValue[V] {
@@ -22,7 +24,8 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:Ve
     val chainedVector = new ChainedVector[K, SlicedReduce[X, Y], Y](inputVectorStream, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
         val sourceHasVal = inputVectorStream.getValueHolder(i)
-        new SlicedReduce[X, Y](sourceHasVal, sliceTrigger, true, newBFunc, emitType, env)
+        val noArgNewBucketFunc = () => newBFuncFromKey(key)
+        new SlicedReduce[X, Y](sourceHasVal, sliceTrigger, true, noArgNewBucketFunc, emitType, env)
       }
     }
     return new VectTerm[K,Y](env)(chainedVector)

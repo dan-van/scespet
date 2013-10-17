@@ -51,28 +51,34 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     })
   }
 
-  test("derive") {
-    val set = impl.asVector( List("A", "B", "C") )
+  protected def createTestMultiStream() = {
+    val set = impl.asVector(List("A", "B", "C"))
     val eventStreams = Map(
-      "A" ->  impl.asStream( eventsA )
-      ,"B" -> impl.asStream( eventsB )
-      ,"C" -> impl.asStream( eventsC )
+      "A" -> impl.asStream(eventsA)
+      , "B" -> impl.asStream(eventsB)
+      , "C" -> impl.asStream(eventsC)
     )
 
-    val multiStream = set.derive(key => eventStreams(key).input)
+    set.derive(key => eventStreams(key).input)
+  }
+
+  class NamedSum[X:Numeric](val str:String) extends Reduce[X]{
+    var sum = 0.0
+    def add(n:X):Unit = {sum = sum + implicitly[Numeric[X]].toDouble(n)}
+
+    override def toString = s"Sum($str)=$sum"
+  }
+
+  test("derive") {
+    val multiStream = createTestMultiStream()
     new StreamTest("A", (0 to 5).toList, multiStream("A"))
     new StreamTest("B", (10 to 15).toList, multiStream("B"))
     new StreamTest("C", (20 to 25).toList, multiStream("C"))
   }
 
   test("reduce each") {
-    val elements = List.fill(11)(2)
-    val expectedOut = elements.toList.grouped(3).map( _.reduce( _+_ )).toList
-    expectedOut should be(List(6, 6, 6, 4))
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)
-    new StreamTest("mult10", expectedOut, mult10)
+//    out("sums")(createTestMultiStream().reduce(new SumK[Int]("foo")).slice_pre(impl.env.getTerminationEvent))
+    out("sums")(createTestMultiStream().reduce(new NamedSum[Int](_)).slice_pre(impl.env.getTerminationEvent))
   }
 
   test("fold each") {

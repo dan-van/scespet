@@ -215,9 +215,9 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return newIsomorphicVector(cellBuilder)
   }
 
-  def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
+  def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y] = {
     val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
-      val value = reduceBuilder
+      val value = reduceBuilder(key)
       def calculate():Boolean = {
         val x: X = input.get(index)
         value.add(x)
@@ -228,12 +228,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   // todo: isn't this identical to the single Term reduceAll implementation?
-  class ReduceCell[Y <: Reduce[X]](index:Int, key:K, reduceBuilder : => Y) extends UpdatingHasVal[Y] {
+  class ReduceAllCell[Y <: Reduce[X]](index:Int, key:K, reduceBuilder : K => Y) extends UpdatingHasVal[Y] {
     val termination = env.getTerminationEvent
     env.addListener(termination, this)
 
     var value:Y = null.asInstanceOf[Y]
-    val reduction = reduceBuilder
+    val reduction = reduceBuilder(key)
 
     def calculate():Boolean = {
       if (env.hasChanged(termination)) {
@@ -248,8 +248,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
 
-  def reduce_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y] = {
-    val cellBuilder = (index:Int, key:K) => new ReduceCell[Y](index, key, reduceBuilder)
+  def reduce_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y] = {
+    val cellBuilder = (index:Int, key:K) => new ReduceAllCell[Y](index, key, reduceBuilder)
     return newIsomorphicVector(cellBuilder)
   }
 
@@ -394,7 +394,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, X](env)(output)
   }
 
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, ReduceType.LAST, env)
+  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
 
-  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](() => newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 }

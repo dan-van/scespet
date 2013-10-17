@@ -30,11 +30,14 @@ class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEven
     if (emitType == ReduceType.LAST && env.hasChanged(termination)) {
       newSliceNextEvent = true
     }
-    val sliceTrigger = (sliceEvents != null && env.hasChanged(sliceEvents))
+    var sliceTrigger = (sliceEvents != null && env.hasChanged(sliceEvents))
     if (newSliceNextEvent || (sliceBefore && sliceTrigger)) {
       completedReduce = nextReduce
       nextReduce = newReduce()
       newSliceNextEvent = false
+      // just sliced, don't slice again!
+      sliceTrigger = false
+      fire = true
     }
     if (env.hasChanged(dataEvents.getTrigger)) {
       nextReduce.add(dataEvents.value)

@@ -274,11 +274,17 @@ trait MultiTerm[K,X] {
   def derive[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y]
   def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)]
   def sample(evt:EventGraphObject):VectTerm[K,X]
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
-  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K,Y]
 
-  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y]
-  def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]
+  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y]
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = reduce[Y]((k:K) => newBFunc)
+
+  def reduce_all[Y <: Reduce[X]](newBFunc: K => Y):VectTerm[K,Y]
+  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K,Y]  = reduce_all[Y]((k:K) => newBFunc)
+
+  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y]
+  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = fold[Y]((k:K) => newBFunc)
+  def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y]
+  def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]   = fold_all[Y]((k:K) => reduceBuilder)
 
   /**
    * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
