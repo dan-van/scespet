@@ -5,7 +5,7 @@ import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
 import org.jfree.data.general.AbstractSeriesDataset
 import org.jfree.data.xy.XYDataset
 import org.jfree.data.DomainOrder
-import scespet.core.{Term, HasVal, VectTerm, MacroTerm}
+import scespet.core._
 import org.jfree.chart.renderer.xy.{XYStepRenderer, XYItemRenderer}
 import org.jfree.chart.axis.{DateAxis, NumberAxis}
 import org.jfree.chart.plot.XYPlot
@@ -85,10 +85,10 @@ object Plot {
   // ------------------------------
 // todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
 // todo: rather than relying on MacroTerm being passed here
-  def plot[X:Numeric](series:Term[X], env:Environment) = {
+  def plot[X](series:Term[X], name:String = "Series")(implicit ev:Numeric[X], env:Environment) = {
     val dataset = new TimeSeriesDataset()
     val options = new Options[String,X](dataset)
-    options.plot(series, env)
+    options.plot(series, name, env)
     plotDataset(dataset)
     options
   }
@@ -105,9 +105,20 @@ object Plot {
   def plot[K,X:Numeric](series:VectTerm[K,X]) = {
     val dataset = new TimeSeriesDataset()
     val options = new Options[String,X](dataset)
-    for (k <- series.input.getKeys.asScala) {
-      options.plot( series(k), k.toString, series.env )
+
+    class DatasetAdder() extends Reduce[X] {
+      val currentCount = dataset.getSeriesCount
+      val name = series.keys(currentCount).toString
+      val seriesId = dataset.addSeries(name)
+      val env = series.env
+
+      def add(v: X) = {
+        val x = env.getEventTime
+        val y = implicitly[Numeric[X]].toDouble( v )
+        dataset.add(seriesId, x, y)
+      }
     }
+    series.reduce_all(new DatasetAdder)
     plotDataset(dataset)
     options
   }
