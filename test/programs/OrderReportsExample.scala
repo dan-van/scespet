@@ -81,8 +81,10 @@ object Test2 extends OrderReportsExample {
 object Test3 extends OrderReportsExample {
   def doBody() {
     val orderIdToName = orderEvents.filterType[NewOrder]().by(_.orderId).map(_.stock)
-    val sumFillByName = orderEvents.filterType[Fill].map(fill => (orderIdToName(fill.orderId).value, fill)).by(_._1).map(_._2.qty).fold_all(new Sum[Int]).map(_.sum)
-    Plot.plot (sumFillByName)
+    val orderEventsByName = orderEvents.by(evt => orderIdToName.apply(evt.orderId).value)
+    out("evt by name"){orderEventsByName}
+//    val sumFillByName = orderEvents.filterType[Fill].map(fill => (orderIdToName(fill.orderId).value, fill)).by(_._1).map(_._2.qty).fold_all(new Sum[Int]).map(_.sum)
+//    Plot.plot (sumFillByName)
   }
 }
 object Test4 extends OrderReportsExample {

@@ -51,112 +51,44 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     })
   }
 
-  test("derive") {
-    val set = impl.asVector( List("A", "B", "C") )
+  protected def createTestMultiStream() = {
+    val set = impl.asVector(List("A", "B", "C"))
     val eventStreams = Map(
-      "A" ->  impl.asStream( eventsA )
-      ,"B" -> impl.asStream( eventsB )
-      ,"C" -> impl.asStream( eventsC )
+      "A" -> impl.asStream(eventsA)
+      , "B" -> impl.asStream(eventsB)
+      , "C" -> impl.asStream(eventsC)
     )
 
-    val multiStream = set.derive(key => eventStreams(key).input)
+    set.derive(key => eventStreams(key).input)
+  }
+
+  class NamedSum[X:Numeric](val str:String) extends Reduce[X]{
+    var sum = 0.0
+    def add(n:X):Unit = {sum = sum + implicitly[Numeric[X]].toDouble(n)}
+
+    override def toString = s"Sum($str)=$sum"
+  }
+
+  test("derive") {
+    val multiStream = createTestMultiStream()
     new StreamTest("A", (0 to 5).toList, multiStream("A"))
     new StreamTest("B", (10 to 15).toList, multiStream("B"))
     new StreamTest("C", (20 to 25).toList, multiStream("C"))
   }
 
+  case class FeedEntry(feedName:String, symbol:String)
+
   test("reduce each") {
-    val elements = List.fill(11)(2)
-    val expectedOut = elements.toList.grouped(3).map( _.reduce( _+_ )).toList
-    expectedOut should be(List(6, 6, 6, 4))
+    val feedData = collection.mutable.HashMap[FeedEntry, HasVal[Double]]()
+    feedData += FeedEntry("Reuters", "MSFT") -> IteratorEvents(1.1 to (10.1,1))((e,i)=> i)
+    feedData += FeedEntry("Reuters", "IBM")  -> IteratorEvents(20.1 to (30.0,2))((e,i)=> i*2)
+    feedData += FeedEntry("CTS", "IBM")      -> IteratorEvents(20.3 to (30.0,2))((e,i)=> i*2)
+    feedData += FeedEntry("UTDF", "MSFT")    -> IteratorEvents(1.2 to (10.2,1))((e,i)=> i)
+    feedData += FeedEntry("Reuters", "foo")  -> IteratorEvents(1.0 to (2.0,0.1))((e,i)=> i)
 
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)
-    new StreamTest("mult10", expectedOut, mult10)
+    val feedDict = impl.asVector(feedData.keySet)
+    val prices = feedDict.derive(key => feedData(key))
+    out("prices")(prices)
   }
 
-  test("fold each") {
-    val elements = List.fill(11)(2)
-    val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
-    expectedOut should be(List(List(2, 4, 6), List(2, 4, 6), List(2, 4, 6), List(2, 4)).flatten)
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.fold(new Sum[Int]).each(3).map(_.sum.toInt)
-    new StreamTest("fold each", expectedOut, mult10)
-  }
-
-  test("slice before") {
-    val elements = List.fill(3)(1) ::: (10 :: List.fill(3)(1))
-    val expectReduce = List(3, 13)
-    val expectScan = List(List(1, 2, 3), List(10, 11, 12, 13)).flatten
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.fold(new Sum[Int]).slice_pre( sliceTrigger ).map(_.sum.toInt)
-    val reduce = stream.reduce(new Sum[Int]).slice_pre( sliceTrigger ).map(_.sum.toInt)
-    new StreamTest("scan", expectScan, scan)
-    new StreamTest("reduce", expectReduce, reduce)
-  }
-
-  test("slice after") {
-    val elements = List.fill(3)(1) ::: (10 :: List.fill(3)(1))
-    val expectReduce = List(13, 3)
-    val expectScan = List(List(1, 2, 3, 13), List(1, 2, 3)).flatten
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.fold(new Sum[Int]).slice_post( sliceTrigger ).map(_.sum.toInt)
-    val reduce = stream.reduce(new Sum[Int]).slice_post( sliceTrigger ).map(_.sum.toInt)
-    new StreamTest("scan", expectScan, scan)
-    new StreamTest("reduce", expectReduce, reduce)
-  }
-
-  test("filterType") {
-    val elements = List(1, 2, 4, "Open", 8, 16, "Open", 32, 64, "Close", 128, "Close", "Open", 256, "Close", "Open", 512)
-    val expectFiltered = List[Integer](1, 2, 4, 8, 16, 32, 64, 128, 256, 512)
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-// umm, don't understand this type error....
-//    val intStream = stream.filterType[Integer]()
-    val intStream = stream.filter(_.isInstanceOf[Integer]).map(_.asInstanceOf[Integer])
-    new StreamTest("Filtered", expectFiltered, intStream)
-  }
-
-  test("reduce while") {
-    val elements = List(1, 2, 4, "Open", 8, 16, "Open", 32, 64, "Close", 128, "Close", "Open", 256, "Close", "Open", 512)
-    val expectReduce = List(120, 256)
-//    val expectScan = List(0, 8, 24, 56, 130, 0, 256)
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    // umm, don't understand this type error....
-    //    val intStream = stream.filterType[Integer]()
-    val numberStream = stream.filter(_.isInstanceOf[Integer]).map(_.asInstanceOf[Integer].intValue())
-//    val numberStream = stream.filterType[Integer].map(_.intValue())
-    val stringStream = stream.filterType[String]
-
-    val isOpen = stringStream.map(_ == "Open").asInstanceOf[MacroTerm[Boolean]]
-
-//    val scan = numberStream.fold(new Sum[Int]).window( isOpen ).map(_.sum.toInt)
-    val reduce = numberStream.reduce(new Sum[Int]).window( isOpen ).map(_.sum.toInt)
-//    new StreamTest("scan", expectScan, scan)
-    new StreamTest("reduce", expectReduce, reduce)
-  }
-
-  test("by") {
-    val elements = "aaAbAB".toCharArray
-    val expectOut = Map('A' -> 4, 'B' -> 2)
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val countByLetter = stream.by(_.toUpper).reduce_all(new Counter)
-    addPostCheck("Counts") {
-      import collection.JavaConverters._
-      expectResult(expectOut.keySet, "Keyset mismatch")(countByLetter.input.getKeys.asScala.toSet)
-      for (e <- expectOut) {
-        var i = countByLetter.input.indexOf(e._1)
-        val reduce = countByLetter.input.get(i)
-        val value = reduce.c
-        expectResult(e._2, s"Value mismatch for key ${e._1}, index: $i")(value)
-      }
-    }
-  }
 }

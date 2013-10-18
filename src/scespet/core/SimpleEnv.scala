@@ -121,7 +121,7 @@ class SimpleEnv() extends Environment {
 
   def removeWakeupReceiver(provider: Any, consumer: Function) {}
 
-  def addListener[T](provider: T, consumer: Function) = {
+  def addListener[T](provider: T, consumer: Function) :T = {
     addListener(provider.asInstanceOf[Any], consumer.asInstanceOf[types.EventGraphObject]);
     provider
   }
