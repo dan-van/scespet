@@ -2,7 +2,7 @@ package scespet
 
 import scespet.core._
 import reflect.ClassTag
-import scespet.expression.{AbsTerm, RootTerm}
+import scespet.expression.{CapturedTerm, RootTerm}
 import gsa.esg.mekon.core.EventGraphObject
 
 /**

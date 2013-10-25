@@ -2,7 +2,7 @@ package scespet
 
 import core._
 import core.types
-import scespet.expression.{HasValRoot, RootTerm, AbsTerm}
+import scespet.expression.{HasValRoot, RootTerm, CapturedTerm}
 import gsa.esg.mekon.core.EventSource
 
 /**
@@ -21,7 +21,7 @@ class EnvTermBuilder(val env :types.Env) {
     return new MacroTerm[X](env)(data)
   }
 
-  def query[X,Y](value: AbsTerm[X, Y]) :Term[Y] = {
+  def query[X,Y](value: CapturedTerm[X, Y]) :Term[Y] = {
     if (value.parent != null) {
       val localParent = query(value.parent)
       val localThis = value.applyTo(localParent)

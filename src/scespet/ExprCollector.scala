@@ -19,8 +19,8 @@ import java.util.logging.Level
 import scala.collection.mutable
 
 class Scesspet {
-    val leaves = collection.mutable.Set[AbsTerm[_,_]]()
-    val allNodes = collection.mutable.Set[AbsTerm[_,_]]()
+    val leaves = collection.mutable.Set[CapturedTerm[_,_]]()
+    val allNodes = collection.mutable.Set[CapturedTerm[_,_]]()
 
     def query[X](data: TraversableOnce[X], timeFunc:(X, Int)=>Long) : Term[X] = {
       var root = new TraversableRoot[X](data, timeFunc)
@@ -28,13 +28,13 @@ class Scesspet {
       root
     }
 
-    def query[X](newHasVal :(types.Env) => HasVal[X]) : AbsTerm[X, X] = {
+    def query[X](newHasVal :(types.Env) => HasVal[X]) : CapturedTerm[X, X] = {
       var root = new HasValRoot[X](newHasVal)
       addNode( null, root )
       root
     }
 
-    def addNode(parent:AbsTerm[_,_], child:AbsTerm[_,_]) = {
+    def addNode(parent:CapturedTerm[_,_], child:CapturedTerm[_,_]) = {
       if (parent != null) {
         leaves -= parent
         allNodes += parent
@@ -46,15 +46,15 @@ class Scesspet {
     }
   }
 
-  abstract class AbsTerm[IN, X](val source:AbsTerm[_, IN]) extends Term[X] with Serializable {
+  abstract class CapturedTerm[IN, X](val source:CapturedTerm[_, IN]) extends Term[X] with Serializable {
     // are joins multi parent?
-    val parent :AbsTerm[_, IN] = source
+    val parent :CapturedTerm[_, IN] = source
     if (source != null) {
       source.addChild(this)
     }
 
-    val children = collection.mutable.LinkedHashSet[AbsTerm[X, _]]()
-    protected def addChild(child:AbsTerm[X, _]) {
+    val children = collection.mutable.LinkedHashSet[CapturedTerm[X, _]]()
+    protected def addChild(child:CapturedTerm[X, _]) {
       children += child
     }
 
@@ -128,32 +128,32 @@ class Scesspet {
     }
   }
 
-  abstract class RootTerm[X] extends AbsTerm[X, X](source = null) {
+  abstract class RootTerm[X] extends CapturedTerm[X, X](source = null) {
     def applyTo(term: Term[X]): Term[X] = ???
     def buildHasVal(env :types.Env) :HasVal[X]
   }
 
-  class MapTerm[IN, X](source:AbsTerm[_, IN], val mapFunc:(IN)=>X) extends AbsTerm[IN, X](source) {
+  class MapTerm[IN, X](source:CapturedTerm[_, IN], val mapFunc:(IN)=>X) extends CapturedTerm[IN, X](source) {
     def applyTo(term: Term[IN]): Term[X] = {
       term.map(mapFunc)
     }
   }
 
-  class FilterTerm[X](source:AbsTerm[_, X], val accept: (X) => Boolean) extends AbsTerm[X, X](source) {
+  class FilterTerm[X](source:CapturedTerm[_, X], val accept: (X) => Boolean) extends CapturedTerm[X, X](source) {
     def applyTo(term: Term[X]): Term[X] = {
       term.filter(accept)
     }
   }
 
   @deprecated("This should be unnecessary when bucketBuilder supports fold")
-  class FoldAllTerm[X, Y <: Reduce[X] ](source:AbsTerm[_, X], val fold: Y) extends AbsTerm[X, Y](source) {
+  class FoldAllTerm[X, Y <: Reduce[X] ](source:CapturedTerm[_, X], val fold: Y) extends CapturedTerm[X, Y](source) {
     def applyTo(term: Term[X]): Term[Y] = {
       term.fold_all(fold)
     }
   }
 
 
-  class CollectTerm[IN, X <: Reduce[IN]](collectCapture:CollectCapture[X, IN]) (bucketBuilderCall:(BucketBuilder[IN, X]) => Term[X]) extends AbsTerm[IN, X](collectCapture.input) {
+  class CollectTerm[IN, X <: Reduce[IN]](collectCapture:CollectCapture[X, IN]) (bucketBuilderCall:(BucketBuilder[IN, X]) => Term[X]) extends CapturedTerm[IN, X](collectCapture.input) {
 
     def applyTo(term: Term[IN]): Term[X] = {
       if (collectCapture.continuousOutput) {
@@ -167,7 +167,7 @@ class Scesspet {
     }
   }
 
-  class CollectCapture[T <: Reduce[X], X](val continuousOutput:Boolean, val input:AbsTerm[_, X], val reduce:T) extends BucketBuilder[X,T] {
+  class CollectCapture[T <: Reduce[X], X](val continuousOutput:Boolean, val input:CapturedTerm[_, X], val reduce:T) extends BucketBuilder[X,T] {
     def each(n: Int) = ???
 
     def window(windowStream: Term[Boolean]) = ???

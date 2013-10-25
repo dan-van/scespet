@@ -5,7 +5,7 @@ import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
 import org.jfree.data.general.AbstractSeriesDataset
 import org.jfree.data.xy.XYDataset
 import org.jfree.data.DomainOrder
-import scespet.core.{Term, HasVal, VectTerm, MacroTerm}
+import scespet.core._
 import org.jfree.chart.renderer.xy.{XYStepRenderer, XYItemRenderer}
 import org.jfree.chart.axis.{DateAxis, NumberAxis}
 import org.jfree.chart.plot.XYPlot
@@ -30,21 +30,20 @@ object Plot {
 
   class TimeSeriesDataset() extends AbstractSeriesDataset with XYDataset {
     val datas_x = collection.mutable.MutableList[TLongArrayList]()
-    val seriesKeys = collection.mutable.MutableList[Any]()
+    val seriesNames = collection.mutable.MutableList[String]()
     val datas_y = collection.mutable.MutableList[TDoubleArrayList]()
     var currentCounts = collection.mutable.MutableList[Int]() // this avoids us exposing new points outside of awt thread
     var cellIndex = 0
 
-    var seriesNameFunc:Any => String = String.valueOf
 
-    def addSeries(key:Any):Int = {
-      seriesKeys += key
+    def addSeries(name:String):Int = {
+      seriesNames += name
       val newXCol = new TLongArrayList(2000)
       val newYCol = new TDoubleArrayList(2000)
       datas_x += newXCol
       datas_y += newYCol
       currentCounts += 0
-      seriesKeys.size - 1
+      seriesNames.size - 1
     }
 
     def add(series:Int, x:Long, y:Double) = {
@@ -65,7 +64,7 @@ object Plot {
 
     def getSeriesCount = datas_x.size
 
-    def getSeriesKey(series: Int) = seriesNameFunc(seriesKeys(series))
+    def getSeriesKey(series: Int) = seriesNames(series)
 
     def fireupdate() = {
       var fire = false
@@ -85,10 +84,10 @@ object Plot {
   // ------------------------------
 // todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
 // todo: rather than relying on MacroTerm being passed here
-  def plot[X:Numeric](series:Term[X], env:Environment) = {
+  def plot[X](series:Term[X], name:String = "Series")(implicit ev:Numeric[X], env:Environment) = {
     val dataset = new TimeSeriesDataset()
     val options = new Options[String,X](dataset)
-    options.plot(series, env)
+    options.plot(series, name, env)
     plotDataset(dataset)
     options
   }
@@ -104,20 +103,43 @@ object Plot {
 
   def plot[K,X:Numeric](series:VectTerm[K,X]) = {
     val dataset = new TimeSeriesDataset()
-    val options = new Options[String,X](dataset)
-    for (k <- series.input.getKeys.asScala) {
-      options.plot( series(k), k.toString, series.env )
-    }
+    val options = new Options[K,X](dataset)
+    options.plot(series)
     plotDataset(dataset)
     options
   }
 
+  /**
+   * this isn't good design. Think about adding stuff to plots and draw inspiration from the major plotting libraries (and REMEMBER not to go overkill, and just use python for advanced stuff!!!)
+   */
   class Options[K,X:Numeric](dataset:TimeSeriesDataset) {
-    def seriesNames(keyRender:K=>String = {k:K => k.toString}) {dataset.seriesNameFunc = keyRender.asInstanceOf[Any => String]}
+    var keyRender:K=>String = (k) => String.valueOf(k)
+
+    def seriesNames(newKeyRender:K=>String):Options[K,X] = {
+      keyRender = newKeyRender
+      this
+    }
+
+    def plot(stream: VectTerm[K, X]) :Options[K,X] = {
+      class DatasetAdder(key:K) extends Reduce[X] {
+        val currentCount = dataset.getSeriesCount
+        val name = keyRender(key)
+        val seriesId = dataset.addSeries(name)
+        val env = stream.env
+
+        def add(v: X) = {
+          val x = env.getEventTime
+          val y = implicitly[Numeric[X]].toDouble( v )
+          dataset.add(seriesId, x, y)
+        }
+      }
+      stream.reduce_all(new DatasetAdder(_))
+      this
+    }
 
     def plot(stream: MacroTerm[X]) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1), stream.env)
 
-    def plot(stream: Term[X], env:Environment) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1), env)
+    def plot(stream: Term[X])(implicit env:Environment) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1), env)
 
     def plot(stream: Term[X], name:String, env:Environment) :Options[K,X] = {
       val seriesId = dataset.addSeries(name)

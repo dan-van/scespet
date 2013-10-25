@@ -2,7 +2,7 @@ package scespet.core
 
 import collection.mutable.ArrayBuffer
 import collection.mutable
-import scespet.expression.{AbsTerm, Scesspet, RootTerm}
+import scespet.expression.{CapturedTerm, Scesspet, RootTerm}
 import scespet.{EnvTermBuilder, expression}
 import gsa.esg.mekon.core.EventSource.EventManagerInteractor
 import gsa.esg.mekon.core

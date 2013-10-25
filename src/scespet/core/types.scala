@@ -258,7 +258,7 @@ trait MultiTerm[K,X] {
    */
   def mapVector[Y](f:VectorStream[K,X] => Y):MacroTerm[Y]
 
-  def map[Y: TypeTag](f:X=>Y):VectTerm[K,Y]
+  def map[Y: TypeTag](f:X=>Y, exposeNull:Boolean = true):VectTerm[K,Y]
 
   def filterType[Y : ClassTag]():VectTerm[K,Y]
 
