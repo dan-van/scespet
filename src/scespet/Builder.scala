@@ -1,7 +1,7 @@
 package scespet
 
 import core.Term
-import scespet.expression.AbsTerm
+import scespet.expression.CapturedTerm
 import reflect.ClassTag
 
 /**

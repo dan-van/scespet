@@ -147,7 +147,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new MacroTerm[Y](env)(collapsed)
   }
 
-  def map[Y: TypeTag](f:X=>Y):VectTerm[K,Y] = {
+  def map[Y: TypeTag](f:X=>Y, exposeNull:Boolean = true):VectTerm[K,Y] = {
     if ( (typeOf[Y] =:= typeOf[EventGraphObject]) ) println(s"WARNING: if you meant to listen to events from ${typeOf[Y]}, you should use 'derive'")
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
 //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
@@ -157,8 +157,13 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         if (in == null) {
           println("null input")
         }
-        value = f(in);
-        true
+        val y = f(in)
+        if (exposeNull || y != null) {
+          value = y
+          true
+        } else {
+          false
+        }
       }
     }
     val cellBuilder = (index:Int, key:K) => new MapCell(index)
