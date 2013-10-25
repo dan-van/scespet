@@ -1,8 +1,11 @@
 package programs
 
 import collection.mutable.ArrayBuffer
+import data.Plot
 import scespet.core._
 import scespet.util._
+import java.util.{List => JList}
+import collection.JavaConversions._
 
 
 /**
@@ -88,7 +91,46 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
 
     val feedDict = impl.asVector(feedData.keySet)
     val prices = feedDict.derive(key => feedData(key))
-    out("prices")(prices)
+
+    class FeedDiff(primary:FeedEntry, secondary:FeedEntry) {
+      val primaryStream = prices(primary)
+      val secondaryStream = prices(secondary)
+      val diff = primaryStream.join(secondaryStream).map( e => e._1 - e._2)
+
+      override def toString: String = s"${primary} diff ${secondary.feedName}"
+    }
+//    class ProductFeeds(val product:String) extends Reduce[List[FeedEntry]] {
+//      var primary:FeedEntry = _
+//      var secondaries = Map[FeedEntry, FeedDiff]()
+//      def add(xs: List[FeedEntry]): Unit = {
+//        for (x <- xs) {
+//          if (x.feedName.contains("Reuters")) {
+//            primary = x
+//            for (s <- secondaries.keys) {
+//              secondaries += s -> new FeedDiff(primary, s)
+//            }
+//          } else {
+//            if (primary == null) {
+//              secondaries += x -> null
+//            } else {
+//              secondaries += x -> new FeedDiff(primary, x)
+//            }
+//          }
+//        }
+//      }
+//
+//      override def toString: String = s"FeedDiffs{ prod=$product, primary=$primary, seconds=$secondaries"
+//    }
+
+
+//    val productToDiffs = feedDict.groupby(_.symbol).map(_.getValues.toList).fold_all(new ProductFeeds(_))
+    val reuters = prices.subset(_.feedName.startsWith("Reuters"))
+//    val joined = prices.join2(reuters)(k => new FeedEntry("Reuters",k.symbol))
+//    val compared = joined.map(p => p._1 - p._2)
+//    val diffs = productToDiffs.toValueSet(_.secondaries.values.filter( _ != null )).derive(_.diff.input)
+//    out("diffs")(compared)
+    Plot.plot(reuters)
+    Thread.sleep(1000000)
   }
 
 }

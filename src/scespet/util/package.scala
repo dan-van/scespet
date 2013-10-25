@@ -18,7 +18,9 @@ package object util {
       term.map(x => {println( "Event "+count+" "+prefix + String.valueOf(x)); count += 1; x} )
     }
     def apply[X](term:MacroTerm[X]) :Term[X] = term.map(x => {println( new Date(term.env.getEventTime) + ": " + prefix + String.valueOf(x)); x} )
-    def apply[K,X](term:VectTerm[K,X]):VectTerm[K,X] = { term.mapVector(x => println(prefix + String.valueOf(x))); term }
+    def apply[K,X](term:VectTerm[K,X]):VectTerm[K,X] = {
+      term.mapVector(x => println(prefix + String.valueOf(x))); term
+    }
   }
   def out(prefix:String):TermPrint = new TermPrint(prefix)
 

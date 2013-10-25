@@ -13,7 +13,7 @@ import scespet.core.VectorStream.ReshapeSignal
  */
 // this one uses pur function calls and tracks updated indicies.
 // we could try a verison that uses wakeup nodes.
-class VectorJoin[K, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K,Y], env:types.Env) extends AbstractVectorStream[K,ValueFunc[(X,Y)], (X,Y)] {
+class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y], env:types.Env, keyMap:K2 => K) extends AbstractVectorStream[K, (X,Y)] {
 
   class CellTuple(val key:K) extends UpdatingHasVal[(X,Y)]{
     var xIndex = -1
@@ -23,8 +23,10 @@ class VectorJoin[K, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K,Y], env:
     }
 
     var yIndex = -1
-    def bindToY() {
-      yIndex = yVect.getKeys.indexOf(key)
+    def bindToY(yKey:K2) {
+      if (yIndex >= 0)
+        throw new UnsupportedOperationException(s"keyMap function maps multiple keys in Y onto $key. Mapped keys: { ${yVect.getKey(yIndex)}, $yKey")
+      yIndex = yVect.getKeys.indexOf( yKey )
       env.addListener(yVect.getTrigger(yIndex), this)
     }
 
@@ -58,9 +60,10 @@ class VectorJoin[K, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K,Y], env:
       }
       if (env.hasChanged(y_changeSignal)) {
         for (i <- y_seenKeys to yVect.getSize - 1) {
-          val newKey = yVect.getKey(i)
+          val newYKey = yVect.getKey(i)
+          val newKey = keyMap(newYKey)
           add(newKey)
-          get(newKey).asInstanceOf[CellTuple].bindToY()
+          get(newKey).asInstanceOf[CellTuple].bindToY(newYKey)
         }
         y_seenKeys = yVect.getSize()
       }

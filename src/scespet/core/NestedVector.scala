@@ -10,7 +10,8 @@ import scespet.core.VectorStream.ReshapeSignal
  *    or make a ReKeyedVector implement VectTerm[K2, List[V]]. But then mapping and transforming a List[V] whenever a single V updates is sucky (both from API and performance)
  *    I think
  */
-class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => K2, env:types.Env) extends AbstractVectorStream[K2, V] with types.MFunc {
+class NestedVector[K2 ,K, V](source:VectorStream[K,V], keyFunc:K => K2, env:types.Env) extends AbstractVectorStream[K2, VectorStream[K,V]] with types.MFunc {
+  val inputAsTerm = new VectTerm[K,V](env)(source)
   val getNewColumnTrigger = new ReshapeSignal(env)
 
   env.addListener(source.getNewColumnTrigger, this)
@@ -19,10 +20,13 @@ class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => K2, env:type
   // initialise
   calculate()
 
+  class MyCell(val value:VectorStream[K,V]) extends HasVal[VectorStream[K,V]] {
+    val trigger = value.getNewColumnTrigger
+  }
+
   def newCell(i: Int, key: K2) = {
-    ???
-    // build an event multiplexer? Or what about formalising this concept in core graph, letting the graph
-    // have a special class of Function that can provide multiple events? Then we'd drain them atomically in the graph walk
+    val k2SubVector = inputAsTerm.subset(keyFunc(_) == key)
+    new MyCell(k2SubVector.input)
   }
 
   // called whenever the input vector gets a new key
@@ -37,8 +41,6 @@ class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => K2, env:type
         index = getSize
         add(k2)
       }
-      val mergeCell = getValueHolder(index)
-//      mergeCell.addInputStream(i)
     }
     lastSourceSize = source.getSize
     true

@@ -12,7 +12,7 @@ import gsa.esg.mekon.core.EventGraphObject;
  */
 
 //TODO: public abstract class ChainedVector<K, F extends HasValue<V>, V> extends AbstractVectorStream<K, F, V> {
-public abstract class ChainedVector<K, F extends EventGraphObject, V> extends AbstractVectorStream<K, F, V> {
+public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
 
     private final VectorStream.ReshapeSignal reshapeSignal;
     private final VectorStream<K, ?> sourceVector;

@@ -5,7 +5,7 @@ import java.util.logging.Logger
 import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
-import scespet.core.UpdatingHasVal
+import scespet.core.{VectorStream, UpdatingHasVal}
 
 /**
  * Created with IntelliJ IDEA.
@@ -15,7 +15,6 @@ import scespet.core.UpdatingHasVal
  * To change this template use File | Settings | File Templates.
  */
 class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends MultiTerm[K,X] {
-  import scala.reflect.macros.Context
   import scala.collection.JavaConverters._
   import scala.collection.JavaConversions._
 
@@ -26,7 +25,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * todo: call this "filterKey" ?
    */
   def subset(predicate:K=>Boolean):VectTerm[K,X] = {
-    val output: VectorStream[K, X] = new ChainedVector[K, UpdatingHasVal[X], X](input, env) {
+    val output: VectorStream[K, X] = new ChainedVector[K, X](input, env) {
       val sourceIndicies = collection.mutable.ArrayBuffer[Integer]()
 
       override def add(key: K) {
@@ -104,9 +103,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     new MacroTerm[X](env)(cell)
   }
 
+  /** This doesn't work yet - questions of event atomicity / multiplexing */
   def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X] = {
-    // todo: I've not finished the impl of ReKeyedVector
     new VectTerm[K2, X](env)(new ReKeyedVector[K, X, K2](input, keyMap, env))
+  }
+
+  /** Experiment concept. To get round event atomicity, what about a Map[K2, Vect[K,X]] which is a partition of this vect?*/
+  def groupby[K2]( keyMap:K=>K2 ):VectTerm[K2,VectorStream[K,X]] = {
+    new VectTerm(env)(new NestedVector[K2, K, X](input, keyMap, env))
   }
 
   private class ChainedCell[C]() extends UpdatingHasVal[C] {
@@ -124,6 +128,16 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     }
   }
 
+  class VectorMap[Y](f:VectorStream[K,X] => Y) extends UpdatingHasVal[Y] {
+    // not convinced we should initialise like this?
+    var value:Y = f.apply(input)
+
+    def calculate() = {
+      value = f.apply(input)
+      true
+    }
+  }
+  
   /**
    * This allows operations that operate on the entire vector rather than single cells (e.g. a demean operation, or a "unique value count")
    * I want to think more about other facilities on this line
@@ -131,20 +145,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @return
    */
   def mapVector[Y](f:VectorStream[K,X] => Y):MacroTerm[Y] = {
-    val collapsed = new UpdatingHasVal[Y] {
-
-      val value:Y = f.apply(input)
-
-      def calculate() = {
-        f.apply(input)
-        true
-      }
-    }
     // build a vector where all cells share this single "collapsed" function
-    val cellBuilder = (index:Int, key:K) => collapsed
+    val singleSharedCell = new VectorMap[Y](f)
+    val cellBuilder = (index:Int, key:K) => singleSharedCell
     newIsomorphicVector(cellBuilder)
     // now return a single stream of the collapsed value:
-    return new MacroTerm[Y](env)(collapsed)
+    return new MacroTerm[Y](env)(singleSharedCell)
   }
 
   def map[Y: TypeTag](f:X=>Y):VectTerm[K,Y] = {
@@ -267,7 +273,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
 
   private def newIsomorphicVector[Y](cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
-    val output: VectorStream[K, Y] = new ChainedVector[K, UpdatingHasVal[Y], Y](input, env) {
+    val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
         var sourceCell = input.getValueHolder(i)
@@ -346,7 +352,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @return
    */
   def derive[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
-    val output: VectorStream[K, Y] = new ChainedVector[K, EventGraphObject, Y](input, env) {
+    val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K) = cellFromKey(key)
     }
     return new VectTerm[K, Y](env)(output)
@@ -361,7 +367,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @return
    */
   def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y] = {
-    val output: VectorStream[K, Y] = new ChainedVector[K, EventGraphObject, Y](input, env) {
+    val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K) = {
         val valuePresent = input.getNewColumnTrigger.newColumnHasValue(i)
         if (!valuePresent) {
@@ -376,11 +382,15 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)] = {
-    return new VectTerm(env)(new VectorJoin[K, X, Y](input, other.input, env))
+    return new VectTerm(env)(new VectorJoin[K, K, X, Y](input, other.input, env, identity))
+  }
+
+  def join2[Y, K2]( other:VectTerm[K2,Y] )( keyMap:K2 => K):VectTerm[K,(X,Y)] = {
+    return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap))
   }
 
   def sample(evt:EventGraphObject):VectTerm[K,X] = {
-    val output: VectorStream[K, X] = new ChainedVector[K, EventGraphObject, X](input, env) {
+    val output: VectorStream[K, X] = new ChainedVector[K, X](input, env) {
       def newCell(i: Int, key: K) = new UpdatingHasVal[X] {
         var value:X = _
         env.addListener(evt, this)

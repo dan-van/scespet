@@ -51,6 +51,7 @@ trait HasVal[X] extends HasValue[X]{
    */
   def trigger :types.EventGraphObject
 
+  // this is only here for Java compatibility
   def getTrigger: EventGraphObject = trigger
 }
 
