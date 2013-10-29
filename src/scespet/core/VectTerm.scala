@@ -26,7 +26,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    */
   def subset(predicate:K=>Boolean):VectTerm[K,X] = {
     val output: VectorStream[K, X] = new ChainedVector[K, X](input, env) {
-      val sourceIndicies = collection.mutable.ArrayBuffer[Integer]()
+      val sourceIndicies = collection.mutable.ArrayBuffer[Int]()
 
       override def add(key: K) {
         if (predicate.apply(key)) {
@@ -38,31 +38,21 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         }
       }
 
-      def newCell(newIndex: Int, key: K): UpdatingHasVal[X] = {
-        val sourceCell = input.getValueHolder(newIndex)
-        val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
-        class MapCell(index:Int) extends UpdatingHasVal[X] {
-          //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
-          var value:X = _
-          def calculate() = {
-            value = sourceCell.value()
-            true
-          }
-        }
-        val cellFunc = new MapCell(newIndex)
-        env.addListener(sourceTrigger, cellFunc)
-        // initialise the cell
+      def newCell(newIndex: Int, key: K): HasValue[X] = {
         val sourceIndex = sourceIndicies(newIndex)
+        val sourceCell = input.getValueHolder(sourceIndex)
+        val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
+
         val hasInputValue = input.getNewColumnTrigger.newColumnHasValue(sourceIndex)
         val hasChanged = env.hasChanged(sourceTrigger)
         if (hasChanged && !hasInputValue) {
           println("WARN: didn't expect this")
         }
         if (hasInputValue || hasChanged) {
-          val hasInitialOutput = cellFunc.calculate()
-          getNewColumnTrigger.newColumnAdded(newIndex, hasInitialOutput)
+          getNewColumnTrigger.newColumnAdded(newIndex, true)
         }
-        return cellFunc
+        // NOTE: yes, I'm returning the actual HasValue from the other vector, Maybe this is dangerous, and maybe I should chain them up?
+        return sourceCell
       }
     }
     return new VectTerm[K, X](env)(output)
@@ -390,7 +380,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm(env)(new VectorJoin[K, K, X, Y](input, other.input, env, identity))
   }
 
-  def join2[Y, K2]( other:VectTerm[K2,Y] )( keyMap:K2 => K):VectTerm[K,(X,Y)] = {
+  def join2[Y, K2]( other:VectTerm[K2,Y] )( keyMap:K => K2):VectTerm[K,(X,Y)] = {
     return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap))
   }
 

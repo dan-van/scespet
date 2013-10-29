@@ -20,9 +20,22 @@ import scala.collection.JavaConverters._
  * @version $Id$
  */
 object Plot {
+  @volatile var active = false
   lazy val top = new MainFrame(){
-    override def closeOperation() {println("Hiding frame");this.iconify()}
+    active = true
+    override def closeOperation() {
+      println("Hiding frame");this.iconify()
+      active = false
+      this.synchronized( this.notifyAll() )
+    }
     title="View"
+  }
+  def waitForClose() {
+    this.synchronized {
+      while (active) {
+        this.wait()
+      }
+    }
   }
 
   object TimeSeriesDataset {

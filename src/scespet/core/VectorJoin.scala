@@ -1,6 +1,7 @@
 package scespet.core
 
 import scespet.core.VectorStream.ReshapeSignal
+import scala.collection.mutable
 
 /**
  * This takes a Stream and demultiplexes it into a VectorStream using a value -> key function
@@ -13,7 +14,7 @@ import scespet.core.VectorStream.ReshapeSignal
  */
 // this one uses pur function calls and tracks updated indicies.
 // we could try a verison that uses wakeup nodes.
-class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y], env:types.Env, keyMap:K2 => K) extends AbstractVectorStream[K, (X,Y)] {
+class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y], env:types.Env, keyMap:K => K2) extends AbstractVectorStream[K, (X,Y)] {
 
   class CellTuple(val key:K) extends UpdatingHasVal[(X,Y)]{
     var xIndex = -1
@@ -23,10 +24,12 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
     }
 
     var yIndex = -1
-    def bindToY(yKey:K2) {
+    def bindToY(yi:Int) {
+      val yKey = yVect.getKey(yi)
       if (yIndex >= 0)
         throw new UnsupportedOperationException(s"keyMap function maps multiple keys in Y onto $key. Mapped keys: { ${yVect.getKey(yIndex)}, $yKey")
-      yIndex = yVect.getKeys.indexOf( yKey )
+      yIndex = yi
+      println(s"joined y:${yKey} (index $yIndex) and x:$key (index $xIndex)")
       env.addListener(yVect.getTrigger(yIndex), this)
     }
 
@@ -59,11 +62,15 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
         x_seenKeys = xVect.getSize()
       }
       if (env.hasChanged(y_changeSignal)) {
-        for (i <- y_seenKeys to yVect.getSize - 1) {
-          val newYKey = yVect.getKey(i)
-          val newKey = keyMap(newYKey)
-          add(newKey)
-          get(newKey).asInstanceOf[CellTuple].bindToY(newYKey)
+        val newYKeys:Map[K2, Int] = (for (yi <- y_seenKeys to yVect.getSize - 1) yield yVect.getKey(yi) -> yi).toMap
+        // slow algo, may want to cache this
+        for (x <- 0 to xVect.getSize - 1) {
+          val key = xVect.getKey(x)
+          val yKey = keyMap(key)
+          val yIndex = newYKeys.get(yKey)
+          if (yIndex.isDefined) {
+            getValueHolder(x).asInstanceOf[CellTuple].bindToY(yIndex.get)
+          }
         }
         y_seenKeys = yVect.getSize()
       }
