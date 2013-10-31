@@ -20,11 +20,15 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
     var xIndex = -1
     def bindToX() {
       xIndex = xVect.getKeys.indexOf(key)
-      env.addListener(xVect.getTrigger(xIndex), this)
+      if (xIndex >= 0) {
+        env.addListener(xVect.getTrigger(xIndex), this)
+      }
     }
 
     var yIndex = -1
     def bindToY(yi:Int) {
+      if (yIndex == yi) return //already bound
+
       val yKey = yVect.getKey(yi)
       if (yIndex >= 0)
         throw new UnsupportedOperationException(s"keyMap function maps multiple keys in Y onto $key. Mapped keys: { ${yVect.getKey(yIndex)}, $yKey")
@@ -52,17 +56,19 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
     val y_changeSignal = yVect.getNewColumnTrigger
     env.addListener(y_changeSignal, this)
 
+
+    // we've just done some listener linkage, ripple an event after listeners established
+    env.fireAfterChangingListeners(this)
+
     override def calculate():Boolean = {
-      if (env.hasChanged(x_changeSignal)) {
-        for (i <- x_seenKeys to xVect.getSize - 1) {
-          val newKey = xVect.getKey(i)
-          add(newKey)
-          get(newKey).asInstanceOf[CellTuple].bindToX()
-        }
-        x_seenKeys = xVect.getSize()
+      for (i <- x_seenKeys to xVect.getSize - 1) {
+        val newKey = xVect.getKey(i)
+        add(newKey)
       }
-      if (env.hasChanged(y_changeSignal)) {
-        val newYKeys:Map[K2, Int] = (for (yi <- y_seenKeys to yVect.getSize - 1) yield yVect.getKey(yi) -> yi).toMap
+      x_seenKeys = xVect.getSize()
+
+      val newYKeys:Map[K2, Int] = (for (yi <- y_seenKeys to yVect.getSize - 1) yield yVect.getKey(yi) -> yi).toMap
+      if (!newYKeys.isEmpty) {
         // slow algo, may want to cache this
         for (x <- 0 to xVect.getSize - 1) {
           val key = xVect.getKey(x)
@@ -72,14 +78,20 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
             getValueHolder(x).asInstanceOf[CellTuple].bindToY(yIndex.get)
           }
         }
-        y_seenKeys = yVect.getSize()
       }
+      y_seenKeys = yVect.getSize()
+
       return super.calculate()
     }
   }
 
   def newCell(i: Int, key: K) = {
     val cell = new CellTuple(key)
+    cell.bindToX()
+    val yKey = keyMap(key)
+    val yKeyIndex = yVect.indexOf(yKey)
+    if (yKeyIndex >= 0) cell.bindToY(yKeyIndex)
+
     if (cell.xIndex >= 0 || cell.yIndex >= 0) {
       cell.calculate()
       // this cell is now initialised

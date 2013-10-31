@@ -26,15 +26,16 @@ object Plot {
     override def closeOperation() {
       println("Hiding frame");this.iconify()
       active = false
-      this.synchronized( this.notifyAll() )
+      Plot.synchronized( Plot.notifyAll() )
     }
     title="View"
   }
   def waitForClose() {
-    this.synchronized {
+    Plot.synchronized {
       while (active) {
-        this.wait()
+        Plot.wait()
       }
+      println("Finished waiting for plot close")
     }
   }
 
