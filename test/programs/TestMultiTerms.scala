@@ -50,6 +50,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     var eventI = 0
     val expectIter = expected.iterator
     stream.map(next => {
+      if (!expectIter.hasNext) throw new AssertionError(s"$name had more events (>=${eventI+1}) than expected")
       val expect = expectIter.next()
       expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
       println(s"Observed event: $name-$eventI \t $next as expected")
@@ -90,9 +91,35 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     new StreamTest("C", (20 to 25).toList, singleStream)
   }
 
+  test("mapKeys") {
+    val multiStream = createTestMultiStream()
+    val reKeyed = multiStream.mapKeys{case k => Some(k.toLowerCase)}
+
+    // expect no results on the old key
+    new StreamTest("A", List[Int](), reKeyed("A"))
+
+    // and all events on new keys
+    new StreamTest("a", (0 to 5).toList, reKeyed("a"))
+    new StreamTest("b", (10 to 15).toList, reKeyed("b"))
+    new StreamTest("c", (20 to 25).toList, reKeyed("c"))
+  }
+
+  test("map subset keys") {
+    val multiStream = createTestMultiStream()
+    val subset = multiStream.mapKeys {
+      case k if k == "C" => Some(k.toLowerCase)
+      case _ => None
+    }
+    val keyCount = subset.mapVector(_.getSize)
+    new StreamTest("keyCount", Array.fill(6)(1).toList, keyCount)
+
+    val firstElementAsSingleStream = subset.mapVector({case v if v.getSize > 0 => v.get(0); case _ => 0})
+    new StreamTest("c", (20 to 25).toList, firstElementAsSingleStream)
+  }
+
   case class FeedEntry(feedName:String, symbol:String)
 
-  test("reduce each") {
+  test("join") {
     val feedData = collection.mutable.HashMap[FeedEntry, HasVal[Double]]()
     feedData += FeedEntry("Reuters", "MSFT") -> IteratorEvents(1.1 to (10.1,1))((e,i)=> i)
     feedData += FeedEntry("Reuters", "IBM")  -> IteratorEvents(20.1 to (30.0,2))((e,i)=> i*2)
@@ -103,16 +130,8 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     val feedDict = impl.asVector(feedData.keySet)
     val prices = feedDict.derive(key => feedData(key))
 
-    class FeedDiff(primary:FeedEntry, secondary:FeedEntry) {
-      val primaryStream = prices(primary)
-      val secondaryStream = prices(secondary)
-      val diff = primaryStream.join(secondaryStream).map( e => e._1 - e._2)
-
-      override def toString: String = s"${primary} diff ${secondary.feedName}"
-    }
-
-    val reuters = prices.subset(_.feedName.startsWith("Reuters"))
-    val joined = prices.join2(reuters)(k => new FeedEntry("Reuters",k.symbol))
+    val reuters = prices.mapKeys({case k if k.feedName == "Reuters" => Some(k.symbol); case _ => None})
+    val joined = prices.join(reuters, k => k.symbol)
     val compared = joined.map(p => p._1 - p._2)
     out("diffs")(compared)
     Plot.plot(compared)

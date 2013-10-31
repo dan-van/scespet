@@ -14,7 +14,6 @@ import java.util.Map;
  * Time: 08:31
  * To change this template use File | Settings | File Templates.
  */
-//todo: public abstract class AbstractVectorStream<K, F extends HasValue<V>, V> implements VectorStream<K, V> {
 public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
     private Map<K, Integer> indicies = new HashMap<K, Integer>();
     private List<K> keys = new ArrayList<K>();

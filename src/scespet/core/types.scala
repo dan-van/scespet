@@ -248,6 +248,10 @@ trait MultiTerm[K,X] {
    */
   def subset(predicate:K=>Boolean):VectTerm[K,X]
 
+  /**
+   * I think this concept is wrong. May need a special type for it (e.g. MatrixTerm[(K2,K), X])
+   * I think a nested composite key is different to simply a Map of key tuples to values.
+   */
   def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X]
 
   /**
@@ -273,7 +277,9 @@ trait MultiTerm[K,X] {
   def toValueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y]
 
   def derive[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y]
-  def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)]
+  def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)]
+  def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)] = join(other, identity)
+
   def sample(evt:EventGraphObject):VectTerm[K,X]
 
   def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y]

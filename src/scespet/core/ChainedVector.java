@@ -11,7 +11,6 @@ import gsa.esg.mekon.core.EventGraphObject;
  * To change this template use File | Settings | File Templates.
  */
 
-//TODO: public abstract class ChainedVector<K, F extends HasValue<V>, V> extends AbstractVectorStream<K, F, V> {
 public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
 
     private final VectorStream.ReshapeSignal reshapeSignal;

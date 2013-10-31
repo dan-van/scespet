@@ -24,38 +24,17 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   /**
    * todo: call this "filterKey" ?
    */
-  def subset(predicate:K=>Boolean):VectTerm[K,X] = {
-    val output: VectorStream[K, X] = new ChainedVector[K, X](input, env) {
-      val sourceIndicies = collection.mutable.ArrayBuffer[Int]()
+  def subset(predicate:K=>Boolean):VectTerm[K,X] = mapKeys(k => {if (predicate(k)) Some(k) else None})
 
-      override def add(key: K) {
-        if (predicate.apply(key)) {
-          val sourceIndex = input.getKeys.indexOf(key)
-          if (getIndex(key) == -1) {
-            sourceIndicies += sourceIndex
-            super.add(key)
-          }
-        }
-      }
-
-      def newCell(newIndex: Int, key: K): HasValue[X] = {
-        val sourceIndex = sourceIndicies(newIndex)
-        val sourceCell = input.getValueHolder(sourceIndex)
-        val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
-
-        val hasInputValue = input.getNewColumnTrigger.newColumnHasValue(sourceIndex)
-        val hasChanged = env.hasChanged(sourceTrigger)
-        if (hasChanged && !hasInputValue) {
-          println("WARN: didn't expect this")
-        }
-        if (hasInputValue || hasChanged) {
-          getNewColumnTrigger.newColumnAdded(newIndex, true)
-        }
-        // NOTE: yes, I'm returning the actual HasValue from the other vector, Maybe this is dangerous, and maybe I should chain them up?
-        return sourceCell
-      }
-    }
-    return new VectTerm[K, X](env)(output)
+  /**
+   * derives a new VectTerm with new derived keys (possibly a subset).
+   * any mapping from K => Option[K2] that yields None will result in that K being dropped from the resulting vector
+   * @param keyMap
+   * @tparam K2
+   * @return
+   */
+  def mapKeys[K2](keyMap:K=>Option[K2]):VectTerm[K2,X] = {
+    new VectTerm[K2, X](env)(new ReKeyedVector[K, X, K2](input, keyMap, env))
   }
 
   def apply(k:K):MacroTerm[X] = {
@@ -94,9 +73,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   /** This doesn't work yet - questions of event atomicity / multiplexing */
-  def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X] = {
-    new VectTerm[K2, X](env)(new ReKeyedVector[K, X, K2](input, keyMap, env))
-  }
+  def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X] = ???
 
   /** Experiment concept. To get round event atomicity, what about a Map[K2, Vect[K,X]] which is a partition of this vect?*/
   def groupby[K2]( keyMap:K=>K2 ):VectTerm[K2,VectorStream[K,X]] = {
@@ -120,7 +97,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   class VectorMap[Y](f:VectorStream[K,X] => Y) extends UpdatingHasVal[Y] {
     // not convinced we should initialise like this?
-    var value:Y = f.apply(input)
+    var value:Y = if (input.getSize > 0) {
+      f.apply(input)
+    } else {
+      println("Initial vector is empty, not sure I should init")
+      f.apply(input)
+    }
 
     def calculate() = {
       value = f.apply(input)
@@ -376,11 +358,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, Y](env)(output)
   }
 
-  def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)] = {
-    return new VectTerm(env)(new VectorJoin[K, K, X, Y](input, other.input, env, identity))
-  }
-
-  def join2[Y, K2]( other:VectTerm[K2,Y] )( keyMap:K => K2):VectTerm[K,(X,Y)] = {
+  def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
     return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap))
   }
 
