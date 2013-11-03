@@ -101,7 +101,7 @@ object Plot {
   def plot[X](series:Term[X], name:String = "Series")(implicit ev:Numeric[X], env:Environment) = {
     val dataset = new TimeSeriesDataset()
     val options = new Options[String,X](dataset)
-    options.plot(series, name, env)
+    options.plot(series, name)
     plotDataset(dataset)
     options
   }
@@ -151,11 +151,11 @@ object Plot {
       this
     }
 
-    def plot(stream: MacroTerm[X]) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1), stream.env)
+    def plot(stream: MacroTerm[X]) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1))(stream.env)
 
-    def plot(stream: Term[X])(implicit env:Environment) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1), env)
+    def plot(stream: Term[X])(implicit env:Environment) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1))
 
-    def plot(stream: Term[X], name:String, env:Environment) :Options[K,X] = {
+    def plot(stream: Term[X], name:String)(implicit env:Environment) :Options[K,X] = {
       val seriesId = dataset.addSeries(name)
       stream.map(v => {
         val asDouble = implicitly[Numeric[X]].toDouble( v )

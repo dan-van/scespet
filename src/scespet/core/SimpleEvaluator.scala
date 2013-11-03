@@ -14,7 +14,7 @@ import core.{EventGraphObject, EventSource}
  */
 
 class SimpleEvaluator() extends EnvTermBuilder(new SimpleEnv()) {
-  def run(iter:Integer = 1000) {
+  def run(iter:Int = 1000) {
     env.asInstanceOf[SimpleEnv].run(iter)
   }
 }

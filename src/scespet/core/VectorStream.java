@@ -20,9 +20,17 @@ public interface VectorStream<K, V> {
     V get(int i);
     K getKey(int i);
 
-    // todo: how about a HasVal<X> interface. i.e. a {trigger, value} tuple.
+    /**
+     * todo: how about adding initialised (or 'isDefined') to HasValue API?
+     * return true if the given cell has ticked (or if it was built based on an input that had already ticked)
+     */
+    boolean initialised(int i);
+
     HasValue<V> getValueHolder(int i);
+
+    // this should be redundant now
     EventGraphObject getTrigger(int i);
+
     ReshapeSignal getNewColumnTrigger();
 
     public static class ReshapeSignal implements Function {

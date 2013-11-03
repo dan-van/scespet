@@ -18,6 +18,7 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
     private final Environment env;
 
     public ChainedVector(final VectorStream<K, ?> sourceVector, final Environment env) {
+        super(env);
         this.sourceVector = sourceVector;
         this.env = env;
 

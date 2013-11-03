@@ -33,6 +33,7 @@
     <orderEntry type="library" name="trove-3.0.3" level="project" />
     <orderEntry type="library" name="junit-4.10" level="application" />
     <orderEntry type="library" name="scalatest_2.10-2.0.M5b" level="project" />
+    <orderEntry type="library" name="msgpack-0.6.8" level="project" />
   </component>
 </module>
 

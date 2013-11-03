@@ -6,6 +6,7 @@ import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
 import scespet.core.{VectorStream, UpdatingHasVal}
+import scespet.core.types.MFunc
 
 /**
  * Created with IntelliJ IDEA.
@@ -133,7 +134,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       def calculate() = {
         var in = input.get(index)
         if (in == null) {
-          println("null input")
+          var isInitialised = input.initialised(index)
+          println(s"null input, isInitialised=$isInitialised")
         }
         val y = f(in)
         if (exposeNull || y != null) {
@@ -258,13 +260,19 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         env.addListener(sourceTrigger, cellFunc)
         // initialise the cell
         var hasInputValue = input.getNewColumnTrigger.newColumnHasValue(i)
+        var isInitialised = input.initialised(i)
         var hasChanged = env.hasChanged(sourceTrigger)
         if (hasChanged && !hasInputValue) {
           println("WARN: didn't expect this")
         }
-        if (hasInputValue || hasChanged) {
+        val oldIsInitialised = hasInputValue || hasChanged
+        if (oldIsInitialised != isInitialised) {
+          println(s"Is initialised conflict for $i: initialised=$isInitialised, old=$oldIsInitialised")
+        }
+        if (oldIsInitialised) {
           val hasInitialOutput = cellFunc.calculate()
           getNewColumnTrigger.newColumnAdded(i, hasInitialOutput)
+          if (hasInitialOutput) setInitialised(i)
         }
         return cellFunc
       }
@@ -338,7 +346,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   /**
    * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
    * e.g. we could have a vector of name->RandomStream and generate a derived
-   * todo: should we delete the derive method and always pass (k,v)
+   * todo: should we delete the derive method and always pass (k,v) - no, I don't think so as it encourages people to think that X could be invariant
    * @param cellFromEntry
    * @tparam Y
    * @return
@@ -359,8 +367,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
-    return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap))
+    return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=true))
   }
+
+  def take[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
+    return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=false))
+  }
+
+
 
   def sample(evt:EventGraphObject):VectTerm[K,X] = {
     val output: VectorStream[K, X] = new ChainedVector[K, X](input, env) {
