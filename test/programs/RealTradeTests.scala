@@ -114,17 +114,18 @@ object TradeCategories extends RealTradeTests {
 //  val universe = impl.asVector(List("MSFT.O", "AAPL.O", "IBM.N"))
   val universe = impl.asVector(List("MSFT.O"))
   val trades = universe.derive(u => getTradeEvents(u))
-  val mids = universe.derive(u => getQuoteEvents(u)).map(q => (q.bid + q.ask)*0.5 )
+  val quote = universe.derive(u => getQuoteEvents(u))
+  val mids = quote.map(q => (q.bid + q.ask) * 0.5)
 
-  def categorise(p:(Trade, Double)):(String, Trade) = {
+  def categorise(p:(Trade, Quote)):(String, Trade) = {
     p match {
-    case (trade, mid) if (trade.price > mid) => ("BUY", trade):(String,Trade)
-    case (trade, mid) if (trade.price < mid) => ("SELL", trade):(String,Trade)
+    case (trade, mid) if (trade.price >= mid.ask) => ("BUY", trade):(String,Trade)
+    case (trade, mid) if (trade.price <= mid.bid) => ("SELL", trade):(String,Trade)
     case (trade,_) => ("NONE", trade):(String,Trade)
     }}
 
 
-  val tradeCategory = trades.take(mids, identity).map(categorise)
+  val tradeCategory = trades.take(quote, identity).map(categorise)
   // crude impl before I have VectTerm.by
   val buys = tradeCategory.filter(_._1 == "BUY")
   val sells = tradeCategory.filter(_._1 == "SELL")
@@ -138,7 +139,9 @@ object TradeCategories extends RealTradeTests {
 //  val buyPressure = buys.map(_._2.quantity).fold_all(new Sum[Long]).map(_.sum)
 //  val sellPressure = sells.map(_._2.quantity).fold_all(new Sum[Long]).map(_.sum)
  val buySellDiff = buyPressure.join(sellPressure).map(e => e._1 - e._2)
-  Plot.plot(buySellDiff).plot(midCount)
+  Plot.plot(buySellDiff)
+//  Plot.plot(buys.map(_._2.price)).plot(sells.map(_._2.price)).plot(mid.map(_._2.price))
+//  Plot.plot(mid.map(_._2.price)).plot(mids)
 //  out("cat")(tradeCategory)
   impl.run(100000)
 }
