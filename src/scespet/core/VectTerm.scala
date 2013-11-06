@@ -273,8 +273,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   /**
-   * used to build a set from the values in a vector
-   * the new vector acts like a set (key == value), generated values are folded into it.
+   * This is like "map", but the outputs of the map function are flattened and presented as a MultiStream (acting as a set, i.e. key == value).
+   *
+   * An example usage is when we have a stream that is exposing a batch of new elements on each fire (e.g. a Dictionary that notifies of batches of new elements)
+   * We can transform this stream (or multistream) into a dynamically growing set of the unique values
+   *
    *
    * todo: maybe call this "flatten", "asSet" ?
    */
