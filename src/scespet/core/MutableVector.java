@@ -129,6 +129,11 @@ public class MutableVector<X> implements VectorStream<X,X> {
         }
 
         @Override
+        public boolean initialised() {
+            return true;
+        }
+
+        @Override
         public X value() {
             return next;
         }

@@ -44,6 +44,8 @@ trait FuncCollector {
  * @tparam X
  */
 trait HasVal[X] extends HasValue[X]{
+  def initialised:Boolean
+
   def value:X
 
   /**
@@ -59,12 +61,14 @@ object HasVal {
   implicit def funcToHasVal[F <: EventGraphObject](f:F) = new HasVal[F] {
     val value = f
     def trigger = value.asInstanceOf[EventGraphObject]
+    def initialised = true
   }
 }
 
 class IsVal[F <: EventGraphObject](f:F) extends HasVal[F] {
   val value = f
   def trigger = f
+  def initialised = true
 }
 
 trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
@@ -72,6 +76,7 @@ trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
    */
   def trigger = this
+  var initialised = true
 }
 
 /**

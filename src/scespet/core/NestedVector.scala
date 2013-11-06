@@ -22,6 +22,7 @@ class NestedVector[K2 ,K, V](source:VectorStream[K,V], keyFunc:K => K2, env:type
 
   class MyCell(val value:VectorStream[K,V]) extends HasVal[VectorStream[K,V]] {
     val trigger = value.getNewColumnTrigger
+    var initialised = true
   }
 
   def newCell(i: Int, key: K2) = {

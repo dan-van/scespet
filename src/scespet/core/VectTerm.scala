@@ -45,7 +45,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       new HasVal[X] {
         def value = holder.value
         def trigger = holder.getTrigger
-       }
+        def initialised = holder.initialised
+      }
     } else {
       // construct an empty slot and bind it when the key appears
       val valueHolder = new ChainedCell[X]
