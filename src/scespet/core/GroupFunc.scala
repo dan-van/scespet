@@ -22,10 +22,9 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
 
   def newCell(i: Int, key: K) = {
     val cell = new ValueFunc[V](source.value, env)  //todo: may not be necessary to do source.value, init later?
+    // initialise it
     cell.calculate()
-    // this cell is now initialised
-    getNewColumnTrigger.newColumnAdded(i, true)
-    setInitialised(i)
+    getNewColumnTrigger.newColumnAdded(i)
     cell
   }
 

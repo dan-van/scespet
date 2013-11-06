@@ -27,6 +27,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
   def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
     val listener = new AbsFunc[X,Y] {
       value = y
+      initialised = true
       def calculate() = {
         y.add(input.value);
         true
@@ -54,6 +55,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
       def calculate() = {
         if (env.hasChanged(termination)) {
           value = reduction
+          initialised = true
           true
         } else {
           y.add(input.value)
@@ -69,6 +71,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
     val listener = new AbsFunc[X,Y] {
       def calculate() = {
         value = f(input.value);
+        initialised = true
         true
       }
     }
@@ -83,6 +86,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
       def calculate() = {
         if (accept(input.value)) {
           value = input.value
+          initialised = true
           true
         } else {
           false
@@ -165,6 +169,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
       def calculate() = {
         var aY:Y = y.input.value
         value = (input.value, aY)
+        initialised = true
         true
       }
     }
@@ -182,6 +187,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
 
       def calculate() = {
         value = (input.value, y.input.value)
+        initialised = true
         true
       }
     }

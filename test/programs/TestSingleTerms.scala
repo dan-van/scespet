@@ -122,9 +122,9 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
   }
 
   test("reduce each") {
-    val elements = List.fill(11)(2)
+    val elements = (1 to 11)
     val expectedOut = elements.toList.grouped(3).map( _.reduce( _+_ )).toList
-    expectedOut should be(List(6, 6, 6, 4))
+    expectedOut should be(List(6, 15, 24, 21))
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)

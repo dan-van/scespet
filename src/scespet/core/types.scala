@@ -24,13 +24,17 @@ class Root[X](builder :types.Env => HasVal[X]) extends UpdatingHasVal[X] {
 
   def init(newEnv :types.Env) = {
     delegate = builder(newEnv)
+    initialised = delegate.initialised
     // downstream listeners are assuming I will fire when I have a new value.
     // to make this happen, we need to bind up a listener to our true underlier
     newEnv.addListener(delegate.trigger, this)
   }
   def value: X = delegate.value
 
-  def calculate(): Boolean = true
+  def calculate(): Boolean = {
+    initialised = true
+    true
+  }
 }
 
 trait FuncCollector {
@@ -76,7 +80,7 @@ trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
    */
   def trigger = this
-  var initialised = true
+  var initialised = false
 }
 
 /**
@@ -88,6 +92,7 @@ trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
  */
 class Generator[Y](initVal:Y, f:()=>Y) extends UpdatingHasVal[Y] {
   var value = initVal
+  initialised = true
 
   def calculate():Boolean = {
     value = f()

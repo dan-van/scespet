@@ -50,9 +50,6 @@ public class MutableVector<X> implements VectorStream<X,X> {
             values.add(x);
             Cell<X> cell = new Cell<X>(x);
             cells.add(cell);
-            // this cell is initialised
-            initialised.add(true);
-            reshaped.newColumnAdded(i, true);
             return true;
         }
         return false;
@@ -79,11 +76,6 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
     public List<X> getValues() {
         return values;
-    }
-
-    @Override
-    public boolean initialised(int i) {
-        return initialised.get(i);
     }
 
     public void setInitialised(int i) {

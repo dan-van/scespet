@@ -22,6 +22,7 @@ class BucketMaintainer[Y <: Reduce[X], X](input:HasVal[X], newBFunc:() => Y, tri
       println(s"Starting new reduce. Old = $nextBucket, bucketTrigger = $newBucketTrigger")
       if (nextBucket != null) {
         value = nextBucket
+        initialised = true
         closedBucket = true
       }
       nextBucket = newBFunc.apply()

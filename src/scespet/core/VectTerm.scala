@@ -56,7 +56,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         def calculate():Boolean = {
           for (i <- searchedUpTo to input.getSize - 1) {
             if (input.getKey(i) == k) {
-              if (newColumns.newColumnHasValue(i)) {
+              if (input.getValueHolder(i).initialised()) {
                 valueHolder.calculate()
               }
               valueHolder.bindTo(input.getValueHolder(i))
@@ -88,6 +88,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
     def calculate() = {
       value = source.value
+      initialised = true
       true
     }
 
@@ -100,9 +101,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   class VectorMap[Y](f:VectorStream[K,X] => Y) extends UpdatingHasVal[Y] {
     // not convinced we should initialise like this?
     var value:Y = if (input.getSize > 0) {
+      initialised = true
       f.apply(input)
     } else {
-      println("Initial vector is empty, not sure I should init")
+      println("Initial vector is empty, i.e. uninitialised. Is it right to apply the mapping function to the empty vector?")
+      initialised = true
       f.apply(input)
     }
 
@@ -130,17 +133,18 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def map[Y: TypeTag](f:X=>Y, exposeNull:Boolean = true):VectTerm[K,Y] = {
     if ( (typeOf[Y] =:= typeOf[EventGraphObject]) ) println(s"WARNING: if you meant to listen to events from ${typeOf[Y]}, you should use 'derive'")
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
-//      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+
       var value:Y = _
       def calculate() = {
-        var in = input.get(index)
-        if (in == null) {
-          var isInitialised = input.initialised(index)
+        val inputValue = input.get(index)
+        if (inputValue == null) {
+          var isInitialised = input.getValueHolder(index).initialised()
           println(s"null input, isInitialised=$isInitialised")
         }
-        val y = f(in)
+        val y = f(inputValue)
         if (exposeNull || y != null) {
           value = y
+          initialised = true
           true
         } else {
           false
@@ -173,6 +177,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         val oy = classTag.unapply(inputVal)
         if (oy.isDefined) {
           value = oy.get
+          initialised = true
           true
         } else {
           false
@@ -191,6 +196,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         val inputVal = input.get(index)
         if (accept(inputVal)) {
           value = inputVal
+          initialised = true
           true
         } else {
           false
@@ -204,6 +210,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y] = {
     val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
       val value = reduceBuilder(key)
+      initialised = true  // I think that reductions start of initialised, but pending some datapoints to be added
       def calculate():Boolean = {
         val x: X = input.get(index)
         value.add(x)
@@ -224,6 +231,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     def calculate():Boolean = {
       if (env.hasChanged(termination)) {
         value = reduction
+        initialised = true
         true
       } else {
         val x: X = input.get(index)
@@ -256,24 +264,22 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
-        var sourceCell = input.getValueHolder(i)
+        val sourceCell = input.getValueHolder(i)
         val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
         env.addListener(sourceTrigger, cellFunc)
         // initialise the cell
-        var hasInputValue = input.getNewColumnTrigger.newColumnHasValue(i)
-        var isInitialised = input.initialised(i)
-        var hasChanged = env.hasChanged(sourceTrigger)
+        val hasInputValue = sourceCell.initialised()
+        val hasChanged = env.hasChanged(sourceTrigger)
         if (hasChanged && !hasInputValue) {
           println("WARN: didn't expect this")
         }
         val oldIsInitialised = hasInputValue || hasChanged
-        if (oldIsInitialised != isInitialised) {
-          println(s"Is initialised conflict for $i: initialised=$isInitialised, old=$oldIsInitialised")
-        }
         if (oldIsInitialised) {
           val hasInitialOutput = cellFunc.calculate()
-          getNewColumnTrigger.newColumnAdded(i, hasInitialOutput)
-          if (hasInitialOutput) setInitialised(i)
+
+          if (hasInitialOutput && ! cellFunc.initialised) {
+            throw new AssertionError("Cell should have been initialised by calculate: "+cellFunc+" for key "+key)
+          }
         }
         return cellFunc
       }
@@ -355,7 +361,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y] = {
     val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K) = {
-        val valuePresent = input.getNewColumnTrigger.newColumnHasValue(i)
+        val valuePresent = input.getValueHolder(i).initialised()
         if (!valuePresent) {
           // not sure what to do
           cellFromEntry(key, input.get(i))
@@ -385,6 +391,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
         def calculate() = {
           value = input.get(i)
+          initialised = true
           true
         }
       }

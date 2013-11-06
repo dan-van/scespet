@@ -17,15 +17,19 @@ import scala.collection.mutable
 class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y], env:types.Env, keyMap:K => K2, fireOnOther:Boolean = true) extends AbstractVectorStream[K, (X,Y)](env) {
 
   class CellTuple(val key:K) extends UpdatingHasVal[(X,Y)]{
+    initialised = false
+
+    var xCell : HasValue[X] = _
     var xIndex = -1
     def bindToX() {
       xIndex = xVect.getKeys.indexOf(key)
       if (xIndex >= 0) {
-        val xTrigger = xVect.getTrigger(xIndex)
-        env.addListener(xTrigger, this)
+        xCell = xVect.getValueHolder(xIndex)
+        env.addListener(xCell.getTrigger, this)
       }
     }
 
+    var yCell : HasValue[Y] = _
     var yIndex = -1
     def bindToY(yi:Int) {
       if (yIndex == yi) return //already bound
@@ -34,35 +38,38 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
       if (yIndex >= 0)
         throw new UnsupportedOperationException(s"keyMap function maps multiple keys in Y onto $key. Mapped keys: { ${yVect.getKey(yIndex)}, $yKey")
       yIndex = yi
+      yCell = yVect.getValueHolder(yIndex)
       println(s"joined y:${yKey} (index $yIndex) and x:$key (index $xIndex)")
       if (fireOnOther) {
-        env.addListener(yVect.getTrigger(yIndex), this)
+        env.addListener(yCell.getTrigger, this)
       }
     }
 
     def calculate() = {
       var fire = false
-      if (env.hasChanged( xVect.getTrigger(xIndex)) ) {
+      if (env.hasChanged( xCell.getTrigger()) ) {
+        // NODEPLOY
         println("x fired")
       }
-      val xVal = if (xIndex >= 0 && (xVect.initialised(xIndex) || env.hasChanged( xVect.getTrigger(xIndex)) )) {
+      val xVal = if (xIndex >= 0 && (xCell.initialised() || env.hasChanged( xCell.getTrigger()) )) {
         // damn, strictly if the cell has changed, then xVect.initialised(xIndex) should be true
         // unfortunately there is no causality between the listener that updates initialised and this listener
         fire = true
-        xVect.get(xIndex)
+        xCell.value()
       } else {
         null.asInstanceOf[X]
       }
-      val yVal = if (yIndex >= 0 && yVect.initialised(yIndex)) {
-        if (fireOnOther && env.hasChanged( yVect.getTrigger(yIndex))) {
+      val yVal = if (yIndex >= 0 && yCell.initialised()) {
+        if (fireOnOther && env.hasChanged( yCell.getTrigger())) {
           fire = true
         }
-        yVect.get(yIndex)
+        yCell.value()
       } else {
         null.asInstanceOf[Y]
       }
       if (fire) {
         value = ( xVal , yVal)
+        initialised = true
         true
       } else false
     }
@@ -120,8 +127,9 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
     if (cell.xIndex >= 0 || cell.yIndex >= 0) {
       val fired = cell.calculate()
       // this cell is now initialised
-      getNewColumnTrigger.newColumnAdded(i, fired)
-      if (fired) setInitialised(i)
+      if (fired && !cell.initialised) {
+        throw new AssertionError("Cell should have been initialised by calculate: "+cell+" for key "+key)
+      }
     }
     cell
   }

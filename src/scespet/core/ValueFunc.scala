@@ -9,6 +9,7 @@ package scespet.core
  */
 class ValueFunc[V](var value:V, env:types.Env) extends UpdatingHasVal[V] {
   def setValue(newVal:V) {
+    this.initialised = true
     this.value = newVal
     env.wakeupThisCycle(this);
   }

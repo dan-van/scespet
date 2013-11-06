@@ -28,14 +28,10 @@ class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => Option[K2], 
     val sourceCell = source.getValueHolder(sourceIndex)
     val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
 
-    val hasInputValue = source.getNewColumnTrigger.newColumnHasValue(sourceIndex)
+    val hasInputValue = sourceCell.initialised()
     val hasChanged = env.hasChanged(sourceTrigger)
     if (hasChanged && !hasInputValue) {
       println("WARN: didn't expect this")
-    }
-    if (hasInputValue || hasChanged) {
-      getNewColumnTrigger.newColumnAdded(newIndex, true)
-      setInitialised(newIndex)
     }
     // NOTE: yes, I'm returning the actual HasValue from the other vector, Maybe this is dangerous, and maybe I should chain them up?
     sourceCell

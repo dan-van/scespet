@@ -23,7 +23,6 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
     // TODO: stop worrying about external dependencies and use Trove native collections?
     private Map<K, Integer> indicies = new HashMap<K, Integer>();
     private List<K> keys = new ArrayList<K>();
-    private List<Boolean> initialised = new ArrayList<Boolean>();
 //    private List<F> functions = new ArrayList<F>();
     private List<HasValue<V>> valueHolders = new ArrayList<HasValue<V>>();
     private Environment env;
@@ -40,15 +39,6 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
     @Override
     public K getKey(int i) {
         return keys.get(i);
-    }
-
-    @Override
-    public boolean initialised(int i) {
-        return initialised.get(i);
-    }
-
-    public void setInitialised(int i) {
-        initialised.set(i, true);
     }
 
     public EventGraphObject getTrigger(int i) {
@@ -116,25 +106,20 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
             index = keys.size();
             indicies.put(key, index);
             keys.add(key);
-            initialised.add(false);
 
             // say this is not initialised, an implementation can override this to be true if necessary
             ReshapeSignal newColumnTrigger = getNewColumnTrigger();
-            newColumnTrigger.newColumnAdded(index, false);
-            HasValue<V> newValue = newCell(index, key);
+            newColumnTrigger.newColumnAdded(index);
+            final HasValue<V> newValue = newCell(index, key);
             valueHolders.add(newValue);
-            if (!initialised(index)) {
-                // strictly this is not safe, there is no causal ordering between this function that manages the 'initialised' state
-                // and a downstream listener that may try to determine if the cell is initialised.
-                // however I think that most cases would be using a trigger from the cell as reason-enough to assume there is a value
-                // TODO: the correct fix to this would be to add 'initialised' to HasValue, which both solves the problem and
-                // TODO: acknowledges that HasValue is conceptually a listenable Option
-                final Integer finalIndex = index;
+            if (! newValue.initialised()) {
                 final EventGraphObject cellFiredEvent = newValue.getTrigger();
                 env.addListener(cellFiredEvent, new Function() {
                     public boolean calculate() {
-                        logger.info("cell is now initialised for key "+key);
-                        setInitialised(finalIndex);
+                        logger.info("cell should now be initialised for key "+key);
+                        if (!newValue.initialised()) {
+                            logger.severe("cell didn't update initialised state: "+newValue.getTrigger());
+                        }
                         env.removeListener(cellFiredEvent, this);
                         return false;
                     }
