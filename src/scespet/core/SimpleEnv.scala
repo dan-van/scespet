@@ -55,6 +55,9 @@ class SimpleEnv() extends Environment {
   def run() {run(1000)}
 
   def run(n:Int) {
+    if (eventI == 0) {
+      if (!eventSourceQueue.isEmpty) eventTime = eventSourceQueue.head.getNextTime
+    }
     graph.applyChanges()
 
     val stopAt = eventI + n

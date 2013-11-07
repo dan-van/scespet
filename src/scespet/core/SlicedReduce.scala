@@ -24,7 +24,9 @@ class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEven
   var completedReduce : Y = _
 
   def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
-  initialised = value != null
+//  initialised = value != null
+  initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
+                      // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
 
   def calculate():Boolean = {
     var fire = emitType == ReduceType.CUMULATIVE // every cumulative event is exposed

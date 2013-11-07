@@ -210,10 +210,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y] = {
     val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
       val value = reduceBuilder(key)
-      initialised = true  // I think that reductions start of initialised, but pending some datapoints to be added
+      // NOTE: The semantics of this field should be consistent with SlicedReduce.initialised
+      initialised = false
       def calculate():Boolean = {
         val x: X = input.get(index)
         value.add(x)
+        initialised = true
         return true
       }
     }
