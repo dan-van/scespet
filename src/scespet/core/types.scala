@@ -155,7 +155,7 @@ trait BucketBuilder[X,T] {
   def slice_post(trigger:MacroTerm[_]):MacroTerm[T]
 }
 
-trait BucketBuilderVect[K, X, T] {
+trait BucketBuilderVect[K, T] {
   def each(n:Int):VectTerm[K,T]
 
   /**
@@ -292,14 +292,14 @@ trait MultiTerm[K,X] {
 
   def sample(evt:EventGraphObject):VectTerm[K,X]
 
-  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y]
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = reduce[Y]((k:K) => newBFunc)
+  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y]
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, Y] = reduce[Y]((k:K) => newBFunc)
 
   def reduce_all[Y <: Reduce[X]](newBFunc: K => Y):VectTerm[K,Y]
   def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K,Y]  = reduce_all[Y]((k:K) => newBFunc)
 
-  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y]
-  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = fold[Y]((k:K) => newBFunc)
+  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y]
+  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, Y] = fold[Y]((k:K) => newBFunc)
   def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y]
   def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]   = fold_all[Y]((k:K) => reduceBuilder)
 

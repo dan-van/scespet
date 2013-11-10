@@ -43,7 +43,18 @@ class EnvTermBuilder(val env :types.Env) {
     import scala.collection.JavaConverters._
     new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
   }
+
+//  def reduce[B <: types.MFunc](aggregateBuilder: => B) :ReduceBuilder[B] = {
+//    new ReduceBuilder[B](aggregateBuilder)
+//  }
+
 }
+
+//class ReduceBuilder[B <: types.MFunc](aggregateBuilder : => B) {
+//  val bBuilder = aggregateBuilder
+//
+//  def join[X](MultiTerm[])
+//}
 
 object EnvTermBuilder {
   implicit def eventObjectToHasVal[X <: types.EventGraphObject](evtObj:X) :HasVal[X] = new IsVal(evtObj)

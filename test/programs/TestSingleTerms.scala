@@ -5,6 +5,7 @@ import scespet.core._
 import scespet.util._
 import org.junit.Test
 import org.scalatest.matchers.Matchers
+import scespet.core.types.MFunc
 
 
 /**
@@ -245,4 +246,58 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
       qty.fold(new Sum[Int]).each(2)
     }
   }
+
+
+  class MyBucket extends MFunc {
+    var countA = 0
+    var countB = 0
+
+    def calculate(): Boolean = {
+      true
+    }
+
+    def addA(a:Int) {countA += 1}
+  }
+  test("Bucket join") {
+    val elementsA = List(1, 2, 3, 4)
+    val elementsB = List(10, 30)
+    val streamA = impl.asStream( IteratorEvents(elementsA)((x,_) => x.toLong) )
+    val streamB = impl.asStream( IteratorEvents(elementsB)((x,_) => (x/10).toLong) )
+
+
+    impl.reduce(new MyBucket).join(streamA){}
+  }
+
+  class MySum {
+    var myInt = 0
+    def setMyInt(i:Int) {
+      myInt = i
+    }
+  }
+
+  object Base {
+    def reduce[X](x:X) :Reducer[X] = new Reducer(x)
+  }
+  class Reducer[X](var x:X) {
+    var intAdderFunc:(X,Int) => Unit = _
+    def setIntAdder(func:(X,Int) => Unit) = {
+      intAdderFunc = func
+      this
+    }
+    def setIntAdder2(func:X => Int => Unit) = {
+      intAdderFunc = Function.uncurried(func)
+      this
+    }
+    def addInt(i:Int) {
+      intAdderFunc(x, i)
+    }
+  }
+  var r1 = Base.reduce(new MySum()).setIntAdder((s,i) => s.setMyInt(i))
+  r1.addInt(10)
+  var r2 = Base.reduce(new MySum()).setIntAdder(_.setMyInt(_))
+  var r3 = Base.reduce(new MySum()).setIntAdder2(_.setMyInt)
+  r2.addInt(10)
+  Base.reduce(new MySum()).setIntAdder2(b => {i => b.setMyInt(i + 10)})
+  Base.reduce(new MySum()).setIntAdder2(b => {i => b.myInt = i})
+
 }

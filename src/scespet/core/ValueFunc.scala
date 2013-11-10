@@ -7,7 +7,9 @@ package scespet.core
  * Time: 21:17
  * To change this template use File | Settings | File Templates.
  */
-class ValueFunc[V](var value:V, env:types.Env) extends UpdatingHasVal[V] {
+class ValueFunc[V](env:types.Env) extends UpdatingHasVal[V] {
+  var value:V = _
+
   def setValue(newVal:V) {
     this.initialised = true
     this.value = newVal

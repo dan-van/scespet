@@ -401,7 +401,16 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, X](env)(output)
   }
 
-  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
+//  def reduceMulti[Y <: types.MFunc](newBFunc: K => Y)(valueAdder: Y=>X=>Unit):ReduceBuilderVect[K, Y] = new ReduceBuilderVect[K, Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
+  def reduceMulti[B <: types.MFunc](newBFunc: K => B)(valueAdder: B=>X=>Unit):Thing[K, B] = ???
 
-  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
+
+  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+}
+
+class Thing[K, B]() {//extends BucketBuilderVect[K,B]{
+  def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :Thing[K, B]= ???
+  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = ???
+
 }

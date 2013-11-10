@@ -21,10 +21,9 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
   val getNewColumnTrigger = new ReshapeSignal(env)
 
   def newCell(i: Int, key: K) = {
-    val cell = new ValueFunc[V](source.value, env)  //todo: may not be necessary to do source.value, init later?
+    val cell = new ValueFunc[V](env)
     // initialise it
     cell.calculate()
-    getNewColumnTrigger.newColumnAdded(i)
     cell
   }
 

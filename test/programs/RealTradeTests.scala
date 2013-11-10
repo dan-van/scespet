@@ -12,6 +12,7 @@ import org.msgpack.annotation.Message
 import org.msgpack.ScalaMessagePack._
 import programs.Trade
 import org.scalatest.time.Minutes
+import scala.concurrent.duration.{Duration, TimeUnit}
 
 // <- import MessagePack instance for scala
 
@@ -107,6 +108,35 @@ object TestPlots extends RealTradeTests {
   val quotes = impl.asStream( getQuoteEvents("MSFT.O") )
   //  val accvol = trades.map(_.quantity).fold_all(new Sum[Long])
   Plot.plot(quotes.map(_.bid), "Bid").plot(quotes.map(_.ask), "Ask").plot(trades.map(_.price), "Trade")
+  impl.run(10000)
+}
+
+object TestReduce extends RealTradeTests {
+  val universe = impl.asVector(List("MSFT.O", "AAPL.O", "IBM.N"))
+//  val universe = impl.asVector(List("MSFT.O"))
+  val trades = universe.derive(u => getTradeEvents(u))
+  val quotes = universe.derive(u => getQuoteEvents(u))
+
+  class Red(key:String) extends types.MFunc {
+    var t:Trade = _
+    var q:Quote = _
+    var events:Int = 0
+
+    def addTrade(t:Trade) {
+      this.t = t
+    }
+    def addQuote(q:Quote) {
+      this.q = q
+    }
+    def calculate(): Boolean = {
+      events += 1
+      true
+    }
+  }
+  import scala.concurrent.duration._
+  val oneMinute = new Timer(1 minute)
+  val summary = trades.reduceMulti(new Red(_))(_.addTrade).take(quotes)(_.addQuote).slice_post(oneMinute)
+  out("Summary")(summary)
   impl.run(10000)
 }
 
