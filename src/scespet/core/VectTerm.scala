@@ -401,16 +401,51 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, X](env)(output)
   }
 
-//  def reduceMulti[Y <: types.MFunc](newBFunc: K => Y)(valueAdder: Y=>X=>Unit):ReduceBuilderVect[K, Y] = new ReduceBuilderVect[K, Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
-  def reduceMulti[B <: types.MFunc](newBFunc: K => B)(valueAdder: B=>X=>Unit):Thing[K, B] = ???
+  def deriveB[B <: Bucket[_]](newBFunc: K => B):PreThing[K, B] = new PreThing[K, B](newBFunc, VectTerm.this.input, env)
 
   def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
 
   def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 }
 
-class Thing[K, B]() {//extends BucketBuilderVect[K,B]{
-  def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :Thing[K, B]= ???
-  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = ???
+class PreThing[K,B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
+  def fold() = new Thing(newBFunc, input, ReduceType.CUMULATIVE, env)
+  def reduce() = new Thing(newBFunc, input, ReduceType.LAST, env)
+}
+
+class Thing[K, B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _], emitType:ReduceType, env:types.Env) {
+  private var joins = List[BucketJoin[K, _, B]]()
+
+  def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :Thing[K, B] = {
+    joins :+= new BucketJoin[K, X, B](term.input, adder)
+    this
+  }
+
+  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = {
+    val sliceTrigger = trigger
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, sliceTrigger, newBFunc, joins, emitType, env)
+    return new VectTerm[K,B](env)(bucketJoinVector)
+  }
+//  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = {
+//    val sliceTrigger = trigger
+//    val chainedVector = new ChainedVector[K, B](input, env) {
+//      // todo: listen to reshapes on input vectors and link cells
+//
+//      def newCell(i: Int, key: K): SlicedBucket[B] = {
+//        val newBFuncFromKey = () => newBFunc(key)
+//        val cell = new SlicedBucket[B](sliceTrigger, false, newBFuncFromKey, emitType, env)
+//        for (j <- joins) {
+//          type V = Any
+//          val aJoin = j.asInstanceOf[DeferredJoin[B, V]]
+//          val foundIndex = aJoin.source.indexOf(key)
+//          if (foundIndex >= 0) {
+//            val valueHolder = aJoin.source.getValueHolder(foundIndex)
+//            cell.
+//          }
+//        }
+//      }
+//    }
+//    return new VectTerm[K,B](env)(chainedVector)
+//  }
 
 }

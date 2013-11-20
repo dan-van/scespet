@@ -264,8 +264,8 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val streamA = impl.asStream( IteratorEvents(elementsA)((x,_) => x.toLong) )
     val streamB = impl.asStream( IteratorEvents(elementsB)((x,_) => (x/10).toLong) )
 
-
-    impl.reduce(new MyBucket).join(streamA){}
+    val universe = impl.asVector(List("A"))
+//    universe.reduceB(new MyBucket).join(streamA){}
   }
 
   class MySum {

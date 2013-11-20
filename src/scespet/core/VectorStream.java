@@ -25,6 +25,10 @@ public interface VectorStream<K, V> {
     // this should be redundant now
     EventGraphObject getTrigger(int i);
 
+    /**
+     * The thing that fires when some new columns have been added to this vector
+     * @return
+     */
     ReshapeSignal getNewColumnTrigger();
 
     public static class ReshapeSignal implements Function {

@@ -117,7 +117,9 @@ object TestReduce extends RealTradeTests {
   val trades = universe.derive(u => getTradeEvents(u))
   val quotes = universe.derive(u => getQuoteEvents(u))
 
-  class Red(key:String) extends types.MFunc {
+  class Red(key:String) extends Bucket[Red] {
+    def value: Red = this
+
     var t:Trade = _
     var q:Quote = _
     var events:Int = 0
@@ -132,11 +134,51 @@ object TestReduce extends RealTradeTests {
       events += 1
       true
     }
+
+    override def toString: String = s"trade:$t, quote:$q, events:$events"
   }
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
-  val summary = trades.reduceMulti(new Red(_))(_.addTrade).take(quotes)(_.addQuote).slice_post(oneMinute)
+  val summary = trades.deriveB(new Red(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
   out("Summary")(summary)
+//  Plot.plot(summary.map(_.q.ask))
+  impl.run(50000)
+}
+
+object TestBucket extends RealTradeTests {
+  val universe = impl.asVector(List("MSFT.O"))
+//  val universe = impl.asVector(List("MSFT.O"))
+  val trades = universe.derive(u => getTradeEvents(u))
+  val quotes = universe.derive(u => getQuoteEvents(u))
+
+  class Red(key:String) extends Bucket[Int] {
+    var t:Trade = _
+    var q:Quote = _
+    var events:Int = 0
+
+    val tradeStream = trades(key).input
+    env.addListener(tradeStream.getTrigger, this)
+
+    val quoteStream = quotes(key).input
+    env.addListener(quoteStream.getTrigger, this)
+
+    def calculate(): Boolean = {
+      events += 1
+      if (env.hasChanged(tradeStream.getTrigger)) {
+        t = tradeStream.value
+      }
+      if (env.hasChanged(quoteStream.getTrigger)) {
+        q = quoteStream.value
+      }
+      true
+    }
+
+    def value: Int = events
+  }
+  import scala.concurrent.duration._
+  val oneMinute = new Timer(1 minute)
+  val summary = universe.deriveB(new Red(_)) reduce() slice_post(oneMinute)
+  Plot.plot(summary.map(_.events))
   impl.run(10000)
 }
 

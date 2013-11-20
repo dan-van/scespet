@@ -47,22 +47,14 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
 
     def calculate() = {
       var fire = false
-      if (env.hasChanged( xCell.getTrigger()) ) {
-        // NODEPLOY
-        println("x fired")
-      }
-      val xVal = if (xIndex >= 0 && (xCell.initialised() || env.hasChanged( xCell.getTrigger()) )) {
-        // damn, strictly if the cell has changed, then xVect.initialised(xIndex) should be true
-        // unfortunately there is no causality between the listener that updates initialised and this listener
+      val xVal = if (xIndex >= 0 && xCell.initialised() ) {
         fire = true
         xCell.value()
       } else {
         null.asInstanceOf[X]
       }
       val yVal = if (yIndex >= 0 && yCell.initialised()) {
-        if (fireOnOther && env.hasChanged( yCell.getTrigger())) {
-          fire = true
-        }
+        fire = true
         yCell.value()
       } else {
         null.asInstanceOf[Y]
