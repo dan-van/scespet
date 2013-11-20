@@ -17,6 +17,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
     private Environment env;
     private ArrayList<X> values = new ArrayList<X>();
     private ArrayList<HasValue<X>> cells = new ArrayList<HasValue<X>>();
+    private ArrayList<Boolean> initialised = new ArrayList<>();
     private Set<X> uniqueness = new HashSet<X>();
     Boolean elementsListenable = null;
 
@@ -49,8 +50,6 @@ public class MutableVector<X> implements VectorStream<X,X> {
             values.add(x);
             Cell<X> cell = new Cell<X>(x);
             cells.add(cell);
-            // this cell is initialised
-            reshaped.newColumnAdded(i, true);
             return true;
         }
         return false;
@@ -77,6 +76,10 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
     public List<X> getValues() {
         return values;
+    }
+
+    public void setInitialised(int i) {
+        initialised.set(i, true);
     }
 
     @Override
@@ -115,6 +118,11 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
         public Cell(X next) {
             this.next = next;
+        }
+
+        @Override
+        public boolean initialised() {
+            return true;
         }
 
         @Override

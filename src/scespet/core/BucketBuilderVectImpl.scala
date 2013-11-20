@@ -9,7 +9,7 @@ import gsa.esg.mekon.core.EventGraphObject
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFuncFromKey:(K) => Y, inputTerm:VectTerm[K, X], emitType:ReduceType,  env:types.Env) extends BucketBuilderVect[K, X, Y] {
+class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFuncFromKey:(K) => Y, inputTerm:VectTerm[K, X], emitType:ReduceType,  env:types.Env) extends BucketBuilderVect[K, Y] {
   val newBFunc = () => newBFuncFromKey(null.asInstanceOf[K])
   val inputVectorStream: VectorStream[K, X] = inputTerm.input
 

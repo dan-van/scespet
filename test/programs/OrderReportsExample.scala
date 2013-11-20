@@ -100,17 +100,19 @@ object Test4 extends OrderReportsExample {
 object TestN extends OrderReportsExample {
   def doBody() {
 
-    val orderWindows = orderEvents.by(_.orderId).map(!_.isInstanceOf[Terminate])
-    //  val orderIdToName = collection.mutable.HashMap[String, String]()
-    //  orderEvents.filterType[NewOrder].map(o => orderIdToName.put(o.orderId, o.stock))
-    //  def orderIdToWindow(id:String) = orderWindows.input.getValueHolder(orderWindows.input.getKeys.indexOf(id))
-    //  val orderIdToTrades = orderEvents.by(_.orderId).filterType[NewOrder].joinf(o => priceFactory.getTrades(o.stock))
-    val orderIdToTrades = orderEvents.by(_.orderId).filterType[NewOrder].derive2((k,v) => priceFactory.getTrades(v.stock))
-    //  out ("ordId:trades ") { orderIdToTrades.reduceNoMacro( new Sum ).window( orderWindows ) }
-    out ("ordId:trades ") { orderIdToTrades.map(_.qty.toInt).reduce( new Sum[Int] ).window( orderWindows ) }
-    //  orderIdToTrades.map(_.value.qty.toInt).reduceNoMacro(new Sum).window( x => orderIdToWindow(x)  )
-    //  orderIdToTrades.reduce(new Sum).window(id => orderWindows.get(id)) //todo
-    //  out("Rand") {trades}
-    //  out("OrderOpen") {orderWindows}
+    val eventsById = orderEvents.by(_.orderId)
+    val orderActive = eventsById.map(!_.isInstanceOf[Terminate])
+    val orderIdToStock = eventsById.filterType[NewOrder].map(_.stock)
+    val orderIdToTrades = eventsById.derive(id => {val stock = orderIdToStock(id).value; priceFactory.getTrades(stock)})
+    out ("ordId:external Volume ") { orderIdToTrades.map(_.qty.toInt).reduce( new Sum[Int] ).window( orderActive ) }
+  }
+}
+
+  object TestTradeBuckets extends OrderReportsExample {
+  def doBody() {
+    val universe = impl.asVector(List("MSFT"))
+    val trades = universe.derive(priceFactory.getTrades)
+    val mids = universe.derive(priceFactory.getMids)
+    val tradeType = trades.join(mids).map({case (t,m) => if (t.price > m) {"Buy"} else if (t.price < m) {"Sell"} else "none"})
   }
 }

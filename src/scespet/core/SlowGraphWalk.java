@@ -6,11 +6,17 @@ import gsa.esg.mekon.core.Function;
 import java.util.*;
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 02/12/2012
- * Time: 22:19
- * To change this template use File | Settings | File Templates.
+ * This is a very simplistic, inefficient implementation of a state propagation graph.
+ * This is one implementation of the types.Env listener handling API, I have a significantly better implementation elsewhere.
+ * However, it is enough to drive the unit tests and development of Scespet, even though in any real production system you'd want something
+ * considerably better.
+ *
+ * Many concepts are not implemented in this class, or are only implemented to a bare minimum of correctness
+ * the topology of the graph propagation is correct (but can't handle cycles)
+ * 'wakeups' are poorly implemented.
+ * the contract between graph structure modification and when events use that new structure is not completely robust.
+ *
+ *
  */
 public class SlowGraphWalk {
 
@@ -149,7 +155,23 @@ public class SlowGraphWalk {
 
     public boolean hasChanged(EventGraphObject obj) {
         Node node = getNode(obj);
+        return hasChanged(node);
+    }
+
+    private boolean hasChanged(Node node) {
         return node.lastFired == cycleCount && cycleCount >= 0;
+    }
+
+    public Iterable<EventGraphObject> getTriggers(EventGraphObject obj) {
+        Node node = getNode(obj);
+        // should I bring in Guava for functional filtered iterators, or just convert this to scala?
+        ArrayList<EventGraphObject> changed = new ArrayList<>(node.in.size());
+        for (Node in : node.in) {
+            if (hasChanged(in)) {
+                changed.add(in.getGraphObject());
+            }
+        }
+        return changed;
     }
 
     private void propagateOrder(Node targetNode, int greaterThan) {

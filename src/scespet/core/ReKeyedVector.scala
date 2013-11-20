@@ -13,7 +13,7 @@ import gsa.esg.mekon.core.EventGraphObject
     // have a special class of Function that can provide multiple events? Then we'd drain them atomically in the graph walk
  *    I think
  */
-class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => Option[K2], env:types.Env) extends AbstractVectorStream[K2, V] with types.MFunc {
+class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => Option[K2], env:types.Env) extends AbstractVectorStream[K2, V](env) with types.MFunc {
   val getNewColumnTrigger = new ReshapeSignal(env)
   env.addListener(source.getNewColumnTrigger, this)
 
@@ -28,13 +28,10 @@ class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => Option[K2], 
     val sourceCell = source.getValueHolder(sourceIndex)
     val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
 
-    val hasInputValue = source.getNewColumnTrigger.newColumnHasValue(sourceIndex)
+    val hasInputValue = sourceCell.initialised()
     val hasChanged = env.hasChanged(sourceTrigger)
     if (hasChanged && !hasInputValue) {
       println("WARN: didn't expect this")
-    }
-    if (hasInputValue || hasChanged) {
-      getNewColumnTrigger.newColumnAdded(newIndex, true)
     }
     // NOTE: yes, I'm returning the actual HasValue from the other vector, Maybe this is dangerous, and maybe I should chain them up?
     sourceCell

@@ -1,11 +1,14 @@
 package scespet.core;
 
+import gsa.esg.mekon.core.Environment;
 import gsa.esg.mekon.core.EventGraphObject;
+import gsa.esg.mekon.core.Function;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 /**
  * Created with IntelliJ IDEA.
@@ -15,12 +18,17 @@ import java.util.Map;
  * To change this template use File | Settings | File Templates.
  */
 public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
+    private final static Logger logger = Logger.getLogger(AbstractVectorStream.class.getName());
+
+    // TODO: stop worrying about external dependencies and use Trove native collections?
     private Map<K, Integer> indicies = new HashMap<K, Integer>();
     private List<K> keys = new ArrayList<K>();
 //    private List<F> functions = new ArrayList<F>();
     private List<HasValue<V>> valueHolders = new ArrayList<HasValue<V>>();
+    private Environment env;
 
-    public AbstractVectorStream() {
+    public AbstractVectorStream(Environment env) {
+        this.env = env;
     }
 
     @Override
@@ -92,7 +100,7 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
         return valueHolders.size();
     }
 
-    public void add(K key) {
+    public void add(final K key) {
         Integer index = indicies.get(key);
         if (index == null) {
             index = keys.size();
@@ -101,9 +109,23 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
 
             // say this is not initialised, an implementation can override this to be true if necessary
             ReshapeSignal newColumnTrigger = getNewColumnTrigger();
-            newColumnTrigger.newColumnAdded(index, false);
-            HasValue<V> newValue = newCell(index, key);
+            newColumnTrigger.newColumnAdded(index);
+            final HasValue<V> newValue = newCell(index, key);
             valueHolders.add(newValue);
+            if (! newValue.initialised()) {
+                final EventGraphObject cellFiredEvent = newValue.getTrigger();
+                env.addListener(cellFiredEvent, new Function() {
+                    public boolean calculate() {
+                        logger.info("cell should now be initialised for key "+key);
+                        if (!newValue.initialised()) {
+                            logger.severe("cell didn't update initialised state: "+newValue.getTrigger());
+                        }
+                        env.removeListener(cellFiredEvent, this);
+                        return false;
+                    }
+                });
+            }
+
 //            F f = (F) newValue.getTrigger();
 //            functions.add(f);
         }

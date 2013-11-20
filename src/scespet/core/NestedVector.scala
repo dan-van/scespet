@@ -10,7 +10,7 @@ import scespet.core.VectorStream.ReshapeSignal
  *    or make a ReKeyedVector implement VectTerm[K2, List[V]]. But then mapping and transforming a List[V] whenever a single V updates is sucky (both from API and performance)
  *    I think
  */
-class NestedVector[K2 ,K, V](source:VectorStream[K,V], keyFunc:K => K2, env:types.Env) extends AbstractVectorStream[K2, VectorStream[K,V]] with types.MFunc {
+class NestedVector[K2 ,K, V](source:VectorStream[K,V], keyFunc:K => K2, env:types.Env) extends AbstractVectorStream[K2, VectorStream[K,V]](env) with types.MFunc {
   val inputAsTerm = new VectTerm[K,V](env)(source)
   val getNewColumnTrigger = new ReshapeSignal(env)
 
@@ -22,6 +22,7 @@ class NestedVector[K2 ,K, V](source:VectorStream[K,V], keyFunc:K => K2, env:type
 
   class MyCell(val value:VectorStream[K,V]) extends HasVal[VectorStream[K,V]] {
     val trigger = value.getNewColumnTrigger
+    var initialised = true
   }
 
   def newCell(i: Int, key: K2) = {

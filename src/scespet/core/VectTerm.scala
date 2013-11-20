@@ -6,6 +6,7 @@ import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
 import scespet.core.{VectorStream, UpdatingHasVal}
+import scespet.core.types.MFunc
 
 /**
  * Created with IntelliJ IDEA.
@@ -44,7 +45,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       new HasVal[X] {
         def value = holder.value
         def trigger = holder.getTrigger
-       }
+        def initialised = holder.initialised
+      }
     } else {
       // construct an empty slot and bind it when the key appears
       val valueHolder = new ChainedCell[X]
@@ -54,7 +56,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         def calculate():Boolean = {
           for (i <- searchedUpTo to input.getSize - 1) {
             if (input.getKey(i) == k) {
-              if (newColumns.newColumnHasValue(i)) {
+              if (input.getValueHolder(i).initialised()) {
                 valueHolder.calculate()
               }
               valueHolder.bindTo(input.getValueHolder(i))
@@ -86,6 +88,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
     def calculate() = {
       value = source.value
+      initialised = true
       true
     }
 
@@ -98,9 +101,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   class VectorMap[Y](f:VectorStream[K,X] => Y) extends UpdatingHasVal[Y] {
     // not convinced we should initialise like this?
     var value:Y = if (input.getSize > 0) {
+      initialised = true
       f.apply(input)
     } else {
-      println("Initial vector is empty, not sure I should init")
+      println("Initial vector is empty, i.e. uninitialised. Is it right to apply the mapping function to the empty vector?")
+      initialised = true
       f.apply(input)
     }
 
@@ -128,16 +133,18 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def map[Y: TypeTag](f:X=>Y, exposeNull:Boolean = true):VectTerm[K,Y] = {
     if ( (typeOf[Y] =:= typeOf[EventGraphObject]) ) println(s"WARNING: if you meant to listen to events from ${typeOf[Y]}, you should use 'derive'")
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
-//      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
+
       var value:Y = _
       def calculate() = {
-        var in = input.get(index)
-        if (in == null) {
-          println("null input")
+        val inputValue = input.get(index)
+        if (inputValue == null) {
+          var isInitialised = input.getValueHolder(index).initialised()
+          println(s"null input, isInitialised=$isInitialised")
         }
-        val y = f(in)
+        val y = f(inputValue)
         if (exposeNull || y != null) {
           value = y
+          initialised = true
           true
         } else {
           false
@@ -170,6 +177,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         val oy = classTag.unapply(inputVal)
         if (oy.isDefined) {
           value = oy.get
+          initialised = true
           true
         } else {
           false
@@ -188,6 +196,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         val inputVal = input.get(index)
         if (accept(inputVal)) {
           value = inputVal
+          initialised = true
           true
         } else {
           false
@@ -201,9 +210,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y] = {
     val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
       val value = reduceBuilder(key)
+      // NOTE: The semantics of this field should be consistent with SlicedReduce.initialised
+      initialised = false
       def calculate():Boolean = {
         val x: X = input.get(index)
         value.add(x)
+        initialised = true
         return true
       }
     }
@@ -221,6 +233,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     def calculate():Boolean = {
       if (env.hasChanged(termination)) {
         value = reduction
+        initialised = true
         true
       } else {
         val x: X = input.get(index)
@@ -253,18 +266,22 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
-        var sourceCell = input.getValueHolder(i)
+        val sourceCell = input.getValueHolder(i)
         val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
         env.addListener(sourceTrigger, cellFunc)
         // initialise the cell
-        var hasInputValue = input.getNewColumnTrigger.newColumnHasValue(i)
-        var hasChanged = env.hasChanged(sourceTrigger)
+        val hasInputValue = sourceCell.initialised()
+        val hasChanged = env.hasChanged(sourceTrigger)
         if (hasChanged && !hasInputValue) {
           println("WARN: didn't expect this")
         }
-        if (hasInputValue || hasChanged) {
+        val oldIsInitialised = hasInputValue || hasChanged
+        if (oldIsInitialised) {
           val hasInitialOutput = cellFunc.calculate()
-          getNewColumnTrigger.newColumnAdded(i, hasInitialOutput)
+
+          if (hasInitialOutput && ! cellFunc.initialised) {
+            throw new AssertionError("Cell should have been initialised by calculate: "+cellFunc+" for key "+key)
+          }
         }
         return cellFunc
       }
@@ -341,7 +358,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   /**
    * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
    * e.g. we could have a vector of name->RandomStream and generate a derived
-   * todo: should we delete the derive method and always pass (k,v)
+   * todo: should we delete the derive method and always pass (k,v) - no, I don't think so as it encourages people to think that X could be invariant
    * @param cellFromEntry
    * @tparam Y
    * @return
@@ -349,7 +366,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y] = {
     val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K) = {
-        val valuePresent = input.getNewColumnTrigger.newColumnHasValue(i)
+        val valuePresent = input.getValueHolder(i).initialised()
         if (!valuePresent) {
           // not sure what to do
           cellFromEntry(key, input.get(i))
@@ -362,8 +379,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
-    return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap))
+    return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=true))
   }
+
+  def take[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
+    return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=false))
+  }
+
+
 
   def sample(evt:EventGraphObject):VectTerm[K,X] = {
     val output: VectorStream[K, X] = new ChainedVector[K, X](input, env) {
@@ -373,6 +396,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
         def calculate() = {
           value = input.get(i)
+          initialised = true
           true
         }
       }
@@ -380,7 +404,51 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, X](env)(output)
   }
 
-  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
+  def deriveB[B <: Bucket[_]](newBFunc: K => B):PreThing[K, B] = new PreThing[K, B](newBFunc, VectTerm.this.input, env)
 
-  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
+
+  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+}
+
+class PreThing[K,B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
+  def fold() = new Thing(newBFunc, input, ReduceType.CUMULATIVE, env)
+  def reduce() = new Thing(newBFunc, input, ReduceType.LAST, env)
+}
+
+class Thing[K, B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _], emitType:ReduceType, env:types.Env) {
+  private var joins = List[BucketJoin[K, _, B]]()
+
+  def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :Thing[K, B] = {
+    joins :+= new BucketJoin[K, X, B](term.input, adder)
+    this
+  }
+
+  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = {
+    val sliceTrigger = trigger
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, sliceTrigger, newBFunc, joins, emitType, env)
+    return new VectTerm[K,B](env)(bucketJoinVector)
+  }
+//  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = {
+//    val sliceTrigger = trigger
+//    val chainedVector = new ChainedVector[K, B](input, env) {
+//      // todo: listen to reshapes on input vectors and link cells
+//
+//      def newCell(i: Int, key: K): SlicedBucket[B] = {
+//        val newBFuncFromKey = () => newBFunc(key)
+//        val cell = new SlicedBucket[B](sliceTrigger, false, newBFuncFromKey, emitType, env)
+//        for (j <- joins) {
+//          type V = Any
+//          val aJoin = j.asInstanceOf[DeferredJoin[B, V]]
+//          val foundIndex = aJoin.source.indexOf(key)
+//          if (foundIndex >= 0) {
+//            val valueHolder = aJoin.source.getValueHolder(foundIndex)
+//            cell.
+//          }
+//        }
+//      }
+//    }
+//    return new VectTerm[K,B](env)(chainedVector)
+//  }
+
 }

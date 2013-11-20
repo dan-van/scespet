@@ -24,6 +24,7 @@ package object programs {
     def generate(): (X, Long)
 
     def advanceState() {
+      initialised = true
       var xAndNext = generate()
       value = xAndNext._1
       if (xAndNext._2 == Long.MaxValue) {
@@ -38,6 +39,7 @@ package object programs {
     var getNextTime: Long = env.getEventTime()
     val random = new Random()
     var value = random.nextDouble()
+    initialised = true
 
     def trigger:scespet.core.types.EventGraphObject = this
 

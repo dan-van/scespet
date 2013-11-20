@@ -8,6 +8,7 @@ package gsa.esg.mekon.core;
  * To change this template use File | Settings | File Templates.
  */
 public interface Environment {
+    public Iterable<EventGraphObject> getTriggers(Object function);
     public boolean hasChanged(Object trigger);
     public void registerEventSource(EventSource source);
     public void setStickyInGraph(EventGraphObject source, boolean sticky);

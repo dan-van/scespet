@@ -20,9 +20,15 @@ public interface VectorStream<K, V> {
     V get(int i);
     K getKey(int i);
 
-    // todo: how about a HasVal<X> interface. i.e. a {trigger, value} tuple.
     HasValue<V> getValueHolder(int i);
+
+    // this should be redundant now
     EventGraphObject getTrigger(int i);
+
+    /**
+     * The thing that fires when some new columns have been added to this vector
+     * @return
+     */
     ReshapeSignal getNewColumnTrigger();
 
     public static class ReshapeSignal implements Function {
@@ -32,6 +38,7 @@ public interface VectorStream<K, V> {
             this.env = env;
         }
 
+        // todo: remnant of an old implementation, clean up, maps no longer needed
         private Map<Integer, Boolean> newColumnHasValue = Collections.emptyMap();
         private Map<Integer, Boolean> newColumnHasValue_pending = new TreeMap();
         @Override
@@ -41,17 +48,11 @@ public interface VectorStream<K, V> {
             return ! newColumnHasValue.isEmpty();
         }
 
-        public void newColumnAdded(int i, boolean hasInitialValue) {
+        public void newColumnAdded(int i) {
             if (newColumnHasValue_pending.isEmpty()) {
                 env.wakeupThisCycle(this);
             }
-            newColumnHasValue_pending.put(i, hasInitialValue);
-        }
-
-        public boolean newColumnHasValue(int i) {
-            Boolean hasValue = newColumnHasValue.get(i);
-            if (hasValue == null) throw new IllegalArgumentException(i+" is not a new column");
-            return hasValue;
+            newColumnHasValue_pending.put(i, true);
         }
     }
 }

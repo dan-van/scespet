@@ -14,7 +14,7 @@ import core.{EventGraphObject, EventSource}
  */
 
 class SimpleEvaluator() extends EnvTermBuilder(new SimpleEnv()) {
-  def run(iter:Integer = 1000) {
+  def run(iter:Int = 1000) {
     env.asInstanceOf[SimpleEnv].run(iter)
   }
 }
@@ -28,6 +28,7 @@ trait EventSourceX[X] extends gsa.esg.mekon.core.EventSource with HasVal[X] {
   def isComplete: Boolean = hasNext()
 
   def init(startTime: Long, endTime: Long) {}
+  var initialised = false // this needs to be set after first call to advanceState
 }
 
 object IteratorEvents {
@@ -49,6 +50,7 @@ class IteratorEvents[X](val iterable:TraversableOnce[X], val timeGet:(X, Int)=>L
   var value:X = _
   def trigger = this
   def advanceState() {
+    initialised = true
     value = peek
     nextI += 1
     if (iterator.hasNext) {

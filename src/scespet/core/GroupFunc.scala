@@ -13,7 +13,7 @@ import scespet.core.VectorStream.ReshapeSignal
  */
 // this one uses pur function calls and tracks updated indicies.
 // we could try a verison that uses wakeup nodes.
-class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends AbstractVectorStream[K, V] with types.MFunc {
+class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends AbstractVectorStream[K, V](env) with types.MFunc {
   {
     env.addListener(source.trigger, this)
   }
@@ -21,10 +21,9 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
   val getNewColumnTrigger = new ReshapeSignal(env)
 
   def newCell(i: Int, key: K) = {
-    val cell = new ValueFunc[V](source.value, env)  //todo: may not be necessary to do source.value, init later?
+    val cell = new ValueFunc[V](env)
+    // initialise it
     cell.calculate()
-    // this cell is now initialised
-    getNewColumnTrigger.newColumnAdded(i, true)
     cell
   }
 

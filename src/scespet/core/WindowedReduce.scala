@@ -45,6 +45,9 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowE
       inWindow = false
       fire = true
     }
+    if (fire) {
+      initialised = true
+    }
     return fire
   }
 }

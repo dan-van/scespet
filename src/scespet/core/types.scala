@@ -24,13 +24,17 @@ class Root[X](builder :types.Env => HasVal[X]) extends UpdatingHasVal[X] {
 
   def init(newEnv :types.Env) = {
     delegate = builder(newEnv)
+    initialised = delegate.initialised
     // downstream listeners are assuming I will fire when I have a new value.
     // to make this happen, we need to bind up a listener to our true underlier
     newEnv.addListener(delegate.trigger, this)
   }
   def value: X = delegate.value
 
-  def calculate(): Boolean = true
+  def calculate(): Boolean = {
+    initialised = true
+    true
+  }
 }
 
 trait FuncCollector {
@@ -44,6 +48,8 @@ trait FuncCollector {
  * @tparam X
  */
 trait HasVal[X] extends HasValue[X]{
+  def initialised:Boolean
+
   def value:X
 
   /**
@@ -59,12 +65,14 @@ object HasVal {
   implicit def funcToHasVal[F <: EventGraphObject](f:F) = new HasVal[F] {
     val value = f
     def trigger = value.asInstanceOf[EventGraphObject]
+    def initialised = true
   }
 }
 
 class IsVal[F <: EventGraphObject](f:F) extends HasVal[F] {
   val value = f
   def trigger = f
+  def initialised = true
 }
 
 trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
@@ -72,6 +80,7 @@ trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
    */
   def trigger = this
+  var initialised = false
 }
 
 /**
@@ -83,6 +92,7 @@ trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
  */
 class Generator[Y](initVal:Y, f:()=>Y) extends UpdatingHasVal[Y] {
   var value = initVal
+  initialised = true
 
   def calculate():Boolean = {
     value = f()
@@ -145,7 +155,7 @@ trait BucketBuilder[X,T] {
   def slice_post(trigger:MacroTerm[_]):MacroTerm[T]
 }
 
-trait BucketBuilderVect[K, X, T] {
+trait BucketBuilderVect[K, T] {
   def each(n:Int):VectTerm[K,T]
 
   /**
@@ -184,6 +194,15 @@ trait BucketBuilderVect[K, X, T] {
 
 trait Reduce[-X] extends Serializable {
   def add(x:X)
+}
+
+// todo - I think I want to merge Reduce and Bucket
+trait Bucket[V] extends types.MFunc with Serializable {
+  def value:V
+  /**
+   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
+   */
+  def complete(){}
 }
 
 trait Term[X] {
@@ -282,14 +301,14 @@ trait MultiTerm[K,X] {
 
   def sample(evt:EventGraphObject):VectTerm[K,X]
 
-  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y]
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = reduce[Y]((k:K) => newBFunc)
+  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y]
+  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, Y] = reduce[Y]((k:K) => newBFunc)
 
   def reduce_all[Y <: Reduce[X]](newBFunc: K => Y):VectTerm[K,Y]
   def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K,Y]  = reduce_all[Y]((k:K) => newBFunc)
 
-  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, X, Y]
-  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, X, Y] = fold[Y]((k:K) => newBFunc)
+  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y]
+  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, Y] = fold[Y]((k:K) => newBFunc)
   def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y]
   def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]   = fold_all[Y]((k:K) => reduceBuilder)
 

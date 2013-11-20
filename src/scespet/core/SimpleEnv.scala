@@ -5,6 +5,8 @@ import gsa.esg.mekon.core._
 import scespet.expression.{Scesspet, RootTerm, CapturedTerm}
 import java.util.TimeZone
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle
+import java.lang.Iterable
+import java.util.concurrent.TimeUnit
 
 /**
  * Created with IntelliJ IDEA.
@@ -20,6 +22,7 @@ class SimpleEnv() extends Environment {
   val graph = new SlowGraphWalk
 
   val eventSources = mutable.Set[EventSource]()
+  val initialised = mutable.Set[EventSource]()
 
   val terminationEvent = new types.MFunc {
     def calculate(): Boolean = {
@@ -55,7 +58,21 @@ class SimpleEnv() extends Environment {
   def run() {run(1000)}
 
   def run(n:Int) {
+    if (eventI == 0) {
+      if (!eventSourceQueue.isEmpty) eventTime = eventSourceQueue.head.getNextTime
+    }
     graph.applyChanges()
+    if (initialised.size < eventSources.size) {
+      var initTime = if (eventTime != 0) {
+        eventTime
+      } else {
+        (for (e <- eventSources if (e.hasNext && e.getNextTime != 0)) yield e.getNextTime).min
+      }
+      for (e <- eventSources if !initialised.contains(e)) {
+        e.init(initTime, TimeUnit.DAYS.toMillis(1000 * 365))
+        initialised.add( e )
+      }
+    }
 
     val stopAt = eventI + n
     while (! eventSourceQueue.isEmpty && eventI < stopAt) {
@@ -107,6 +124,10 @@ class SimpleEnv() extends Environment {
 
   def hasChanged(trigger: Any):Boolean = {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
+  }
+
+  def getTriggers(function: scala.Any): Iterable[EventGraphObject] = {
+    graph.getTriggers(function.asInstanceOf[EventGraphObject])
   }
 
   def getSharedObject[T](clazz: Class[T], args : AnyRef* ) = ???

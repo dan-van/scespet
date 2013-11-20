@@ -5,6 +5,7 @@ import scespet.core._
 import scespet.util._
 import org.junit.Test
 import org.scalatest.matchers.Matchers
+import scespet.core.types.MFunc
 
 
 /**
@@ -122,9 +123,9 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
   }
 
   test("reduce each") {
-    val elements = List.fill(11)(2)
+    val elements = (1 to 11)
     val expectedOut = elements.toList.grouped(3).map( _.reduce( _+_ )).toList
-    expectedOut should be(List(6, 6, 6, 4))
+    expectedOut should be(List(6, 15, 24, 21))
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)
@@ -245,4 +246,58 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
       qty.fold(new Sum[Int]).each(2)
     }
   }
+
+
+  class MyBucket extends MFunc {
+    var countA = 0
+    var countB = 0
+
+    def calculate(): Boolean = {
+      true
+    }
+
+    def addA(a:Int) {countA += 1}
+  }
+  test("Bucket join") {
+    val elementsA = List(1, 2, 3, 4)
+    val elementsB = List(10, 30)
+    val streamA = impl.asStream( IteratorEvents(elementsA)((x,_) => x.toLong) )
+    val streamB = impl.asStream( IteratorEvents(elementsB)((x,_) => (x/10).toLong) )
+
+    val universe = impl.asVector(List("A"))
+//    universe.reduceB(new MyBucket).join(streamA){}
+  }
+
+  class MySum {
+    var myInt = 0
+    def setMyInt(i:Int) {
+      myInt = i
+    }
+  }
+
+  object Base {
+    def reduce[X](x:X) :Reducer[X] = new Reducer(x)
+  }
+  class Reducer[X](var x:X) {
+    var intAdderFunc:(X,Int) => Unit = _
+    def setIntAdder(func:(X,Int) => Unit) = {
+      intAdderFunc = func
+      this
+    }
+    def setIntAdder2(func:X => Int => Unit) = {
+      intAdderFunc = Function.uncurried(func)
+      this
+    }
+    def addInt(i:Int) {
+      intAdderFunc(x, i)
+    }
+  }
+  var r1 = Base.reduce(new MySum()).setIntAdder((s,i) => s.setMyInt(i))
+  r1.addInt(10)
+  var r2 = Base.reduce(new MySum()).setIntAdder(_.setMyInt(_))
+  var r3 = Base.reduce(new MySum()).setIntAdder2(_.setMyInt)
+  r2.addInt(10)
+  Base.reduce(new MySum()).setIntAdder2(b => {i => b.setMyInt(i + 10)})
+  Base.reduce(new MySum()).setIntAdder2(b => {i => b.myInt = i})
+
 }
