@@ -295,6 +295,22 @@ trait MultiTerm[K,X] {
    */
   def toValueSet[Y]( expand: (X=>TraversableOnce[Y]) = ( (x:X) => Traversable(x.asInstanceOf[Y]) ) ):VectTerm[Y,Y]
 
+  /**
+   * derive a new vector by applying a function to the keys of the current vector.
+   * The new vector will have the same keys, but different values.
+   *
+   * I used to provide both key and value as inputs to the cell build, but removed this.
+   * If it is necessary to use the current value of a cell to build the derived cells one can do this:
+   * vect.derive(key => new MyCell(key, vect(key).value ))
+   *
+   * TODO: naming
+   * this is related to "map", but "map" is a function of value, this is a function of key
+   * maybe this should be called 'mapkey', or 'takef'? (i.e. we're 'taking' cells from the domain 'cellFromKey'?)
+   * the reason I chose 'join' is that we're effectively doing a left join of this vector onto a vector[domain, cellFromKey]
+   @param cellFromKey
+    * @tparam Y
+   * @return
+   */
   def derive[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y]
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)]
   def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)] = join(other, identity)
@@ -311,15 +327,6 @@ trait MultiTerm[K,X] {
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, Y] = fold[Y]((k:K) => newBFunc)
   def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y]
   def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]   = fold_all[Y]((k:K) => reduceBuilder)
-
-  /**
-   * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
-   * e.g. we could have a vector of name->RandomStream and generate a derived
-   * @param cellFromEntry
-   * @tparam Y
-   * @return
-   */
-  def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y]
 }
 
 

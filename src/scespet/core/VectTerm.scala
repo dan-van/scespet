@@ -352,28 +352,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, Y](env)(output)
   }
 
-  /**
-   * derive a new vector with the same key, but elements generated from the current element's key and listenable value holder
-   * e.g. we could have a vector of name->RandomStream and generate a derived
-   * todo: should we delete the derive method and always pass (k,v) - no, I don't think so as it encourages people to think that X could be invariant
-   * @param cellFromEntry
-   * @tparam Y
-   * @return
-   */
-  def derive2[Y]( cellFromEntry:(K,X)=>HasVal[Y] ):VectTerm[K,Y] = {
-    val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
-      def newCell(i: Int, key: K) = {
-        val valuePresent = input.getValueHolder(i).initialised()
-        if (!valuePresent) {
-          // not sure what to do
-          cellFromEntry(key, input.get(i))
-        } else {
-          cellFromEntry(key, input.get(i))
-        }
-      }
-    }
-    return new VectTerm[K, Y](env)(output)
-  }
 
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
     return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=true))
@@ -384,7 +362,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
 
-
+  /**
+   * we could build this out of other primitives (e.g. reduce, or 'take(derive).map') but this is more convenient and efficient
+   * @param evt
+   * @return
+   */
   def sample(evt:EventGraphObject):VectTerm[K,X] = {
     val output: VectorStream[K, X] = new ChainedVector[K, X](input, env) {
       def newCell(i: Int, key: K) = new UpdatingHasVal[X] {
@@ -401,10 +383,36 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, X](env)(output)
   }
 
+  /**
+   * todo: naming
+   * build a vector of Bucket instances with the same shape as this vector
+   *
+   * @param newBFunc
+   * @tparam B
+   * @return
+   */
   def deriveB[B <: Bucket[_]](newBFunc: K => B):PreThing[K, B] = new PreThing[K, B](newBFunc, VectTerm.this.input, env)
 
+  /**
+   * build a vector of Reduce instances that are driven with values from this vector.
+   * the Reduce instances do not expose intermediate state, but will only fire when the bucket is closed.
+   * e.g. if 'Sum' then we are exposing the total summation once the bucket is sealed (e.g. daily trade volume)
+   * @see #fold
+   * @param newBFunc
+   * @tparam Y
+   * @return
+   */
   def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
 
+  /**
+   * build a vector of Reduce instances that are driven with values from this vector.
+   * the Reduce instances expose their state changes.
+   * e.g. if 'Sum' then we are exposing the current cumulative sum as time goes by (e.g. accumulated trade volume)
+   * @see #reduce
+   * @param newBFunc
+   * @tparam Y
+   * @return
+   */
   def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 }
 
@@ -426,26 +434,4 @@ class Thing[K, B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _], emitT
     val bucketJoinVector = new MultiVectorJoin[K, B](input, sliceTrigger, newBFunc, joins, emitType, env)
     return new VectTerm[K,B](env)(bucketJoinVector)
   }
-//  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = {
-//    val sliceTrigger = trigger
-//    val chainedVector = new ChainedVector[K, B](input, env) {
-//      // todo: listen to reshapes on input vectors and link cells
-//
-//      def newCell(i: Int, key: K): SlicedBucket[B] = {
-//        val newBFuncFromKey = () => newBFunc(key)
-//        val cell = new SlicedBucket[B](sliceTrigger, false, newBFuncFromKey, emitType, env)
-//        for (j <- joins) {
-//          type V = Any
-//          val aJoin = j.asInstanceOf[DeferredJoin[B, V]]
-//          val foundIndex = aJoin.source.indexOf(key)
-//          if (foundIndex >= 0) {
-//            val valueHolder = aJoin.source.getValueHolder(foundIndex)
-//            cell.
-//          }
-//        }
-//      }
-//    }
-//    return new VectTerm[K,B](env)(chainedVector)
-//  }
-
 }
