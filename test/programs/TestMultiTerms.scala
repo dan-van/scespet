@@ -137,4 +137,34 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     Plot.plot(compared)
   }
 
+  test("by") {
+    val nameStream = impl.asStream(IteratorEvents(Array("FOO", "BAR", "BAZ", "FOOBAR"))( (x,i) => i.toLong + 1 ))
+    val byFirst = nameStream.by(_.charAt(0))
+    out("byFirst"){byFirst}
+    new StreamTest("F", List("FOO", "FOOBAR"), byFirst('F'))
+    new StreamTest("B", List("BAR", "BAZ"), byFirst('B'))
+  }
+
+  test("toValueSet") {
+    val nameStream = impl.asStream(IteratorEvents(Array("FOO", "BAR", "BAZ", "FOOBAR"))( (x,i) => i.toLong + 1 ))
+    val byFirst = nameStream.by(_.charAt(0))
+    val expanded = byFirst.toValueSet(x => List(x+".1", x+".2"))
+    out("byFirst "){expanded}
+    impl.run(1)
+    expectResult(List("FOO.1", "FOO.2"))(expanded.keys)
+    expectResult(expanded.keys)(expanded.values)
+
+    impl.run(1)
+    expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2"))(expanded.keys)
+    expectResult(expanded.keys)(expanded.values)
+
+    impl.run(1)
+    expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2"))(expanded.keys)
+    expectResult(expanded.keys)(expanded.values)
+
+    impl.run(1)
+    expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2", "FOOBAR.1", "FOOBAR.2"))(expanded.keys)
+    expectResult(expanded.keys)(expanded.values)
+  }
+
 }

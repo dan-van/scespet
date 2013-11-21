@@ -92,7 +92,7 @@ object Test4 extends OrderReportsExample {
     val eventsById = orderEvents.by(_.orderId)
     val orderIdToName = eventsById.filterType[NewOrder]().map(_.stock)
     val orderIdToIsOpen = eventsById.map(!_.isInstanceOf[Terminate])
-    val orderIdToTrades = orderIdToName.derive2((id,name) => priceFactory.getTrades(name))
+    val orderIdToTrades = orderIdToName.derive(id => priceFactory.getTrades( orderIdToName(id).value ))
     val accVolPerOrder = orderIdToTrades.map(_.qty).fold(new Sum[Double]).window(orderIdToIsOpen).map(_.sum)
     Plot.plot (accVolPerOrder)
   }

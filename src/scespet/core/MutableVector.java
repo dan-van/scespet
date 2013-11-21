@@ -50,6 +50,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
             values.add(x);
             Cell<X> cell = new Cell<X>(x);
             cells.add(cell);
+            reshaped.newColumnAdded(i);
             return true;
         }
         return false;
@@ -58,10 +59,8 @@ public class MutableVector<X> implements VectorStream<X,X> {
     public boolean addAll(Iterable<X> xs) {
         boolean added = false;
         for (X x : xs) {
+            // note, adding a colume will fire the reshaped signal
             added |= add(x);
-        }
-        if (added) {
-            env.wakeupThisCycle(reshaped);
         }
         return added;
     }
@@ -142,4 +141,18 @@ public class MutableVector<X> implements VectorStream<X,X> {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        StringBuilder buf = new StringBuilder("ValueSet{");
+        for (int i=0; i<getSize(); i++) {
+            buf.append(getKey(i)).append(", ");
+        }
+        if (getSize() > 0) {
+            buf.delete(buf.length() - 2, buf.length());
+        }
+        buf.append("}");
+        return buf.toString();
+    }
+
 }
