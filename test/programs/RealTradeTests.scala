@@ -139,7 +139,7 @@ object TestReduce extends RealTradeTests {
   }
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
-  val summary = trades.deriveB(new Red(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
+  val summary = trades.deriveSliced(new Red(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
   out("Summary")(summary)
 //  Plot.plot(summary.map(_.q.ask))
   impl.run(50000)
@@ -177,7 +177,7 @@ object TestBucket extends RealTradeTests {
   }
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
-  val summary = universe.deriveB(new Red(_)) reduce() slice_post(oneMinute)
+  val summary = universe.deriveSliced(new Red(_)) reduce() slice_post(oneMinute)
   Plot.plot(summary.map(_.events))
   impl.run(10000)
 }

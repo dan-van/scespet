@@ -22,8 +22,7 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
 
   def newCell(i: Int, key: K) = {
     val cell = new ValueFunc[V](env)
-    // initialise it
-    cell.calculate()
+    // cell value will get initialised by the subsequent call to "setValue" in this class's calculate method
     cell
   }
 
@@ -35,7 +34,12 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
       index = getSize()
       add(key)
     }
-    var func = getValueHolder(index).asInstanceOf[ValueFunc[V]]
+    // TODO: could think about calling fireAfterChangingListeners or wakeupThisCycle dependent on new cell or not?
+    // NOTE: this may not be necessary, as a new cell always results in a 'reshape' fire
+    // and therefore any chained vector will be interrogating values of new cells
+    // i.e. they do not need to be specifically triggered by the new cell itself.
+    // hmm, still worry that there could be some subtlety lurking here.
+    val func = getValueHolder(index).asInstanceOf[ValueFunc[V]]
     func.setValue(nextVal)
     return true
   }

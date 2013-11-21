@@ -63,10 +63,11 @@ class SimpleEnv() extends Environment {
     }
     graph.applyChanges()
     if (initialised.size < eventSources.size) {
-      var initTime = if (eventTime != 0) {
+      val initTime = if (eventTime != 0) {
         eventTime
       } else {
-        (for (e <- eventSources if (e.hasNext && e.getNextTime != 0)) yield e.getNextTime).min
+        val nonZero = for (e <- eventSources if (e.hasNext && e.getNextTime != 0)) yield e.getNextTime
+        if (nonZero.isEmpty) 0 else nonZero.min
       }
       for (e <- eventSources if !initialised.contains(e)) {
         e.init(initTime, TimeUnit.DAYS.toMillis(1000 * 365))

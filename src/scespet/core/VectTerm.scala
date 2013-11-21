@@ -56,10 +56,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         def calculate():Boolean = {
           for (i <- searchedUpTo to input.getSize - 1) {
             if (input.getKey(i) == k) {
-              if (input.getValueHolder(i).initialised()) {
-                valueHolder.calculate()
+              val inputCell = input.getValueHolder(i)
+              valueHolder.bindTo(inputCell)
+              if (inputCell.initialised()) {
+                valueHolder.calculate() // this is possibly overkill - I'll write the tests then remove this line, but I like the idea of it being ready as soon as we respond to the new column
+                env.wakeupThisCycle(valueHolder)
               }
-              valueHolder.bindTo(input.getValueHolder(i))
               env.removeListener(newColumns, this)
               searchedUpTo = i
               return true
@@ -353,6 +355,17 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
 
+  /**
+   * todo: naming
+   * build a vector of sliced Bucket instances with the same shape as this vector
+   *
+   * @param newBFunc
+   * @tparam B
+   * @return
+   */
+  def deriveSliced[B <: Bucket[_]](newBFunc: K => B):PreThing[K, B] = new PreThing[K, B](newBFunc, VectTerm.this.input, env)
+
+  
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
     return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=true))
   }
@@ -382,16 +395,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     }
     return new VectTerm[K, X](env)(output)
   }
-
-  /**
-   * todo: naming
-   * build a vector of Bucket instances with the same shape as this vector
-   *
-   * @param newBFunc
-   * @tparam B
-   * @return
-   */
-  def deriveB[B <: Bucket[_]](newBFunc: K => B):PreThing[K, B] = new PreThing[K, B](newBFunc, VectTerm.this.input, env)
 
   /**
    * build a vector of Reduce instances that are driven with values from this vector.
