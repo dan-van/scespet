@@ -60,7 +60,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
               valueHolder.bindTo(inputCell)
               if (inputCell.initialised()) {
                 valueHolder.calculate() // this is possibly overkill - I'll write the tests then remove this line, but I like the idea of it being ready as soon as we respond to the new column
-                env.wakeupThisCycle(valueHolder)
+                env.wakeupThisCycle(valueHolder)  // damn - this is firing before fireAfterChangingListeners catches the underlying cell
               }
               env.removeListener(newColumns, this)
               searchedUpTo = i
