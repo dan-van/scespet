@@ -178,6 +178,15 @@ trait BucketBuilderVect[K, T] {
    */
   def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, T]
 
+  /**
+   * collect data into buckets that get 'closed' *before* the given event fires.
+   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
+   * e.g. bucket trades into buckets created whenever the trade direction changes
+   *
+   * @see #slice_post
+   * @param trigger
+   * @return
+   */
   def slice_pre(trigger: EventGraphObject):VectTerm[K,T]
 
   /**
