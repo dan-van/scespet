@@ -1,12 +1,12 @@
 package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
-import java.util.logging.Logger
 import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
-import scespet.core.{VectorStream, UpdatingHasVal}
-import scespet.core.types.MFunc
+
+
+import scespet.core.MultiVectorJoin.BucketCell
 
 /**
  * Created with IntelliJ IDEA.
@@ -363,7 +363,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @tparam B
    * @return
    */
-  def deriveSliced[B <: Bucket[_]](newBFunc: K => B):PreSliceBuilder[K, B] = new PreSliceBuilder[K, B](newBFunc, VectTerm.this.input, env)
+  def deriveSliced[B <: Bucket](newBFunc: K => B):PreSliceBuilder[K, B] = new PreSliceBuilder[K, B](newBFunc, VectTerm.this.input, env)
 
   
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
@@ -419,12 +419,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 }
 
-class PreSliceBuilder[K,B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
+class PreSliceBuilder[K,B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
   def fold() = new SliceBuilder(newBFunc, input, ReduceType.CUMULATIVE, env)
   def reduce() = new SliceBuilder(newBFunc, input, ReduceType.LAST, env)
 }
 
-class SliceBuilder[K, B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _], emitType:ReduceType, env:types.Env) {
+class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], emitType:ReduceType, env:types.Env) {
   private var joins = List[BucketJoin[K, _, B]]()
 
   def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :SliceBuilder[K, B] = {
@@ -439,20 +439,47 @@ class SliceBuilder[K, B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _]
    * @param windowStream
    * @return
    */
-  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K, B] = ???
+  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K, B] = {
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+      def createBucketCell(key:K): BucketCell[B] = {
+        val newBFuncFromKey = () => newBFunc(key)
+        new WindowedBucket[B](windowStream.input, newBFuncFromKey, emitType, env)
+      }
+    }
+    return new VectTerm[K,B](env)(bucketJoinVector)
+  }
+
 
   /**
    * window each element in the vector with the given window function
    * @return
    */
-  def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, B] = ???
+  def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, B] = {
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+      def createBucketCell(key:K): BucketCell[B] = {
+        val newBFuncFromKey = () => newBFunc(key)
+        val cellWindowFunc = windowFunc(key)
+        new WindowedBucket[B](cellWindowFunc, newBFuncFromKey, emitType, env)
+      }
+    }
+    return new VectTerm[K,B](env)(bucketJoinVector)
+  }
 
   /**
    * do a takef on the given vector to get hasValue[Boolean] for each key in this vector.
    * if the other vector does not have the given key, the window will be assumed to be false (i.e. not open)
    * @return
    */
-  def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, B] = ???
+  def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, B] = {
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+      def createBucketCell(key:K): BucketCell[B] = {
+        val newBFuncFromKey = () => newBFunc(key)
+        val cellWindowFunc = windowVect(key)
+        new WindowedBucket[B](cellWindowFunc.input, newBFuncFromKey, emitType, env)
+      }
+    }
+    return new VectTerm[K,B](env)(bucketJoinVector)
+  }
 
   /**
    * collect data into buckets that get 'closed' *before* the given event fires.
@@ -465,7 +492,12 @@ class SliceBuilder[K, B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _]
    */
   def slice_pre(trigger: EventGraphObject):VectTerm[K,B] = {
     val sliceTrigger = trigger
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, sliceTrigger, sliceBefore = true, newBFunc, joins, emitType, env)
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+      def createBucketCell(key:K): BucketCell[B] = {
+        val newBFuncFromKey = () => newBFunc(key)
+        new SlicedBucket[B](sliceTrigger, sliceBefore=true, newBFuncFromKey, emitType, env)
+      }
+    }
     return new VectTerm[K,B](env)(bucketJoinVector)
   }
 
@@ -480,7 +512,12 @@ class SliceBuilder[K, B <: Bucket[_]](newBFunc: K => B, input:VectorStream[K, _]
    */
   def slice_post(trigger: EventGraphObject):VectTerm[K,B] = {
     val sliceTrigger = trigger
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, sliceTrigger, sliceBefore = false, newBFunc, joins, emitType, env)
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+      def createBucketCell(key:K): BucketCell[B] = {
+        val newBFuncFromKey = () => newBFunc(key)
+        new SlicedBucket[B](sliceTrigger, sliceBefore=false, newBFuncFromKey, emitType, env)
+      }
+    }
     return new VectTerm[K,B](env)(bucketJoinVector)
   }
 }

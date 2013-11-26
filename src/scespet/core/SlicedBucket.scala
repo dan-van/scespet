@@ -1,12 +1,13 @@
 package scespet.core
 
-import scespet.core.ReduceType
+
+import scespet.core.MultiVectorJoin.BucketCell
 
 
 /**
  * todo: remove code duplication with SlicedReduce
  */
-class SlicedBucket[Y <: types.MFunc](val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] {
+class SlicedBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] with BucketCell[Y] {
   private var inputBindings = List[InputBinding[_]]()
   private var newSliceNextEvent = false
 
@@ -25,11 +26,16 @@ class SlicedBucket[Y <: types.MFunc](val sliceEvents :types.EventGraphObject, va
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
 
-  def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
+  def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) :Boolean = {
     val inputBinding = new InputBinding[X](in, adder)
     inputBindings :+= inputBinding
-    // we can't apply the value right now, as we're not sure if this is a before or after slice event
     env.addListener(inputBinding, this)
+    if (in.initialised) {
+      inputBinding.addValueToBucket(nextReduce)
+      true
+    } else {
+      false
+    }
   }
 
   private class InputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) extends types.MFunc {
@@ -74,7 +80,7 @@ class SlicedBucket[Y <: types.MFunc](val sliceEvents :types.EventGraphObject, va
       }
     }
     // for 'cumulative' type, fire if we have added a value, and the bucket says its state has changed
-    val bucketFire = if (addedValueToBucket) nextReduce.calculate() else false
+    val bucketFire = if (addedValueToBucket) nextReduce.event() else false
     if (emitType == ReduceType.CUMULATIVE) fire |= bucketFire
     
     if (!sliceBefore && sliceTrigger) {

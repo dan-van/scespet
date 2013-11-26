@@ -206,8 +206,13 @@ trait Reduce[-X] extends Serializable {
 }
 
 // todo - I think I want to merge Reduce and Bucket
-trait Bucket[V] extends types.MFunc with Serializable {
-  def value:V
+trait Bucket extends {
+//trait Bucket extends types.MFunc with Serializable {
+  /**
+   * called to mark when we have finished calling custom 'adders'. effectively row-complete
+   */
+  def event() :Boolean
+
   /**
    * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
    */

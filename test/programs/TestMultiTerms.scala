@@ -167,4 +167,36 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     expectResult(expanded.keys)(expanded.values)
   }
 
+  test("deriveBucket") {
+    // set up two vector streams that fire events, sometimes co-inciding, sometimes independent
+    val counter = impl.asStream(IteratorEvents(0 to 19)((x,i)=>i.toLong))
+    val evenOdd = counter.by(c => if (c % 2 == 0) "Event" else  "Odd")
+    val div5 = evenOdd.filter(_ % 5 == 0)
+
+    // take a 'join' on both these streams into a MFunc style accumulation
+    class MyJavaFunction extends Bucket {
+      def value = this
+      var xChanged,yChanged = false
+      var countX, countY, countBoth = 0
+
+
+      def event(): Boolean = {
+        if (xChanged && yChanged) countBoth += 1
+        else if (xChanged) countX += 1
+        else if (yChanged) countY += 1
+        else fail("calculate called when nothing had changed")
+        xChanged = false; yChanged = false
+        true
+      }
+      def addX(x:Int) = xChanged = true
+      def addY(x:Int) = yChanged = true
+
+      override def toString: String = s"x:$countX, y:$countY, both:$countBoth"
+    }
+
+    val buckets = evenOdd.deriveSliced(k => new MyJavaFunction).fold(). join(evenOdd){b => b.addX}. join(div5){b => b.addY}. slice_pre(impl.env.getTerminationEvent)
+    out("in")(counter)
+    out("buckets")(buckets)
+  }
+
 }

@@ -7,11 +7,11 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import scespet.util.{_}
 
-import org.msgpack._
-import org.msgpack.annotation.Message
+
+
 import org.msgpack.ScalaMessagePack._
-import programs.Trade
-import org.scalatest.time.Minutes
+
+
 import scala.concurrent.duration.{Duration, TimeUnit}
 
 // <- import MessagePack instance for scala
@@ -117,7 +117,7 @@ object TestReduce extends RealTradeTests {
   val trades = universe.derive(u => getTradeEvents(u))
   val quotes = universe.derive(u => getQuoteEvents(u))
 
-  class Red(key:String) extends Bucket[Red] {
+  class Red(key:String) extends Bucket {
     def value: Red = this
 
     var t:Trade = _
@@ -130,7 +130,8 @@ object TestReduce extends RealTradeTests {
     def addQuote(q:Quote) {
       this.q = q
     }
-    def calculate(): Boolean = {
+
+    def event(): Boolean = {
       events += 1
       true
     }
@@ -151,7 +152,7 @@ object TestBucket extends RealTradeTests {
   val trades = universe.derive(u => getTradeEvents(u))
   val quotes = universe.derive(u => getQuoteEvents(u))
 
-  class Red(key:String) extends Bucket[Int] {
+  class Red(key:String) extends Bucket with types.MFunc {
     var t:Trade = _
     var q:Quote = _
     var events:Int = 0
@@ -170,6 +171,13 @@ object TestBucket extends RealTradeTests {
       if (env.hasChanged(quoteStream.getTrigger)) {
         q = quoteStream.value
       }
+      true
+    }
+
+
+    // should I try to unify event and calculate?
+    def event(): Boolean = {
+      println("event on bucket")
       true
     }
 
