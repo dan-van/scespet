@@ -118,7 +118,8 @@ abstract class MultiVectorJoin[K, B <: Bucket](
     // between new input cells becoming available, and other input cells firing.
     // for now, I'm close my eyes to this problem, and just check/express the behaviour in a unit test.
     if (hadInitialInput) {
-      bucketCell.value.event()
+      // cause the bucket to fire (it's new, so we have to do it after listeners are chained)
+      env.fireAfterChangingListeners(bucketCell.value)
     }
     bucketCell
   }

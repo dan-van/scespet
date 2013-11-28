@@ -131,7 +131,8 @@ object TestReduce extends RealTradeTests {
       this.q = q
     }
 
-    def event(): Boolean = {
+
+    def calculate(): Boolean = {
       events += 1
       true
     }

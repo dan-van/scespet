@@ -169,8 +169,8 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
 
   test("deriveBucket") {
     // set up two vector streams that fire events, sometimes co-inciding, sometimes independent
-    val counter = impl.asStream(IteratorEvents(0 to 19)((x,i)=>i.toLong))
-    val evenOdd = counter.by(c => if (c % 2 == 0) "Event" else  "Odd")
+    val counter = impl.asStream(IteratorEvents(0 to 20)((x,i)=>i.toLong))
+    val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
     val div5 = evenOdd.filter(_ % 5 == 0)
 
     // take a 'join' on both these streams into a MFunc style accumulation
@@ -179,8 +179,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
       var xChanged,yChanged = false
       var countX, countY, countBoth = 0
 
-
-      def event(): Boolean = {
+      def calculate(): Boolean = {
         if (xChanged && yChanged) countBoth += 1
         else if (xChanged) countX += 1
         else if (yChanged) countY += 1

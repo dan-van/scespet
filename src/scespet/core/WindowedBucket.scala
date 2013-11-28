@@ -85,7 +85,7 @@ class WindowedBucket[Y <: Bucket](val windowEvents :HasValue[Boolean], newReduce
       }
     }
     // for 'cumulative' type, fire if we have added a value, and the bucket says its state has changed
-    val bucketFire = if (addedValueToBucket) nextReduce.event() else false
+    val bucketFire = if (addedValueToBucket) nextReduce.calculate() else false
     if (emitType == ReduceType.CUMULATIVE) fire |= bucketFire
 
     if (inWindow && !isNowOpen) {
