@@ -481,6 +481,8 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
     return new VectTerm[K,B](env)(bucketJoinVector)
   }
 
+  def slice_pre(term: MacroTerm[_]):VectTerm[K,B] = slice_pre(term.input.trigger)
+
   /**
    * collect data into buckets that get 'closed' *before* the given event fires.
    * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.

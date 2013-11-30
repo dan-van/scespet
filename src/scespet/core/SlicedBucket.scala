@@ -27,16 +27,6 @@ import gsa.esg.mekon.core.EventGraphObject
  */
  
 class SlicedBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] with BucketCell[Y] {
-
-  val sliceListener = if (sliceBefore) joinValueRendezvous else this
-  if (sliceEvents != null) env.addListener(sliceEvents, sliceListener)
-
-  // not 100% sure about this - if we are only emitting completed buckets, we close and emit a bucket when the system finishes
-  private val termination = env.getTerminationEvent
-  if (emitType == ReduceType.LAST) {
-    env.addListener(termination, sliceListener)
-  }
-
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
     
@@ -68,11 +58,20 @@ class SlicedBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, val sli
       }
     }
   }
-  
+
+  val sliceListener = if (sliceBefore) joinValueRendezvous else this
+  if (sliceEvents != null) env.addListener(sliceEvents, sliceListener)
+  // not 100% sure about this - if we are only emitting completed buckets, we close and emit a bucket when the system finishes
+  private val termination = env.getTerminationEvent
+  if (emitType == ReduceType.LAST) {
+    env.addListener(termination, sliceListener)
+  }
+
   private def readyNextReduce() {
     if (nextReduce != null) {
       env.removeListener(joinValueRendezvous, nextReduce)
       env.removeListener(nextReduce, this)
+      nextReduce.complete()
     }
     nextReduce = newReduce()
     // join values trigger the bucket
