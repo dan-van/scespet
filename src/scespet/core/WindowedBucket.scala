@@ -29,16 +29,13 @@ class WindowedBucket[Y <: Bucket](val windowEvents :HasValue[Boolean], newReduce
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
 
-  def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit):Boolean = {
+  def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
     val inputBinding = new InputBinding[X](in, adder)
     inputBindings :+= inputBinding
     // we can't apply the value right now, as we're not sure if this is a before or after slice event
     env.addListener(inputBinding, this)
     if (in.initialised) {
       inputBinding.addValueToBucket(nextReduce)
-      true
-    } else {
-      false
     }
   }
 

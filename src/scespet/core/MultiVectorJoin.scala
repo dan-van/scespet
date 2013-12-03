@@ -96,7 +96,6 @@ abstract class MultiVectorJoin[K, B <: Bucket](
 
   def newCell(i: Int, key: K) = {
     val bucketCell = createBucketCell(key)
-    var hadInitialInput = false
     // bind the cell up to listen to all its input bindings.
     for (joinDef <- sourceJoins) {
       val inVector = joinDef.source
@@ -106,20 +105,8 @@ abstract class MultiVectorJoin[K, B <: Bucket](
         val joinInputHasVal = inVector.getValueHolder(i).asInstanceOf[HasVal[X]]
         val bucketJoinDefinition = joinDef.asInstanceOf[BucketJoin[K, X, B]]
         val adder = bucketJoinDefinition.joinFunc
-        bucketCell.addInputBinding(joinInputHasVal, adder)
-        if (joinInputHasVal.initialised) {
-          hadInitialInput = true
-        }
+        val addedValue = bucketCell.addInputBinding(joinInputHasVal, adder)
       }
-    }
-    // Initialisation - ah, didn't think of that, going to have to apply the current input value from each join source if
-    // it is already initialised
-    // however, do I need to worry about slice_pre or slice_post here? I don't think there's any implicit causal ordering
-    // between new input cells becoming available, and other input cells firing.
-    // for now, I'm close my eyes to this problem, and just check/express the behaviour in a unit test.
-    if (hadInitialInput) {
-      // cause the bucket to fire (it's new, so we have to do it after listeners are chained)
-      env.fireAfterChangingListeners(bucketCell.value)
     }
     bucketCell
   }
@@ -129,6 +116,6 @@ abstract class MultiVectorJoin[K, B <: Bucket](
 
 object MultiVectorJoin {
   trait BucketCell[B] extends HasVal[B] {
-    def addInputBinding[X](in:HasVal[X], adder:B=>X=>Unit) :Boolean
+    def addInputBinding[X](in:HasVal[X], adder:B=>X=>Unit)
   }
 }

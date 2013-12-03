@@ -170,6 +170,8 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
   // an 'MFunc' which tracks how many x, y, or both events have occured
   class XYCollector() extends Bucket {
     def value = this
+    var firstX:Int = -1
+    var lastX:Int = -1
     var xChanged,yChanged = false
     var countX, countY, countBoth = 0
     var done = false
@@ -187,13 +189,87 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
       xChanged = false; yChanged = false
       true
     }
-    def addX(x:Int) = xChanged = true
+    def addX(x:Int) = {xChanged = true; lastX = x; if (firstX == -1) firstX = x}
     def addY(x:Int) = yChanged = true
 
-    override def toString: String = s"x:$countX, y:$countY, both:$countBoth, done:$done"
+    override def toString: String = s"firstX:$firstX x:$lastX nx:$countX, ny:$countY, nboth:$countBoth, done:$done"
+
+    override def equals(o: scala.Any): Boolean = {
+      o match {
+        case xy:XYCollector => {
+          xy.countX == this.countX &&
+          xy.countY == this.countY &&
+          xy.countBoth == this.countBoth &&
+          xy.firstX == this.firstX &&
+          xy.lastX == this.lastX
+        }
+        case _ => false
+      }
+    }
+
+    override def hashCode(): Int = {
+      var result: Int = firstX
+      result = 31 * result + lastX
+      result = 31 * result + countX
+      result = 31 * result + countY
+      result = 31 * result + countBoth
+      result = 31 * result + (if (done) 1 else 0)
+      return result
+    }
   }
 
-  test("deriveBucket") {
+  test("bucket sliced reduce") {
+    val stream = byOddEvenSliceEleven(reduce = true, 26)
+    val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
+    new StreamTest("Recombined count", List(11, 11, 5), recombinedEventCount)
+
+
+    val evenBuckets = stream("Even")
+    val expectedEven = List(
+                        {val v = new XYCollector; v.firstX =  0; v.lastX = 10; v.countX = 4; v.countBoth = 2;v.done=true; v}, // for i 0 -> 10, there are 3 even numbers and 2 (even & multiple of 5)
+                        {val v = new XYCollector; v.firstX = 12; v.lastX = 20; v.countX = 4; v.countBoth = 1;v.done=true; v}, // for i 12 -> 21, there are 3 even numbers and 2 (even & multiple of 5)
+                        {val v = new XYCollector; v.firstX = 22; v.lastX = 26; v.countX = 3; v.countBoth = 0;v.done=true; v}  // for i 22 -> 26, there are 3 even numbers and 2 (even & multiple of 5)
+                      )
+    new StreamTest("Even.x", expectedEven, evenBuckets)
+
+    val oddBuckets = stream("Odd")
+    val expectedOdd = List(
+                        {val v = new XYCollector; v.firstX =  1; v.lastX =  9; v.countX = 4; v.countBoth = 1; v.done=true; v}, // for i 0 -> 10, there are 3 even numbers and 2 (even & multiple of 5)
+                        {val v = new XYCollector; v.firstX = 11; v.lastX = 21; v.countX = 5; v.countBoth = 1; v.done=true; v}, // for i 11 -> 21, there are 3 even numbers and 2 (even & multiple of 5)
+                        {val v = new XYCollector; v.firstX = 23; v.lastX = 25; v.countX = 1; v.countBoth = 1; v.done=true; v}  // for i 22 -> 26, there are 3 even numbers and 2 (even & multiple of 5)
+                      )
+    new StreamTest("Odd", expectedOdd, oddBuckets)
+  }
+  
+  test("bucket sliced fold") {
+    val stream = byOddEvenSliceEleven(reduce = false, 26)
+  }
+
+  def byOddEvenSliceEleven(reduce :Boolean, n:Int) = {
+    // set up two vector streams that fire events, sometimes co-inciding, sometimes independent
+    val counter = impl.asStream(IteratorEvents(0 to n)((x,i)=>i.toLong))
+    val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
+    val div5 = evenOdd.filter(_ % 5 == 0)
+
+    def mySliceDef(i:Int) = {
+      val doIt = i > 0 && i % 11 == 0
+      if (doIt)
+        println("Slice!")
+      doIt
+    }
+    val sliceOn = counter.filter(mySliceDef)
+
+    val slicer = evenOdd.deriveSliced(k => new XYCollector)
+    val sliceBuilder = if (reduce) slicer.reduce() else slicer.fold()
+    val buckets = sliceBuilder.
+      join(evenOdd){b => b.addX}.
+      join(div5){b => b.addY}.
+      slice_pre( sliceOn )
+    buckets
+  }
+
+  // make this cover both fold and reduce
+  test("bucket windows") {
     // set up two vector streams that fire events, sometimes co-inciding, sometimes independent
     val counter = impl.asStream(IteratorEvents(0 to 26)((x,i)=>i.toLong))
     val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
@@ -209,7 +285,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     out("Slice")(sliceOn)
 
     // direct evenOdd -> bucket.x and div5 -> bucket.y
-    val buckets = evenOdd.deriveSliced(k => new XYCollector).fold().
+    val buckets = evenOdd.deriveSliced(k => new XYCollector).reduce().
       join(evenOdd){b => b.addX}.
       join(div5){b => b.addY}.
       slice_pre( sliceOn )
