@@ -18,7 +18,7 @@ class ExprPrinter() extends Builder {
   }
 
   class StopTerm[X]() extends Term[X] {
-    def map[Y](f: (X) => Y): Term[Y] = new StopTerm[Y]
+    def map[Y](f: (X) => Y, exposeNull:Boolean = true): Term[Y] = new StopTerm[Y]
 
     def filter(accept: (X) => Boolean): Term[X] = this
 
@@ -52,8 +52,14 @@ class ExprPrinter() extends Builder {
     def sample(evt: EventGraphObject): MacroTerm[X] = ???
   }
 
+  /**
+   * This was an idea about being able to apply a complete expression tree to an input value for debug / printing purposes.
+   * Not so sure it has merit.
+   * @param x
+   * @tparam X
+   */
   class ExecutingTerm[X](x:X) extends Term[X] {
-    def map[Y](f: (X) => Y): Term[Y] = {
+    def map[Y](f: (X) => Y, exposeNull:Boolean = true): Term[Y] = {
       val y = f(x)
       println(s".map($f) = $y")
       new ExecutingTerm[Y](y)

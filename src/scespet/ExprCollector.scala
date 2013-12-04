@@ -68,7 +68,7 @@ class Scesspet {
 
     def value = ???
 
-    def map[Y](f: (X) => Y) = new MapTerm[X, Y](this, f)
+    def map[Y](f: (X) => Y, exposeNull:Boolean = true) = new MapTerm[X, Y](this, f, exposeNull)
 
     def filter(accept: (X) => Boolean) = new FilterTerm[X](this, accept)
 
@@ -133,9 +133,9 @@ class Scesspet {
     def buildHasVal(env :types.Env) :HasVal[X]
   }
 
-  class MapTerm[IN, X](source:CapturedTerm[_, IN], val mapFunc:(IN)=>X) extends CapturedTerm[IN, X](source) {
+  class MapTerm[IN, X](source:CapturedTerm[_, IN], val mapFunc:(IN)=>X, val exposeNull:Boolean) extends CapturedTerm[IN, X](source) {
     def applyTo(term: Term[IN]): Term[X] = {
-      term.map(mapFunc)
+      term.map(mapFunc, exposeNull)
     }
   }
 

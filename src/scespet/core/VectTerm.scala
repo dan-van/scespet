@@ -30,9 +30,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   /**
    * derives a new VectTerm with new derived keys (possibly a subset).
    * any mapping from K => Option[K2] that yields None will result in that K being dropped from the resulting vector
-   * @param keyMap
-   * @tparam K2
-   * @return
+   * todo: more thought - this may be more useful to use null instread of 'None' as it avoids having to introduce Option
    */
   def mapKeys[K2](keyMap:K=>Option[K2]):VectTerm[K2,X] = {
     new VectTerm[K2, X](env)(new ReKeyedVector[K, X, K2](input, keyMap, env))
@@ -309,6 +307,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       val newColumnsTrigger = input.getNewColumnTrigger
       env.addListener(newColumnsTrigger, this)
       var maxTriggerIdx = 0
+      // now bind any existing cells
+      bindNewCells()
 
       private def bindNewCells() {
         for (i <- maxTriggerIdx to input.getSize - 1) {
