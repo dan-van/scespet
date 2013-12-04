@@ -133,9 +133,13 @@ class SlicedBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, val sli
       doSliceIfRequired()
     }
 
-    var fire = sliced
-    if (emitType == ReduceType.CUMULATIVE && env.hasChanged(value)) fire = true
-    if (fire) initialised = true  // belt and braces initialiser
+    val fire = if (emitType == ReduceType.CUMULATIVE) {
+      env.hasChanged(value)
+    } else {
+      sliced
+    }
+    if (fire)
+      initialised = true  // belt and braces initialiser
     return fire
   }
 

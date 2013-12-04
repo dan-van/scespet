@@ -6,6 +6,7 @@ import scespet.core._
 import scespet.util._
 import java.util.{List => JList}
 import collection.JavaConversions._
+import scala.collection.mutable
 
 
 /**
@@ -168,7 +169,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
   }
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
-  class XYCollector() extends Bucket {
+  class XYCollector() extends Bucket with Cloneable {
     def value = this
     var firstX:Int = -1
     var lastX:Int = -1
@@ -216,6 +217,8 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
       result = 31 * result + (if (done) 1 else 0)
       return result
     }
+
+    override def clone(): XYCollector = super.clone().asInstanceOf[XYCollector]
   }
 
   test("bucket sliced reduce") {
@@ -243,6 +246,37 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
   
   test("bucket sliced fold") {
     val stream = byOddEvenSliceEleven(reduce = false, 26)
+    val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) 0 else V.max})
+    new StreamTest("Recombined count", (0 to 26), recombinedCounter)
+
+    // now populate an expected sequence of observed values:
+    val expectedEven = new ArrayBuffer[XYCollector]()
+    val expectedOdd = new ArrayBuffer[XYCollector]()
+    def fillExpectations(i:Int, j:Int) {
+      val vOdd = new XYCollector;
+      val vEven = new XYCollector;
+      for (x <- i to j) {
+        // mutate the last odd or even state accumulation
+        val v = if (x % 2 == 0) vEven else vOdd
+        if (v.firstX < 0) v.firstX = x
+        v.lastX = x
+        if (x % 5 == 0) {
+          v.countBoth += 1
+        } else {
+          v.countX += 1
+        }
+        // now clone and put the copy into expected
+        (if (x % 2 == 0) expectedEven else expectedOdd).append(v.clone)
+      }
+      expectedEven.last.done = true
+      expectedOdd.last.done = true
+    }
+    fillExpectations(0, 10)
+    fillExpectations(11, 21)
+    fillExpectations(22, 26)
+
+    new StreamTest("Even", expectedEven, stream("Even"))
+    new StreamTest("Odd", expectedOdd, stream("Odd"))
   }
 
   def byOddEvenSliceEleven(reduce :Boolean, n:Int) = {
