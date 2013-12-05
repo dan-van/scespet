@@ -1,6 +1,7 @@
 package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
+import scespet.core.types.MFunc
 
 /**
  * Created with IntelliJ IDEA.
@@ -17,12 +18,25 @@ class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm
   }
 
   def all():MacroTerm[Y] = {
-    val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
-      def create(source: HasVal[X], reduce: Y, env:types.Env) = new types.MFunc {
-        def calculate() = false // never create a new bucket
+    if (emitType == ReduceType.LAST) {
+      val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
+        def create(source: HasVal[X], reduce: Y, env:types.Env) = new types.MFunc {
+          def calculate() = false // never create a new bucket
+        }
       }
+      return buildTermForBucketStream(newBFunc, bucketTrigger)
+    } else {
+      // really simple implementation TODO: clean up fold_all and reduce_all
+      val inputCell = inputTerm.input
+      val outputCell = new UpdatingHasVal[Y] {
+        val bucket = newBFunc()
+        env.addListener( inputCell.getTrigger, this)
+
+        def calculate() = { bucket.add(inputCell.value); true }
+        def value = bucket
+      }
+      return new MacroTerm[Y](env)(outputCell)
     }
-    return buildTermForBucketStream(newBFunc, bucketTrigger)
   }
 
   def each(n: Int):MacroTerm[Y] = {
