@@ -52,6 +52,7 @@ abstract class OrderReportsExample extends App {
   }
 
   val impl: SimpleEvaluator = new SimpleEvaluator()
+  implicit val env = impl.env
 //  var eventStream = impl.query(IteratorEvents(orderEventList))
 //  out("fills") { eventStream.by(_.orderId).filterType[Fill].map(_.qty.toInt) }
 //  out("Net fill") {eventStream.by(_.orderId).filterType[Fill].map(_.qty.toInt).fold_all2(new Sum)}
@@ -70,7 +71,8 @@ object Test1 extends OrderReportsExample {
   def doBody() {
     val msft = impl.asStream(priceFactory.getMids("MSFT.O"))
     val vod = impl.asStream(priceFactory.getMids("VOD.L"))
-    Plot.plot(msft).plot(vod)
+    Plot.plot(msft)
+    Plot.plot(vod)
   }
 }
 object Test2 extends OrderReportsExample {

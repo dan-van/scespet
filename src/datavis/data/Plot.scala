@@ -11,7 +11,7 @@ import org.jfree.chart.axis.{ValueAxis, DateAxis, NumberAxis}
 import org.jfree.chart.plot.{CrosshairState, PlotRenderingInfo, XYPlot}
 import java.awt.event.{ActionEvent, ActionListener}
 import org.jfree.chart.{ChartPanel, JFreeChart}
-import java.awt.{Graphics2D, Dimension}
+import java.awt.{Paint, Shape, Graphics2D, Dimension}
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
 
 import scala.collection.JavaConverters._
@@ -102,63 +102,80 @@ object Plot {
   // ------------------------------
 // todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
 // todo: rather than relying on MacroTerm being passed here
-  def plot[X](series:Term[X], name:String = "Series")(implicit ev:Numeric[X], env:Environment) = {
-    val options = new Options[String,X](chartstate.dataset)
-    options.plot(series, name)
+  def plot[X](series:Term[X], name:String = s"Series(${chartstate.dataset.getSeriesCount + 1})")(implicit ev:Numeric[X], env:Environment) = {
+    val options = new Options[String,X](chartstate)
+    options.seriesNames(_ => name)
+
+    val dataset = chartstate.dataset
+    val seriesId = dataset.addSeries(name)
+    options.addSeries(seriesId)
+
+    series.map(v => {
+      val asDouble = implicitly[Numeric[X]].toDouble( v )
+      dataset.add(seriesId, env.getEventTime, asDouble)
+    })
+
     options
   }
 
+  def plot[K, X:Numeric](stream: VectTerm[K, X]) :Options[K,X] = {
+    val options = new Options[K, X](chartstate)
+    class DatasetAdder(key:K, options:Options[K, X]) extends Reduce[X] {
+      val dataset = chartstate.dataset  // I'll clean this later
+      val currentCount = dataset.getSeriesCount
 
-  def plot[X:Numeric](series:MacroTerm[X]) = {
-    val options = new Options[String,X](chartstate.dataset)
-    options.plot(series)
+      val name = options.keyRender(key)
+      val seriesId = dataset.addSeries(name)
+      options.addSeries(seriesId)
+      val env = stream.env
+
+      def add(v: X) = {
+        val x = env.getEventTime
+        val y = implicitly[Numeric[X]].toDouble( v )
+        dataset.add(seriesId, x, y)
+      }
+    }
+    stream.reduce_all(new DatasetAdder(_, options))
     options
   }
 
-  def plot[K,X:Numeric](series:VectTerm[K,X]) = {
-    val options = new Options[K,X](chartstate.dataset)
-    options.plot(series)
-    options
-  }
 
   /**
    * this isn't good design. Think about adding stuff to plots and draw inspiration from the major plotting libraries (and REMEMBER not to go overkill, and just use python for advanced stuff!!!)
    */
-  class Options[K,X:Numeric](dataset:TimeSeriesDataset) {
+  class Options[K,X](chartState:ChartState) {
+    var seriesList = List[Int]()
+
     var keyRender:K=>String = (k) => String.valueOf(k)
+    private var _enableShapes = false
+    private var _shape:Shape = _
+    private var _fillPaint:Paint = _
 
     def seriesNames(newKeyRender:K=>String):Options[K,X] = {
       keyRender = newKeyRender
       this
     }
 
-    def plot(stream: VectTerm[K, X]) :Options[K,X] = {
-      class DatasetAdder(key:K) extends Reduce[X] {
-        val currentCount = dataset.getSeriesCount
-        val name = keyRender(key)
-        val seriesId = dataset.addSeries(name)
-        val env = stream.env
-
-        def add(v: X) = {
-          val x = env.getEventTime
-          val y = implicitly[Numeric[X]].toDouble( v )
-          dataset.add(seriesId, x, y)
-        }
-      }
-      stream.reduce_all(new DatasetAdder(_))
-      this
+    def enableShapes() = {_enableShapes = true; applyAll()}
+    def setShape(shape:Shape) = {
+      _shape = _shape;
+      _enableShapes = true;
+      applyAll()
     }
 
-    def plot(stream: MacroTerm[X]) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1))(stream.env)
+    protected[Plot] def addSeries(s:Int) {
+      seriesList :+= s
+      applySeriesOptions(s)
+    }
 
-    def plot(stream: Term[X])(implicit env:Environment) :Options[K,X] = plot(stream, "Series "+(dataset.getSeriesCount+1))
-
-    def plot(stream: Term[X], name:String)(implicit env:Environment) :Options[K,X] = {
-      val seriesId = dataset.addSeries(name)
-      stream.map(v => {
-        val asDouble = implicitly[Numeric[X]].toDouble( v )
-        dataset.add(seriesId, env.getEventTime, asDouble)
-      })
+    private def applySeriesOptions(series:Int) {
+      if (_enableShapes) chartstate.enableShapes(series)
+      chartstate.renderer.setSeriesShape(series, _shape)
+      chartstate.renderer.setSeriesFillPaint(series, _fillPaint)
+    }
+    
+    private def applyAll() = {
+      seriesList.foreach( applySeriesOptions )
       this
     }
   }
@@ -175,6 +192,10 @@ object Plot {
 
   class ChartState(val dataset:Plot.TimeSeriesDataset) {
     var renderer = new XYStepRenderer() {
+      setAutoPopulateSeriesFillPaint(true)
+      setAutoPopulateSeriesOutlineStroke(true)
+      setAutoPopulateSeriesStroke(true)
+
       override def drawItem(g2: Graphics2D, state: XYItemRendererState, dataArea: Rectangle2D, info: PlotRenderingInfo, plot: XYPlot, domainAxis: ValueAxis, rangeAxis: ValueAxis, dataset: XYDataset, series: Int, item: Int, crosshairState: CrosshairState, pass: Int) = {
         super.drawItem(g2, state, dataArea, info, plot, domainAxis, rangeAxis, dataset, series, item, crosshairState, pass)
         if (isItemPass(pass)) {
@@ -188,6 +209,7 @@ object Plot {
     }
     var range: NumberAxis = new NumberAxis()
     range.setAutoRangeIncludesZero(false)
+
 
     var domain: DateAxis = new DateAxis("Time")
     var plot: XYPlot = new XYPlot(dataset, domain, range, renderer)
@@ -206,6 +228,11 @@ object Plot {
       renderer.setBaseShapesFilled(true)
       renderer.setAutoPopulateSeriesOutlineStroke(true)
       renderer.setBaseShapesVisible(true)
+    }
+
+    def enableShapes(series:Int) {
+      renderer.setSeriesShapesVisible(series, true)
+      renderer.setSeriesShapesFilled(series, true)
     }
   }
 }

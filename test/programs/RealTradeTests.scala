@@ -10,7 +10,6 @@ import scespet.util.{_}
 //import org.msgpack._
 //import org.msgpack.annotation.Message
 //import org.msgpack.ScalaMessagePack._
-import programs.Trade
 import org.scalatest.time.Minutes
 import scala.concurrent.duration.{Duration, TimeUnit}
 
@@ -107,7 +106,9 @@ object TestPlots extends RealTradeTests {
   val trades = impl.asStream( getTradeEvents("MSFT.O") )
   val quotes = impl.asStream( getQuoteEvents("MSFT.O") )
   //  val accvol = trades.map(_.quantity).fold_all(new Sum[Long])
-  Plot.plot(quotes.map(_.bid), "Bid").plot(quotes.map(_.ask), "Ask").plot(trades.map(_.price), "Trade")
+  Plot.plot(quotes.map(_.bid), "Bid")
+  Plot.plot(quotes.map(_.ask), "Ask")
+  Plot.plot(trades.map(_.price), "Trade")
   impl.run(10000)
 }
 
