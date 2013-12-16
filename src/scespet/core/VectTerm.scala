@@ -497,11 +497,13 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
     val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
       def createBucketCell(key:K): BucketCell[B] = {
         val newBFuncFromKey = () => newBFunc(key)
-        new SlicedBucket[B](sliceTrigger, sliceBefore=true, newBFuncFromKey, emitType, env)
+        new SliceBeforeBucket[B](sliceTrigger, newBFuncFromKey, emitType, env)
       }
     }
     return new VectTerm[K,B](env)(bucketJoinVector)
   }
+
+  def slice_post(term: MacroTerm[_]):VectTerm[K,B] = slice_post(term.input.trigger)
 
   /**
    * collect data into buckets that get 'closed' *after* the given event fires.
@@ -517,7 +519,7 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
     val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
       def createBucketCell(key:K): BucketCell[B] = {
         val newBFuncFromKey = () => newBFunc(key)
-        new SlicedBucket[B](sliceTrigger, sliceBefore=false, newBFuncFromKey, emitType, env)
+        new SliceAfterBucket[B](sliceTrigger, newBFuncFromKey, emitType, env)
       }
     }
     return new VectTerm[K,B](env)(bucketJoinVector)
