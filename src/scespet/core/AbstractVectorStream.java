@@ -112,22 +112,6 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
             newColumnTrigger.newColumnAdded(index);
             final HasValue<V> newValue = newCell(index, key);
             valueHolders.add(newValue);
-            if (! newValue.initialised()) {
-                final EventGraphObject cellFiredEvent = newValue.getTrigger();
-                env.addListener(cellFiredEvent, new Function() {
-                    public boolean calculate() {
-                        logger.info("cell should now be initialised for key "+key);
-                        if (!newValue.initialised()) {
-                            logger.severe("cell didn't update initialised state: "+newValue.getTrigger());
-                        }
-                        env.removeListener(cellFiredEvent, this);
-                        return false;
-                    }
-                });
-            }
-
-//            F f = (F) newValue.getTrigger();
-//            functions.add(f);
         }
     }
 

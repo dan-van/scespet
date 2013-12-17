@@ -29,6 +29,7 @@ public class SlowGraphWalk {
 
         private Node(EventGraphObject graphObject) {
             this.graphObject = graphObject;
+            if (graphObject == null) throw new IllegalArgumentException("Null graphObject");
         }
 
         public EventGraphObject getGraphObject() {
@@ -123,6 +124,8 @@ public class SlowGraphWalk {
     }
 
     public void addTrigger(final EventGraphObject source, final Function target) {
+        if (source == null) throw new IllegalArgumentException("Null source function firing "+target);
+        if (target == null) throw new IllegalArgumentException("Null target function listening to "+source);
         if (isFiring) {
             deferredChanges.add(new Runnable() {
                 public void run() {
@@ -216,12 +219,18 @@ public class SlowGraphWalk {
         if (!isChanging) {
             isChanging = true;
             while (!deferredChanges.isEmpty() || !deferredFires.isEmpty()) {
+                // each time round this loop is effectively a new cycle
+                cycleCount += 1;
                 for (Runnable deferredChange : deferredChanges) {
                     deferredChange.run();
                 }
                 deferredChanges.clear();
                 for (EventGraphObject deferredFire : deferredFires) {
-                    doFire(deferredFire);
+                    Node node = getNode(deferredFire);
+                    // this is in absence of using a set for deferred fires
+                    if (node.lastFired < cycleCount) {
+                        doFire(deferredFire);
+                    }
                 }
                 deferredFires.clear();
             }
@@ -239,6 +248,8 @@ public class SlowGraphWalk {
     }
 
     public void fireAfterChangingListeners(EventGraphObject graphObject) {
+        if (graphObject == null)
+            throw new IllegalArgumentException("Can't fire a null object");
         deferredFires.add(graphObject);
     }
 }

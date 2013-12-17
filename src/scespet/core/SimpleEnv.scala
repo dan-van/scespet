@@ -66,6 +66,7 @@ class SimpleEnv() extends Environment {
       val initTime = if (eventTime != 0) {
         eventTime
       } else {
+        // this is a duff idea - I think I should just have an option whether eventTime represents a counter, or timestamp
         val nonZero = for (e <- eventSources if (e.hasNext && e.getNextTime != 0)) yield e.getNextTime
         if (nonZero.isEmpty) 0 else nonZero.min
       }
