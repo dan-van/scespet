@@ -218,7 +218,7 @@ trait Term[X] {
   def value:X
 
   def fold_all[Y <: Reduce[X]](y: Y):Term[Y]
-  def map[Y](f: (X) => Y):Term[Y]
+  def map[Y](f: (X) => Y, exposeNull:Boolean = true):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
   def reduce_all[Y <: Reduce[X]](y: Y):Term[Y]

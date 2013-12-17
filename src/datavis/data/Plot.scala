@@ -6,21 +6,25 @@ import org.jfree.data.general.AbstractSeriesDataset
 import org.jfree.data.xy.XYDataset
 import org.jfree.data.DomainOrder
 import scespet.core._
-import org.jfree.chart.renderer.xy.{XYStepRenderer, XYItemRenderer}
-import org.jfree.chart.axis.{DateAxis, NumberAxis}
-import org.jfree.chart.plot.XYPlot
+import org.jfree.chart.renderer.xy.{XYLineAndShapeRenderer, XYItemRendererState, XYStepRenderer, XYItemRenderer}
+import org.jfree.chart.axis.{ValueAxis, DateAxis, NumberAxis}
+import org.jfree.chart.plot.{CrosshairState, PlotRenderingInfo, XYPlot}
 import java.awt.event.{ActionEvent, ActionListener}
 import org.jfree.chart.{ChartPanel, JFreeChart}
-import java.awt.Dimension
+import java.awt.{Graphics2D, Dimension}
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
 
 import scala.collection.JavaConverters._
+import java.awt.geom.Rectangle2D
+import org.jfree.chart.entity.EntityCollection
 
 /**
  * @version $Id$
  */
 object Plot {
   @volatile var active = false
+  private var _chartState : ChartState = _
+
   lazy val top = new MainFrame(){
     active = true
     override def closeOperation() {
@@ -99,27 +103,21 @@ object Plot {
 // todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
 // todo: rather than relying on MacroTerm being passed here
   def plot[X](series:Term[X], name:String = "Series")(implicit ev:Numeric[X], env:Environment) = {
-    val dataset = new TimeSeriesDataset()
-    val options = new Options[String,X](dataset)
+    val options = new Options[String,X](chartstate.dataset)
     options.plot(series, name)
-    plotDataset(dataset)
     options
   }
 
 
   def plot[X:Numeric](series:MacroTerm[X]) = {
-    val dataset = new TimeSeriesDataset()
-    val options = new Options[String,X](dataset)
+    val options = new Options[String,X](chartstate.dataset)
     options.plot(series)
-    plotDataset(dataset)
     options
   }
 
   def plot[K,X:Numeric](series:VectTerm[K,X]) = {
-    val dataset = new TimeSeriesDataset()
-    val options = new Options[K,X](dataset)
+    val options = new Options[K,X](chartstate.dataset)
     options.plot(series)
-    plotDataset(dataset)
     options
   }
 
@@ -165,8 +163,29 @@ object Plot {
     }
   }
 
-  private def plotDataset[X: Numeric](dataset: Plot.TimeSeriesDataset) {
-    var renderer: XYItemRenderer = new XYStepRenderer()
+  def chartstate :ChartState = {
+    if (_chartState == null) {
+      _chartState = new ChartState(new TimeSeriesDataset)
+      top.contents = Component.wrap(_chartState.chartPanel)
+      if (top.size == new Dimension(0, 0)) top.pack()
+      top.visible = true
+    }
+    _chartState
+  }
+
+  class ChartState(val dataset:Plot.TimeSeriesDataset) {
+    var renderer = new XYStepRenderer() {
+      override def drawItem(g2: Graphics2D, state: XYItemRendererState, dataArea: Rectangle2D, info: PlotRenderingInfo, plot: XYPlot, domainAxis: ValueAxis, rangeAxis: ValueAxis, dataset: XYDataset, series: Int, item: Int, crosshairState: CrosshairState, pass: Int) = {
+        super.drawItem(g2, state, dataArea, info, plot, domainAxis, rangeAxis, dataset, series, item, crosshairState, pass)
+        if (isItemPass(pass)) {
+          var entities: EntityCollection = null
+          if (info != null) {
+            entities = info.getOwner.getEntityCollection
+          }
+          drawSecondaryPass(g2, plot, dataset, pass, series, item, domainAxis, dataArea, rangeAxis, crosshairState, entities)
+        }
+      }
+    }
     var range: NumberAxis = new NumberAxis()
     range.setAutoRangeIncludesZero(false)
 
@@ -180,8 +199,13 @@ object Plot {
     }).start()
     val chart = new JFreeChart("Plot", plot)
     val chartPanel = new ChartPanel(chart)
-    top.contents = Component.wrap(chartPanel)
-    if (top.size == new Dimension(0, 0)) top.pack()
-    top.visible = true
+
+    def enableShapes() {
+      renderer.setShapesVisible(true)
+      renderer.setAutoPopulateSeriesFillPaint(true)
+      renderer.setBaseShapesFilled(true)
+      renderer.setAutoPopulateSeriesOutlineStroke(true)
+      renderer.setBaseShapesVisible(true)
+    }
   }
 }

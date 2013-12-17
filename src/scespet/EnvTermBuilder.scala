@@ -12,7 +12,14 @@ import gsa.esg.mekon.core.EventSource
  * Time: 23:35
  * To change this template use File | Settings | File Templates.
  */
-class EnvTermBuilder(val env :types.Env) {
+class EnvTermBuilder(val e :types.Env) extends DelayedInit {
+  implicit var env = e
+
+  var initBody:()=>Unit = _
+
+  override def delayedInit(x: => Unit) {
+    initBody = ()=>{x;}
+  }
 
   def asStream[X](data: HasVal[X]) : MacroTerm[X] = {
     if (data.isInstanceOf[EventSource]) {

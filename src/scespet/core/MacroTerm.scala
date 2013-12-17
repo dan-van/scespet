@@ -67,12 +67,17 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
     return new MacroTerm[Y](env)(listener)
   }
 
-  def map[Y](f: (X) => Y):MacroTerm[Y] = {
+  def map[Y](f: (X) => Y, exposeNull:Boolean = true):MacroTerm[Y] = {
     val listener = new AbsFunc[X,Y] {
       def calculate() = {
-        value = f(input.value);
-        initialised = true
-        true
+        val newVal = f(input.value)
+        if (exposeNull || newVal != null.asInstanceOf[Y]) {
+          value = newVal
+          initialised = true
+          true
+        } else {
+          false
+        }
       }
     }
     env.addListener(input.trigger, listener)

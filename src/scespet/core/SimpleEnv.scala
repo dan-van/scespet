@@ -106,6 +106,8 @@ class SimpleEnv() extends Environment {
     graph.wakeup(target)
   }
 
+  def executeDelayed(runnable: Runnable) = ???
+
   @Override
   def getEventTime = eventTime
 
