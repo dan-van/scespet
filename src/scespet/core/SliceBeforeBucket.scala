@@ -29,6 +29,7 @@ import scespet.util.Logged
  */
  
 class SliceBeforeBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends SlicedBucket[Y] {
+  if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()

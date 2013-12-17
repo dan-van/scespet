@@ -6,6 +6,7 @@ import scespet.core._
 import scespet.util._
 import java.util.{List => JList}
 import collection.JavaConversions._
+import scespet.core.types.MFunc
 
 
 /**
@@ -157,8 +158,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   }
 
 
-  test("bucket sliced fold pre") {
-    assume(false, "See docs on SliceBeforeBucket for why I can't support this yet")
+  ignore("bucket sliced fold pre") { //See docs on SliceBeforeBucket for why I can't support this yet
     val stream = generateCounterAndPartialBucketDef(reduce = false, 26).slicePre()
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) 0 else V.max})
     new StreamTest("Recombined count", (0 to 26), recombinedCounter)
@@ -256,38 +256,43 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
           println("Slice!")
         doIt
       }
-      val sliceOn = counter.filter(mySliceDef)
-
+      lazy val sliceOn = counter.filter(mySliceDef)
+      lazy val windowStream = {
+        sliceOn.map(new Function1[Any, Boolean] {
+          var windowOpen = true
+          def apply(v1: Any): Boolean = {
+            windowOpen = !windowOpen;
+            println("Window edge. WindowOpen = "+windowOpen)
+            windowOpen}
+        })
+      }
       def slicePre() = unslicedBuckets.slice_pre( sliceOn )
       def slicePost() = unslicedBuckets.slice_post( sliceOn )
+      def window() = unslicedBuckets.window( windowStream )
     }
   }
 
 
   // make this cover both fold and reduce
-  test("bucket windows") {
-    // set up two vector streams that fire events, sometimes co-inciding, sometimes independent
-    val counter = impl.asStream(IteratorEvents(0 to 26)((x,i)=>i.toLong))
-    val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
-    val div5 = evenOdd.filter(_ % 5 == 0)
+  test("bucket windows reduce") {
 
-    def mySliceDef(i:Int) = {
-      val doIt = i % 11 == 0
-      if (doIt)
-        println("Slice!")
-      doIt
-    }
-    val sliceOn = counter.filter(mySliceDef)
-    out("Slice")(sliceOn)
+    val stream = generateCounterAndPartialBucketDef(reduce = true, 26).window()
 
-    // direct evenOdd -> bucket.x and div5 -> bucket.y
-    val buckets = evenOdd.deriveSliced(k => new XYCollector).reduce().
-      join(evenOdd){b => b.addX}.
-      join(div5){b => b.addY}.
-      slice_pre( sliceOn )
+    val evenBuckets = stream("Even")
+    val expectedEven = List(
+    {val v = new XYCollector; v.firstX =  0; v.lastX = 10; v.countX = 4; v.countBoth = 2;v.done=true; v}, // for i 0 -> 10, there are 3 even numbers and 2 (even & multiple of 5)
+//    {val v = new XYCollector; v.firstX = 12; v.lastX = 22; v.countX = 5; v.countBoth = 1;v.done=true; v}, // for i 12 -> 21, there are 3 even numbers and 2 (even & multiple of 5)
+    {val v = new XYCollector; v.firstX = 24; v.lastX = 26; v.countX = 2; v.countBoth = 0;v.done=true; v}  // for i 22 -> 26, there are 3 even numbers and 2 (even & multiple of 5)
+    )
+    new StreamTest("Even.x", expectedEven, evenBuckets)
 
-    out("in")(counter)
-    out("buckets")(buckets)
+    val oddBuckets = stream("Odd")
+    val expectedOdd = List(
+    {val v = new XYCollector; v.firstX =  1; v.lastX = 11; v.countX = 5; v.countBoth = 1; v.done=true; v}, // for i 0 -> 10, there are 3 even numbers and 2 (even & multiple of 5)
+//    {val v = new XYCollector; v.firstX = 13; v.lastX = 21; v.countX = 4; v.countBoth = 1; v.done=true; v}, // for i 11 -> 21, there are 3 even numbers and 2 (even & multiple of 5)
+    {val v = new XYCollector; v.firstX = 23; v.lastX = 25; v.countX = 1; v.countBoth = 1; v.done=true; v}  // for i 22 -> 26, there are 3 even numbers and 2 (even & multiple of 5)
+    )
+    new StreamTest("Odd", expectedOdd, oddBuckets)
   }
 
 }

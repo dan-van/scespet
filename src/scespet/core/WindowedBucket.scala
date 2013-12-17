@@ -10,7 +10,7 @@ import scespet.core.MultiVectorJoin.BucketCell
  * todo: seems so similar in concept that it feels odd to have two different classes.
  * todo: will think more on this.
  */
-class WindowedBucket[Y <: Bucket](val windowEvents :HasValue[Boolean], newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] with BucketCell[Y]{
+class WindowedBucket[Y <: Bucket](val windowEvents :HasValue[Boolean], newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends SlicedBucket[Y] {
   private var inputBindings = List[InputBinding[_]]()
 
   private var inWindow = if (windowEvents == null) true else windowEvents.value
