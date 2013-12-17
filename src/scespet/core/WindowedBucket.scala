@@ -4,6 +4,10 @@ import scespet.core.MultiVectorJoin.BucketCell
 
 
 /**
+ * A window-close takes precedence over a new value to be added
+ * i.e if the window close event is atomic with a value for the bucket, that value is deemed to be not-in the bucket
+
+ *
  * todo: remove code duplication with SlicedBucket. Hang on, is that possible?
  * todo: thinks.... window edges are defined by boolean transitions, therefore I cannot have
  * todo: a window that opens and closes in the same atomic event, which means that 'slice' is impossible.

@@ -436,6 +436,9 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
 
   /**
    * window the whole vector by a single bucket stream (e.g. 9:00-17:00 EU)
+   * A window-open happens-before a new value to be added (i.e. the new value is included in the window)
+   * A window-close happens-before a new value (i.e if the window close event is atomic with a value for the bucket, that value is deemed to be not-in the bucket)
+
    * @param windowStream
    * @return
    */
