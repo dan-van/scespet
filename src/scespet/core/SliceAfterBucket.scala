@@ -29,17 +29,14 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, new
     def calculate(): Boolean = {
       doneSlice = false
       // slice now if we're in sliceBefore mode and the slice event has fired
-      val doSliceNow = sliceNextEvent
-      if (sliceTriggered()) {
-        if (sliceNextEvent)
-          throw new UnsupportedOperationException("SliceBefore with two successive slice events, not tested this yet")
-        sliceNextEvent = true
-      }
-
-      if (doSliceNow) {
+      if (sliceNextEvent) {
         readyNextReduce()
         doneSlice = true
         sliceNextEvent = false
+      }
+
+      if (sliceTriggered()) {
+        sliceNextEvent = true
       }
 
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...

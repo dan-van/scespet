@@ -3,6 +3,7 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
+import scespet.EnvTermBuilder
 
 /**
 * Created with IntelliJ IDEA.
@@ -34,7 +35,8 @@ object Program1 extends App {
   nameList += "IBM.N"
   nameList += "BARC.L"
 
-  val impl: SimpleEvaluator = new SimpleEvaluator()
+  implicit val env = new SimpleEnv
+  val impl = EnvTermBuilder(env)
 
 //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
@@ -100,5 +102,5 @@ object Program1 extends App {
 //  val v2 = tradeExpr by { _.name } map {_.qty} map (new Sum) map {println(_)}
   //  val v2:Term[Sum] = from(trade) map { _.name } map { _.length } reduce(new Sum, 2.hours.between("09:00", "15:00") )
   v8
-  impl.run()
+  env.run()
 }

@@ -6,19 +6,37 @@ import scespet.expression.{HasValRoot, RootTerm, CapturedTerm}
 import gsa.esg.mekon.core.EventSource
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 30/04/2013
- * Time: 23:35
- * To change this template use File | Settings | File Templates.
+ * This needs to have 'init(env)' called before you can use it.
+ * Why not a constructor!? Because I'm experimenting with the following approach that allows a 'program' to be encapsulated with access to all utilities
+ * and implicit env variables as needed, where the env is provided later:
+ *
+ * val myProg = new EnvTermBuilder {
+ *   val myStream1 = asStream( someEventGraphObject )
+ *   ...
+ * }
+ *
+ * which allows the "myProg" to now be run in an execution engine/context of choice.
+ * e.g. remotely, within an existing environment, with Mekon (proprietary) or the dumb scespet.core.SimpleEvaluator
+ *
  */
-class EnvTermBuilder(val e :types.Env) extends DelayedInit {
-  implicit var env = e
+class EnvTermBuilder() extends DelayedInit {
+  implicit var env:types.Env = _
 
-  var initBody:()=>Unit = _
+  private var initBody = List[()=>Unit]()
 
-  override def delayedInit(x: => Unit) {
-    initBody = ()=>{x;}
+  override def delayedInit(func: => Unit) {
+    // first one is my own init - do it!
+    if (this.initBody == null) {
+      func
+    } else {
+      val funcReference = () => {func;}
+      initBody :+= funcReference
+    }
+  }
+
+  def init(env:types.Env) {
+    this.env = env
+    for (b <- initBody) b.apply()
   }
 
   def asStream[X](data: HasVal[X]) : MacroTerm[X] = {
@@ -64,5 +82,11 @@ class EnvTermBuilder(val e :types.Env) extends DelayedInit {
 //}
 
 object EnvTermBuilder {
+  def apply(env:types.Env):EnvTermBuilder = {
+    val builder = new EnvTermBuilder
+    builder.init(env)
+    builder
+  }
+  
   implicit def eventObjectToHasVal[X <: types.EventGraphObject](evtObj:X) :HasVal[X] = new IsVal(evtObj)
 }

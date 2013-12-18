@@ -3,6 +3,7 @@ package programs
 import collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
+import scespet.EnvTermBuilder
 
 
 /**
@@ -32,7 +33,9 @@ object Program2 extends App {
   nameList += "IBM.N"
   nameList += "BARC.L"
 
-  val impl: SimpleEvaluator = new SimpleEvaluator()
+  implicit val env = new SimpleEnv
+  val impl = EnvTermBuilder(env)
+
   var names = IteratorEvents(nameList)((_,_) => 0L)
   var trades = IteratorEvents(tradeList)((_,i) => i)
   //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
@@ -60,7 +63,7 @@ object Program2 extends App {
 //    var start = impl.query(trades)
     val nameStream = impl.asStream(names)
     val start = nameStream.by(x => x).derive(getTrades).fold_all(new Collect)
-    impl.run()
+    env.run()
     println("run finished. Final data = ")
     for (i <- 0 to start.input.getSize() - 1 ) {
       println(s"$i : ${start.input.getKey(i)} = ${start.input.get(i).data}")
@@ -72,7 +75,7 @@ object Program2 extends App {
     //    var start = impl.query(trades)
     val nameStream = impl.asStream(names).by( x => x ).map(_.dropRight(2)).map(name => Set(".L", ".O").map(name + _))
     out("name to new tails")(nameStream)
-    impl.run()
+    env.run()
     println("run finished. Final data = ")
     for (i <- 0 to nameStream.input.getSize() - 1 ) {
       println(s"$i : ${nameStream.input.getKey(i)} = ${nameStream.input.get(i)}")
@@ -86,7 +89,7 @@ object Program2 extends App {
     var nameToGeneratedNames = uniqueNames.map(_.dropRight(2)).map(name => Set(".L", "l.CHI").map(name + _))
     val universe = nameToGeneratedNames.mapVector(_.getValues.asScala.flatten.toSet)
     out("universe stream"){universe}
-    impl.run()
+    env.run()
     println("run finished. Final data = "+universe.input.value)
   }
 
@@ -97,7 +100,7 @@ object Program2 extends App {
     val universe = nameSets.toValueSet[String](_.iterator)
     out("universe stream"){universe}
 
-    impl.run()
+    env.run()
     println("run finished. Final data = "+universe.input.getValues)
     val toPrint = universe
     //    for (i <- 0 to nameSets.input.getSize() - 1 ) {

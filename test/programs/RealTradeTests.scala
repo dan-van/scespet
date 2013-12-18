@@ -6,6 +6,7 @@ import java.io.{BufferedWriter, FileWriter, File}
 import java.net.URL
 import java.text.SimpleDateFormat
 import scespet.util.{_}
+import scespet.EnvTermBuilder
 
 //import org.msgpack._
 //import org.msgpack.annotation.Message
@@ -34,8 +35,8 @@ abstract class RealTradeTests extends App with Logged {
 //  20131030T090001	515.1	300	300	518.9	300	300
   case class Quote(time:Long,	bid:Double,	bidDepth:Long, ask:Double, askDepth:Long)
 
-  val impl: SimpleEvaluator = new SimpleEvaluator()
-  implicit val env = impl.env
+  implicit val env = new SimpleEnv
+  val impl = EnvTermBuilder(env)
 
   var tickerToTrades = Map[String, HasVal[Trade]]()
   var tickerToQuotes = Map[String, HasVal[Quote]]()
@@ -99,7 +100,7 @@ object TestTrade extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O"))
   val trades = universe.derive(u => getTradeEvents(u))
   Plot.plot(trades.map(_.price))
-  impl.run(100000)
+  env.run(100000)
 }
 
 object TestPlots extends RealTradeTests {
@@ -109,7 +110,7 @@ object TestPlots extends RealTradeTests {
   Plot.plot(quotes.map(_.bid), "Bid")
   Plot.plot(quotes.map(_.ask), "Ask")
   Plot.plot(trades.map(_.price), "Trade")
-  impl.run(10000)
+  env.run(10000)
 }
 
 object TestReduce extends RealTradeTests {
@@ -145,7 +146,7 @@ object TestReduce extends RealTradeTests {
   val summary = trades.deriveSliced(new Red(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
   out("Summary")(summary)
 //  Plot.plot(summary.map(_.q.ask))
-  impl.run(50000)
+  env.run(50000)
 }
 
 object TestBucket extends RealTradeTests {
@@ -189,7 +190,7 @@ object TestBucket extends RealTradeTests {
   val oneMinute = new Timer(1 minute)
   val summary = universe.deriveSliced(new Red(_)) reduce() slice_post(oneMinute)
   Plot.plot(summary.map(_.events))
-  impl.run(10000)
+  env.run(10000)
 }
 
 object TradeCategories extends RealTradeTests {
@@ -225,6 +226,6 @@ object TradeCategories extends RealTradeTests {
 //  Plot.plot(buys.map(_._2.price)).plot(sells.map(_._2.price)).plot(mid.map(_._2.price))
 //  Plot.plot(mid.map(_._2.price)).plot(mids)
 //  out("cat")(tradeCategory)
-  impl.run(100000)
+  env.run(100000)
 }
 

@@ -4,6 +4,7 @@ import data.Plot
 import scala.collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
+import scespet.EnvTermBuilder
 
 /**
  * Created with IntelliJ IDEA.
@@ -51,8 +52,8 @@ abstract class OrderReportsExample extends App {
     }
   }
 
-  val impl: SimpleEvaluator = new SimpleEvaluator()
-  implicit val env = impl.env
+  implicit val env = new SimpleEnv
+  val impl = EnvTermBuilder(env)
 //  var eventStream = impl.query(IteratorEvents(orderEventList))
 //  out("fills") { eventStream.by(_.orderId).filterType[Fill].map(_.qty.toInt) }
 //  out("Net fill") {eventStream.by(_.orderId).filterType[Fill].map(_.qty.toInt).fold_all2(new Sum)}
@@ -64,7 +65,7 @@ abstract class OrderReportsExample extends App {
 //  var trades = universe.valueSet().joinf( priceFactory.getTrades )
   val orderEvents = impl.asStream(IteratorEvents(orderEventList)((o, _) => o.time))
   doBody()
-  impl.run(200)
+  env.run(200)
 }
 
 object Test1 extends OrderReportsExample {

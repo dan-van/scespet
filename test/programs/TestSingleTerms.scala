@@ -6,6 +6,7 @@ import scespet.util._
 import org.junit.Test
 import org.scalatest.matchers.Matchers
 import scespet.core.types.MFunc
+import scespet.EnvTermBuilder
 
 
 /**
@@ -42,10 +43,13 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
   nameList += "IBM.N"
   nameList += "BARC.L"
 
-  var impl: SimpleEvaluator = new SimpleEvaluator()
+  var env:SimpleEnv = _
+  var impl:EnvTermBuilder = _
+
   val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
-    impl = new SimpleEvaluator
+    env = new SimpleEnv
+    impl = EnvTermBuilder(env)
   }
 
   def addPostCheck(name:String)(check: => Unit) {
@@ -60,7 +64,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 //  def output(prefix:String)(term:VectTerm[_,_]) = term.collapse().map(x => println(prefix + String.valueOf(x)))
 
   override protected def afterEach() {
-    impl.run()
+    env.run()
     for (r <- postRunChecks) {
       r()
     }

@@ -7,6 +7,7 @@ import scespet.util._
 import java.util.{List => JList}
 import collection.JavaConversions._
 import scespet.core.types.MFunc
+import scespet.EnvTermBuilder
 
 
 /**
@@ -23,10 +24,13 @@ import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRun
 @RunWith(classOf[JUnitRunner])
 class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
 
-  var impl: SimpleEvaluator = new SimpleEvaluator()
+  var env:SimpleEnv = _
+  var impl:EnvTermBuilder = _
+
   val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
-    impl = new SimpleEvaluator
+    env = new SimpleEnv
+    impl = EnvTermBuilder(env)
   }
 
   def addPostCheck(name:String)(check: => Unit) {
@@ -38,7 +42,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   val eventsC = IteratorEvents( 20 to 25 )( (x,i) => (10 * i) + 3)
 
   override protected def afterEach() {
-    impl.run()
+    env.run()
     for (r <- postRunChecks) {
       r()
     }

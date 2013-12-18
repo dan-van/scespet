@@ -13,7 +13,7 @@ import core.{EventGraphObject, EventSource}
  * @version $Id$
  */
 
-class SimpleEvaluator() extends EnvTermBuilder(new SimpleEnv()) {
+class SimpleEvaluator() extends EnvTermBuilder() {
   def run(iter:Int = 1000) {
     env.asInstanceOf[SimpleEnv].run(iter)
   }

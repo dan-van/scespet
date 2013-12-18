@@ -7,6 +7,7 @@ import scespet.util._
 import java.util.{List => JList}
 import collection.JavaConversions._
 import scala.collection.mutable
+import scespet.EnvTermBuilder
 
 
 /**
@@ -23,10 +24,13 @@ import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRun
 @RunWith(classOf[JUnitRunner])
 class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
 
-  var impl: SimpleEvaluator = new SimpleEvaluator()
+  var env:SimpleEnv = _
+  var impl:EnvTermBuilder = _
+
   val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
-    impl = new SimpleEvaluator
+    env = new SimpleEnv
+    impl = EnvTermBuilder(env)
   }
 
   def addPostCheck(name:String)(check: => Unit) {
@@ -38,7 +42,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
   val eventsC = IteratorEvents( 20 to 25 )( (x,i) => (10 * i) + 3)
 
   override protected def afterEach() {
-    impl.run()
+    env.run()
     for (r <- postRunChecks) {
       r()
     }
@@ -151,19 +155,19 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     val byFirst = nameStream.by(_.charAt(0))
     val expanded = byFirst.toValueSet(x => List(x+".1", x+".2"))
     out("byFirst "){expanded}
-    impl.run(1)
+    env.run(1)
     expectResult(List("FOO.1", "FOO.2"))(expanded.keys)
     expectResult(expanded.keys)(expanded.values)
 
-    impl.run(1)
+    env.run(1)
     expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2"))(expanded.keys)
     expectResult(expanded.keys)(expanded.values)
 
-    impl.run(1)
+    env.run(1)
     expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2"))(expanded.keys)
     expectResult(expanded.keys)(expanded.values)
 
-    impl.run(1)
+    env.run(1)
     expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2", "FOOBAR.1", "FOOBAR.2"))(expanded.keys)
     expectResult(expanded.keys)(expanded.values)
   }

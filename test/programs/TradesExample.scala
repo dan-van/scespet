@@ -1,8 +1,9 @@
 package programs
 
 import collection.mutable.ArrayBuffer
-import scespet.core.{SimpleEvaluator, IteratorEvents, MacroTerm, Reduce}
+import scespet.core._
 import scespet.util._
+import scespet.EnvTermBuilder
 
 
 /**
@@ -34,13 +35,15 @@ class TradesExample {
     override def toString = s"TradeAccVol:$accVol"
   }
 
-  val impl: SimpleEvaluator = new SimpleEvaluator()
+  var env:SimpleEnv = new SimpleEnv
+  var impl = EnvTermBuilder(env)
+
   var tradeExpr: MacroTerm[Trade] = impl.asStream(trades).asInstanceOf[MacroTerm[Trade]]
 }
 
 object testFoldAll extends TradesExample with App {
   tradeExpr map {_.qty} fold_all (new Sum[Int]) map { println(_) }
-  impl.run()
+  env.run()
 }
 
 object testReduceEach extends TradesExample with App {
@@ -49,7 +52,7 @@ object testReduceEach extends TradesExample with App {
   out("tradePrint fired="){tradeBuckets}
   // bucket pairs of TradePrint into a sum (i.e. accVol of 4 trades)
   out("Sum="){ tradeBuckets.map(_.accVol).reduce(new Sum[Int]).each(2) }
-  impl.run()
+  env.run()
 }
 
 
@@ -62,7 +65,7 @@ object testWindowCausal extends TradesExample with App {
   // bucket trades into this window definition
   val tradeBuckets = tradeExpr.reduce(new TradePrint).window(windowStream)
   out("tradeBucket="){tradeBuckets}
-  impl.run()
+  env.run()
 }
 
 
