@@ -98,7 +98,7 @@ abstract class RealTradeTests extends App with Logged {
 
 object TestTrade extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O"))
-  val trades = universe.derive(u => getTradeEvents(u))
+  val trades = universe.keyToStream(u => getTradeEvents(u))
   Plot.plot(trades.map(_.price))
   env.run(100000)
 }
@@ -116,8 +116,8 @@ object TestPlots extends RealTradeTests {
 object TestReduce extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O", "AAPL.O", "IBM.N"))
 //  val universe = impl.asVector(List("MSFT.O"))
-  val trades = universe.derive(u => getTradeEvents(u))
-  val quotes = universe.derive(u => getQuoteEvents(u))
+  val trades = universe.keyToStream(u => getTradeEvents(u))
+  val quotes = universe.keyToStream(u => getQuoteEvents(u))
 
   class Red(key:String) extends Bucket {
     def value: Red = this
@@ -143,7 +143,7 @@ object TestReduce extends RealTradeTests {
   }
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
-  val summary = trades.deriveSliced(new Red(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
+  val summary = trades.buildBucketStream(new Red(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
   out("Summary")(summary)
 //  Plot.plot(summary.map(_.q.ask))
   env.run(50000)
@@ -152,8 +152,8 @@ object TestReduce extends RealTradeTests {
 object TestBucket extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O"))
 //  val universe = impl.asVector(List("MSFT.O"))
-  val trades = universe.derive(u => getTradeEvents(u))
-  val quotes = universe.derive(u => getQuoteEvents(u))
+  val trades = universe.keyToStream(u => getTradeEvents(u))
+  val quotes = universe.keyToStream(u => getQuoteEvents(u))
 
   class Red(key:String) extends Bucket with types.MFunc {
     var t:Trade = _
@@ -188,7 +188,7 @@ object TestBucket extends RealTradeTests {
   }
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
-  val summary = universe.deriveSliced(new Red(_)) reduce() slice_post(oneMinute)
+  val summary = universe.buildBucketStream(new Red(_)) reduce() slice_post(oneMinute)
   Plot.plot(summary.map(_.events))
   env.run(10000)
 }
@@ -196,8 +196,8 @@ object TestBucket extends RealTradeTests {
 object TradeCategories extends RealTradeTests {
 //  val universe = impl.asVector(List("MSFT.O", "AAPL.O", "IBM.N"))
   val universe = impl.asVector(List("MSFT.O"))
-  val trades = universe.derive(u => getTradeEvents(u))
-  val quote = universe.derive(u => getQuoteEvents(u))
+  val trades = universe.keyToStream(u => getTradeEvents(u))
+  val quote = universe.keyToStream(u => getQuoteEvents(u))
   val mids = quote.map(q => (q.bid + q.ask) * 0.5)
 
   def categorise(p:(Trade, Quote)):(String, Trade) = {

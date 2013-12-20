@@ -71,7 +71,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
       , "C" -> impl.asStream(eventsC)
     )
 
-    set.derive(key => eventStreams(key).input)
+    set.keyToStream(key => eventStreams(key).input)
   }
 
   class NamedSum[X:Numeric](val str:String) extends Reduce[X]{
@@ -133,7 +133,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     feedData += FeedEntry("Reuters", "foo")  -> IteratorEvents(1.0 to (2.0,0.1))((e,i)=> i)
 
     val feedDict = impl.asVector(feedData.keySet)
-    val prices = feedDict.derive(key => feedData(key))
+    val prices = feedDict.keyToStream(key => feedData(key))
 
     val reuters = prices.mapKeys({case k if k.feedName == "Reuters" => Some(k.symbol); case _ => None})
     val joined = prices.join(reuters, k => k.symbol)
@@ -297,7 +297,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     }
     val sliceOn = counter.filter(mySliceDef)
 
-    val slicer = evenOdd.deriveSliced(k => new XYCollector)
+    val slicer = evenOdd.buildBucketStream(k => new XYCollector)
     val sliceBuilder = if (reduce) slicer.reduce() else slicer.fold()
     val buckets = sliceBuilder.
       join(evenOdd){b => b.addX}.
@@ -323,7 +323,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     out("Slice")(sliceOn)
 
     // direct evenOdd -> bucket.x and div5 -> bucket.y
-    val buckets = evenOdd.deriveSliced(k => new XYCollector).reduce().
+    val buckets = evenOdd.buildBucketStream(k => new XYCollector).reduce().
       join(evenOdd){b => b.addX}.
       join(div5){b => b.addY}.
       slice_pre( sliceOn )

@@ -95,7 +95,7 @@ object Test4 extends OrderReportsExample {
     val eventsById = orderEvents.by(_.orderId)
     val orderIdToName = eventsById.filterType[NewOrder]().map(_.stock)
     val orderIdToIsOpen = eventsById.map(!_.isInstanceOf[Terminate])
-    val orderIdToTrades = orderIdToName.derive(id => priceFactory.getTrades( orderIdToName(id).value ))
+    val orderIdToTrades = orderIdToName.keyToStream(id => priceFactory.getTrades( orderIdToName(id).value ))
     val accVolPerOrder = orderIdToTrades.map(_.qty).fold(new Sum[Double]).window(orderIdToIsOpen).map(_.sum)
     Plot.plot (accVolPerOrder)
   }
@@ -106,7 +106,7 @@ object TestN extends OrderReportsExample {
     val eventsById = orderEvents.by(_.orderId)
     val orderActive = eventsById.map(!_.isInstanceOf[Terminate])
     val orderIdToStock = eventsById.filterType[NewOrder].map(_.stock)
-    val orderIdToTrades = eventsById.derive(id => {val stock = orderIdToStock(id).value; priceFactory.getTrades(stock)})
+    val orderIdToTrades = eventsById.keyToStream(id => {val stock = orderIdToStock(id).value; priceFactory.getTrades(stock)})
     out ("ordId:external Volume ") { orderIdToTrades.map(_.qty.toInt).reduce( new Sum[Int] ).window( orderActive ) }
   }
 }
@@ -114,8 +114,8 @@ object TestN extends OrderReportsExample {
   object TestTradeBuckets extends OrderReportsExample {
   def doBody() {
     val universe = impl.asVector(List("MSFT"))
-    val trades = universe.derive(priceFactory.getTrades)
-    val mids = universe.derive(priceFactory.getMids)
+    val trades = universe.keyToStream(priceFactory.getTrades)
+    val mids = universe.keyToStream(priceFactory.getMids)
     val tradeType = trades.join(mids).map({case (t,m) => if (t.price > m) {"Buy"} else if (t.price < m) {"Sell"} else "none"})
   }
 }
