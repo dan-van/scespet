@@ -21,6 +21,8 @@ abstract class MultiVectorJoin[K, B <: Bucket](
                       sourceShape:VectorStream[K,_],
                       sourceJoins:List[BucketJoin[K, _, B]],
                       env:types.Env) extends AbstractVectorStream[K, B](env) with types.MFunc {
+  def isInitialised: Boolean = sourceShape.isInitialised
+
   /*
    * this is responsible for tracking seen keys in a source input vector, and binding any new input cells
    * into the bucket aggregation (using the defined input->bucketUpdate function)

@@ -15,6 +15,7 @@ import scala.collection.mutable
 // this one uses pur function calls and tracks updated indicies.
 // we could try a verison that uses wakeup nodes.
 class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y], env:types.Env, keyMap:K => K2, fireOnOther:Boolean = true) extends AbstractVectorStream[K, (X,Y)](env) {
+  def isInitialised: Boolean = xVect.isInitialised || yVect.isInitialised
 
   class CellTuple(val key:K) extends UpdatingHasVal[(X,Y)]{
     initialised = false

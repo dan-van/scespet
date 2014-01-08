@@ -10,6 +10,18 @@ import java.util.*;
  * new keys are only ever added.
  */
 public interface VectorStream<K, V> {
+    /**
+     * @return true if this vector is definitely empty, rather than some upstream source simply being in an unknown (not initialised) state.
+     * I have not achieved inner peace on this one. The only current usecase is when applying
+     * MultiStream.mapVector( mapFunc ) and it was plain that my mapFunc should not have been applied to an empty vector (because no events had been
+     * consumed yet, that would have given rise to a non-empty vector).
+     * Why didn't I just say that I should never apply mapVector to an empty vector?
+     * - well, if we *had* seen an event, but filtered it and resulted in an empty vector, then that is a significant result and worthy of going into
+     * the mapFunc.
+     *
+     * Anyway, wait for more usecase and thought on this one.
+     */
+    boolean isInitialised();
     int getSize();
     List<K> getKeys();
     List<V> getValues();

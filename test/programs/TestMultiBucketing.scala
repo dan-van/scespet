@@ -8,6 +8,7 @@ import java.util.{List => JList}
 import collection.JavaConversions._
 import scespet.core.types.MFunc
 import scespet.EnvTermBuilder
+import scala.collection.mutable
 
 
 /**
@@ -68,7 +69,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     def value = this
     var firstX:Int = -1
     var lastX:Int = -1
-    var xChanged,yChanged = false
+    var xChanged ,yChanged = 0
     var countX, countY, countBoth = 0
     var done = false
 
@@ -78,14 +79,14 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     }
 
     def calculate(): Boolean = {
-      if (xChanged && yChanged) countBoth += 1
-      else if (xChanged) countX += 1
-      else if (yChanged) countY += 1
-      xChanged = false; yChanged = false
+      if (xChanged > 0 && yChanged > 0) countBoth += 1
+      else if (xChanged > 0) countX += 1
+      else if (yChanged > 0) countY += 1
+      xChanged = 0; yChanged = 0
       true
     }
-    def addX(x:Int) = {xChanged = true; lastX = x; if (firstX == -1) firstX = x}
-    def addY(x:Int) = yChanged = true
+    def addX(x:Int) = {xChanged += 1; lastX = x; if (firstX == -1) firstX = x}
+    def addY(x:Int) = yChanged += 1
 
     override def toString: String = s"firstX:$firstX x:$lastX nx:$countX, ny:$countY, nboth:$countBoth, done:$done"
 
@@ -141,7 +142,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   test("bucket sliced reduce post") {
     val stream = generateCounterAndPartialBucketDef(reduce = true, 26).slicePost()
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
-//    new StreamTest("Recombined count", List(11, 11, 5), recombinedEventCount)
+    new StreamTest("Recombined count", List(12, 11, 4), recombinedEventCount)
 
 
     val evenBuckets = stream("Even")
@@ -154,88 +155,86 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
     val oddBuckets = stream("Odd")
     val expectedOdd = List(
-    {val v = new XYCollector; v.firstX =  1; v.lastX = 11; v.countX = 5; v.countBoth = 1; v.done=true; v}, // for i 0 -> 10, there are 3 even numbers and 2 (even & multiple of 5)
-    {val v = new XYCollector; v.firstX = 13; v.lastX = 21; v.countX = 4; v.countBoth = 1; v.done=true; v}, // for i 11 -> 21, there are 3 even numbers and 2 (even & multiple of 5)
-    {val v = new XYCollector; v.firstX = 23; v.lastX = 25; v.countX = 1; v.countBoth = 1; v.done=true; v}  // for i 22 -> 26, there are 3 even numbers and 2 (even & multiple of 5)
+    {val v = new XYCollector; v.firstX =  1; v.lastX = 11; v.countX = 5; v.countBoth = 1; v.done=true; v}, // for i 1 -> 11, there are 5 odd numbers and 1 (odd & multiple of 5)
+    {val v = new XYCollector; v.firstX = 13; v.lastX = 21; v.countX = 4; v.countBoth = 1; v.done=true; v}, // for i 13 -> 21, there are 4 even numbers and 1 (odd & multiple of 5)
+    {val v = new XYCollector; v.firstX = 23; v.lastX = 25; v.countX = 1; v.countBoth = 1; v.done=true; v}  // for i 23 -> 25, there are 1 even numbers and 1 (odd & multiple of 5)
     )
     new StreamTest("Odd", expectedOdd, oddBuckets)
   }
 
+  def generateExpectedXYCollectorValues(r:Seq[Int]) :Seq[XYCollector] = {
+    val v = new XYCollector
+    val buf = new ArrayBuffer[XYCollector]()
+    val iter = r.iterator
+    while (iter.hasNext) {
+      val x = iter.next()
+      if (v.firstX < 0) v.firstX = x
+      v.lastX = x
+      if (x % 5 == 0) {
+        v.countBoth += 1
+      } else {
+        v.countX += 1
+      }
+      // now clone and put the copy into expected
+      val vCopy = v.clone()
+      buf.append(vCopy)
+    }
+    buf
+  }
 
-  ignore("bucket sliced fold pre") { //See docs on SliceBeforeBucket for why I can't support this yet
+  def addDoneEvent(buf:mutable.Buffer[XYCollector]) {
+    val copy = buf.last.clone
+    copy.done = true
+    buf.append(copy)
+  }
+
+  def generateExpectedXYCollectorValues(i:Int, j:Int, expectedOdd:mutable.Buffer[XYCollector], expectedEven:mutable.Buffer[XYCollector]) {
+    val oddRange = (i to j).filter(_ % 2 == 1)
+    expectedOdd.appendAll( generateExpectedXYCollectorValues(oddRange) )
+    val evenRange = (i to j).filter(_ % 2 == 0)
+    expectedEven.appendAll( generateExpectedXYCollectorValues(evenRange) )
+
+    val (lastBuf, prevLastBuf) = if (j % 2 == 0) { // last value in range was even
+      (expectedEven, expectedOdd)
+    } else {
+      (expectedOdd, expectedEven)
+    }
+    // now mutate to 'done' the last value
+    lastBuf.last.done = true
+    // and add a 'done' copy to the other buffer
+    addDoneEvent(prevLastBuf)
+  }
+
+
+
+  ignore("bucket fold, slice before") { //See docs on SliceBeforeBucket for why I can't support this yet
     val stream = generateCounterAndPartialBucketDef(reduce = false, 26).slicePre()
-    val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) 0 else V.max})
+    val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     new StreamTest("Recombined count", (0 to 26), recombinedCounter)
 
     // now populate an expected sequence of observed values:
     val expectedEven = new ArrayBuffer[XYCollector]()
     val expectedOdd = new ArrayBuffer[XYCollector]()
-    def fillExpectations(i:Int, j:Int) {
-      val vOdd = new XYCollector;
-      val vEven = new XYCollector;
-      for (x <- i to j) {
-        // mutate the last odd or even state accumulation
-        val v = if (x % 2 == 0) vEven else vOdd
-        if (v.firstX < 0) v.firstX = x
-        v.lastX = x
-        if (x % 5 == 0) {
-          v.countBoth += 1
-        } else {
-          v.countX += 1
-        }
-        // now clone and put the copy into expected
-        (if (x % 2 == 0) expectedEven else expectedOdd).append(v.clone)
-      }
-      expectedEven.last.done = true
-      expectedOdd.last.done = true
-    }
-    fillExpectations(0, 10)
-    fillExpectations(11, 21)
-    fillExpectations(22, 26)
+    generateExpectedXYCollectorValues(0, 10, expectedOdd, expectedEven)
+    generateExpectedXYCollectorValues(11, 21, expectedOdd, expectedEven)
+    generateExpectedXYCollectorValues(22, 26, expectedOdd, expectedEven)
 
     new StreamTest("Even", expectedEven, stream("Even"))
     new StreamTest("Odd", expectedOdd, stream("Odd"))
   }
 
   // fails due to missing event after slice
-  test("bucket sliced fold post") {
+  test("bucket fold, slice after") {
     val stream = generateCounterAndPartialBucketDef(reduce = false, 26).slicePost()
-    val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) 0 else V.max})
+    val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     new StreamTest("Recombined count", (0 to 26), recombinedCounter)
 
     // now populate an expected sequence of observed values:
     val expectedEven = new ArrayBuffer[XYCollector]()
     val expectedOdd = new ArrayBuffer[XYCollector]()
-    def fillExpectations(i:Int, j:Int) {
-      val vOdd = new XYCollector;
-      val vEven = new XYCollector;
-      for (x <- i to j) {
-        val isEven = x % 2 == 0
-        // mutate the last odd or even state accumulation
-        val v = if (isEven) vEven else vOdd
-        if (v.firstX < 0) v.firstX = x
-        v.lastX = x
-        if (x % 5 == 0) {
-          v.countBoth += 1
-        } else {
-          v.countX += 1
-        }
-        // now clone and put the copy into expected
-        val vCopy = v.clone()
-        if (x == j) {
-          vCopy.done = true
-          // expect an event for the 'done' fire from the other group
-          val otherGroup = if (isEven) expectedOdd else expectedEven
-          val closeEvent = otherGroup.last.clone()
-          closeEvent.done = true
-          otherGroup.append(closeEvent)
-        }
-        (if (isEven) expectedEven else expectedOdd).append(vCopy)
-      }
-    }
-    fillExpectations(0, 11)
-    fillExpectations(12, 22)
-    fillExpectations(23, 26)
+    generateExpectedXYCollectorValues(0, 11, expectedOdd, expectedEven)
+    generateExpectedXYCollectorValues(12, 22, expectedOdd, expectedEven)
+    generateExpectedXYCollectorValues(23, 26, expectedOdd, expectedEven)
 
     new StreamTest("Even", expectedEven, stream("Even"))
     new StreamTest("Odd", expectedOdd, stream("Odd"))
@@ -262,13 +261,13 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
       }
       lazy val sliceOn = counter.filter(mySliceDef)
       lazy val windowStream = {
-        sliceOn.map(new Function1[Any, Boolean] {
+        sliceOn.fold_all(new Reduce[Any] {
           var windowOpen = true
-          def apply(v1: Any): Boolean = {
+          def add(x: Any): Unit = {
             windowOpen = !windowOpen;
             println("Window edge. WindowOpen = "+windowOpen)
-            windowOpen}
-        })
+          }
+        }).map(_.windowOpen)
       }
       def slicePre() = unslicedBuckets.slice_pre( sliceOn )
       def slicePost() = unslicedBuckets.slice_post( sliceOn )
@@ -277,7 +276,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   }
 
 
-  ignore("bucket windows reduce") {
+  test("bucket windows reduce") {
     val stream = generateCounterAndPartialBucketDef(reduce = true, 26).window()
 
     // This is similar to slice_pre - if the window close event is atomic with a value for the bucket, that value is deemed to be not-in the bucket
@@ -297,6 +296,32 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     {val v = new XYCollector; v.firstX = 23; v.lastX = 25; v.countX = 1; v.countBoth = 1; v.done=true; v}  // for i 22 -> 26, there are 3 even numbers and 2 (even & multiple of 5)
     )
     new StreamTest("Odd", expectedOdd, oddBuckets)
+  }
+
+
+  test("bucket window fold") {
+  val stream = generateCounterAndPartialBucketDef(reduce = false, 26).window()
+    val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
+    val counterExpectations = (0 to 10) ++ Seq(10) ++ (22 to 26)
+    new StreamTest("Recombined count", counterExpectations, recombinedCounter)
+
+    // now populate an expected sequence of observed values:
+    val expectedEven = new ArrayBuffer[XYCollector]()
+    val expectedOdd = new ArrayBuffer[XYCollector]()
+    def doRange(r:Seq[Int]) {
+      expectedEven.appendAll( generateExpectedXYCollectorValues( r.filter(_ % 2 == 0) ) )
+      addDoneEvent(expectedEven)
+
+      expectedOdd.appendAll( generateExpectedXYCollectorValues( r.filter(_ % 2 == 1) ) )
+      addDoneEvent(expectedOdd)
+    }
+
+    doRange(0 to 10)
+    // windows close on event 11, and open on event 22
+    doRange(22 to 26)
+
+    new StreamTest("Even", expectedEven, stream("Even"))
+    new StreamTest("Odd", expectedOdd, stream("Odd"))
   }
 
 }

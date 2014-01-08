@@ -1,7 +1,6 @@
 package scespet.core;
 
 import gsa.esg.mekon.core.Environment;
-import gsa.esg.mekon.core.EventGraphObject;
 
 /**
  * Created with IntelliJ IDEA.
@@ -16,6 +15,7 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
     private final VectorStream.ReshapeSignal reshapeSignal;
     private final VectorStream<K, ?> sourceVector;
     private final Environment env;
+    private boolean initialised = false;
 
     public ChainedVector(final VectorStream<K, ?> sourceVector, final Environment env) {
         super(env);
@@ -30,6 +30,9 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
                 env.addListener(sourceVectorChanged, this);
             }
             public boolean calculate() {
+                if (!initialised && sourceVector.isInitialised()) {
+                    initialised = true;
+                }
                 for (int i=seenKeys; i<sourceVector.getSize(); i++) {
                     K newKey = sourceVector.getKey(i);
                     add(newKey);
@@ -39,11 +42,17 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
             }
         };
         // we've just done some listener linkage, ripple an event after listeners established
+        // not sure why we don't immediately do calculate here? Maybe because it would not propagate any mapping functions
+        // but then again, surely the construction of a mapping function would use exactly the same 'should i init' approach?
         env.fireAfterChangingListeners(reshapeSignal);
 //        env.wakeupThisCycle(reshapeSignal);
 //        reshapeSignal.calculate();
     }
 
+    @Override
+    public boolean isInitialised() {
+        return initialised;
+    }
 
     @Override
     public VectorStream.ReshapeSignal getNewColumnTrigger() {

@@ -14,6 +14,8 @@ import gsa.esg.mekon.core.EventGraphObject
  *    I think
  */
 class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => Option[K2], env:types.Env) extends AbstractVectorStream[K2, V](env) with types.MFunc {
+  def isInitialised: Boolean = source.isInitialised
+
   val getNewColumnTrigger = new ReshapeSignal(env)
   env.addListener(source.getNewColumnTrigger, this)
 

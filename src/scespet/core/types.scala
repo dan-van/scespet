@@ -201,6 +201,7 @@ trait BucketBuilderVect[K, T] {
   def slice_post(trigger: EventGraphObject):VectTerm[K,T]
 }
 
+// TODO: I reckon this should also expose a 'value' type
 trait Reduce[-X] extends Serializable {
   def add(x:X)
 }

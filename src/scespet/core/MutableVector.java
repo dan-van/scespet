@@ -44,6 +44,11 @@ public class MutableVector<X> implements VectorStream<X,X> {
         env.setStickyInGraph(reshaped, true);
     }
 
+    @Override
+    public boolean isInitialised() {
+        return true;
+    }
+
     public boolean add(X x) {
         if (uniqueness.add(x)) {
             int i = values.size();

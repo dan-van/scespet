@@ -11,6 +11,8 @@ import scespet.core.VectorStream.ReshapeSignal
  *    I think
  */
 class NestedVector[K2 ,K, V](source:VectorStream[K,V], keyFunc:K => K2, env:types.Env) extends AbstractVectorStream[K2, VectorStream[K,V]](env) with types.MFunc {
+  def isInitialised: Boolean = source.isInitialised
+
   val inputAsTerm = new VectTerm[K,V](env)(source)
   val getNewColumnTrigger = new ReshapeSignal(env)
 

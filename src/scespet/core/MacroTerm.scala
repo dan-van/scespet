@@ -81,6 +81,8 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
       }
     }
     env.addListener(input.trigger, listener)
+    if (input.initialised) // This initialises the initial value - we do not need to propagate an event here.
+      listener.calculate()
     return new MacroTerm[Y](env)(listener)
   }
 

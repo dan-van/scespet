@@ -100,17 +100,18 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   class VectorMap[Y](f:VectorStream[K,X] => Y) extends UpdatingHasVal[Y] {
     // not convinced we should initialise like this?
-    var value:Y = if (input.getSize > 0) {
+    var value:Y = if (input.isInitialised) {
       initialised = true
       f.apply(input)
     } else {
-      println("Initial vector is empty, i.e. uninitialised. Is it right to apply the mapping function to the empty vector?")
-      initialised = true
-      f.apply(input)
+      println("Initial vector is uninitialised. not applying mapVector to the empty vector")
+      initialised = false
+      null.asInstanceOf[Y]
     }
 
     def calculate() = {
       value = f.apply(input)
+      initialised = true
       true
     }
   }
@@ -446,15 +447,9 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
    * @return
    */
   def window(windowStream: MacroTerm[Boolean]) :VectTerm[K, B] = {
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-      def createBucketCell(key:K): BucketCell[B] = {
-        val newBFuncFromKey = () => newBFunc(key)
-        new WindowedBucket[B](windowStream.input, newBFuncFromKey, emitType, env)
-      }
-    }
-    return new VectTerm[K,B](env)(bucketJoinVector)
+    // all cells use the same single window trigger
+    window(cellkey => windowStream.input)
   }
-
 
   /**
    * window each element in the vector with the given window function
@@ -465,7 +460,10 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
       def createBucketCell(key:K): BucketCell[B] = {
         val newBFuncFromKey = () => newBFunc(key)
         val cellWindowFunc = windowFunc(key)
-        new WindowedBucket[B](cellWindowFunc, newBFuncFromKey, emitType, env)
+        emitType match {
+          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc, newBFuncFromKey, env)
+          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc, newBFuncFromKey, env)
+        }
       }
     }
     return new VectTerm[K,B](env)(bucketJoinVector)
@@ -481,7 +479,10 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
       def createBucketCell(key:K): BucketCell[B] = {
         val newBFuncFromKey = () => newBFunc(key)
         val cellWindowFunc = windowVect(key)
-        new WindowedBucket[B](cellWindowFunc.input, newBFuncFromKey, emitType, env)
+        emitType match {
+          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc.input, newBFuncFromKey, env)
+          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc.input, newBFuncFromKey, env)
+        }
       }
     }
     return new VectTerm[K,B](env)(bucketJoinVector)
