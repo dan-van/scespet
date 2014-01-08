@@ -62,7 +62,7 @@ object Program2 extends App {
   def v3 = {
 //    var start = impl.query(trades)
     val nameStream = impl.asStream(names)
-    val start = nameStream.by(x => x).derive(getTrades).fold_all(new Collect)
+    val start = nameStream.by(x => x).keyToStream(getTrades).fold_all(new Collect)
     env.run()
     println("run finished. Final data = ")
     for (i <- 0 to start.input.getSize() - 1 ) {

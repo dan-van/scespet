@@ -216,6 +216,8 @@ trait Bucket extends types.MFunc with Serializable {
 }
 
 trait Term[X] {
+  implicit def eventObjectToHasVal[E <: types.EventGraphObject](evtObj:E) :HasVal[E] = new IsVal(evtObj)
+
   def value:X
 
   def fold_all[Y <: Reduce[X]](y: Y):Term[Y]
@@ -261,6 +263,8 @@ trait Term[X] {
 }
 
 trait MultiTerm[K,X] {
+  implicit def eventObjectToHasVal[E <: types.EventGraphObject](evtObj:E) :HasVal[E] = new IsVal(evtObj)
+
   /**
    * for symmetry with MacroTerm.value
    * @return
@@ -321,7 +325,7 @@ trait MultiTerm[K,X] {
     * @tparam Y
    * @return
    */
-  def derive[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y]
+  def keyToStream[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y]
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)]
   def join[Y]( other:VectTerm[K,Y] ):VectTerm[K,(X,Y)] = join(other, identity)
 

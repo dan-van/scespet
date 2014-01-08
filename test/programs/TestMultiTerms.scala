@@ -71,7 +71,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
       , "C" -> impl.asStream(eventsC)
     )
 
-    set.derive(key => eventStreams(key).input)
+    set.keyToStream(key => eventStreams(key).input)
   }
 
   class NamedSum[X:Numeric](val str:String) extends Reduce[X]{
@@ -133,7 +133,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     feedData += FeedEntry("Reuters", "foo")  -> IteratorEvents(1.0 to (2.0,0.1))((e,i)=> i)
 
     val feedDict = impl.asVector(feedData.keySet)
-    val prices = feedDict.derive(key => feedData(key))
+    val prices = feedDict.keyToStream(key => feedData(key))
 
     val reuters = prices.mapKeys({case k if k.feedName == "Reuters" => Some(k.symbol); case _ => None})
     val joined = prices.join(reuters, k => k.symbol)

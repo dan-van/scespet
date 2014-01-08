@@ -28,6 +28,21 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def subset(predicate:K=>Boolean):VectTerm[K,X] = mapKeys(k => {if (predicate(k)) Some(k) else None})
 
   /**
+   * when this is MultiTerm[X,X] (i.e. a set), then you can present it as a Stream[List[X]]
+   * @return
+   */
+  def keyList()(implicit ev:K =:= X):MacroTerm[List[K]] = {
+    val keySetHolder : HasVal[List[K]] = new HasVal[List[K]] {
+      def value = input.getKeys.toList
+
+      def trigger = input.getNewColumnTrigger
+
+      def initialised = true
+    }
+    new MacroTerm[List[K]](env)(keySetHolder)
+  }
+
+  /**
    * derives a new VectTerm with new derived keys (possibly a subset).
    * any mapping from K => Option[K2] that yields None will result in that K being dropped from the resulting vector
    * todo: more thought - this may be more useful to use null instread of 'None' as it avoids having to introduce Option
@@ -290,6 +305,16 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, Y](env)(output)
   }
 
+  def toKeySet() = {
+    new VectTerm[K,K](env)(new ChainedVector[K, K](input, env) {
+      def newCell(i: Int, key: K) = {
+        val cell = new ValueFunc[K](env)
+        cell.setValue(key)
+        cell
+      }
+    })
+  }
+
   /**
    * This is like "map", but the outputs of the map function are flattened and presented as a MultiStream (acting as a set, i.e. key == value).
    *
@@ -351,7 +376,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @tparam Y
    * @return
    */
-  def derive[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
+  def keyToStream[Y]( cellFromKey:K=>HasVal[Y] ):VectTerm[K,Y] = {
     val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K) = cellFromKey(key)
     }
@@ -367,7 +392,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @tparam B
    * @return
    */
-  def deriveSliced[B <: Bucket](newBFunc: K => B):PreSliceBuilder[K, B] = new PreSliceBuilder[K, B](newBFunc, VectTerm.this.input, env)
+  def buildBucketStream[B <: Bucket](newBFunc: K => B):PreSliceBuilder[K, B] = new PreSliceBuilder[K, B](newBFunc, VectTerm.this.input, env)
 
   
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {

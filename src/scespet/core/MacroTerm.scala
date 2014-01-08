@@ -120,7 +120,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
   }
 
   def takef[Y](newGenerator:(X)=>HasVal[Y]) : VectTerm[X,Y] = {
-    this.by(x => x).derive(newGenerator)
+    this.by(x => x).keyToStream(newGenerator)
   }
 
 // Take a stream of X (usually representing some collection), map X -> Collection[Y] and generate a new flattened set of Y (mainly used if X is some form of collection and you want to flatten it)
@@ -214,4 +214,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
   def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.LAST, env)
 
   def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.CUMULATIVE, env)
+}
+object MacroTerm {
+  implicit def termToHasVal[E](term:MacroTerm[E]) :HasVal[E] = term.input
 }

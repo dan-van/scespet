@@ -246,7 +246,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
     val div5 = evenOdd.filter(_ % 5 == 0)
 
-    val slicer = evenOdd.deriveSliced(k => new XYCollector)
+    val slicer = evenOdd.buildBucketStream(k => new XYCollector)
     val sliceBuilder = if (reduce) slicer.reduce() else slicer.fold()
     val unslicedBuckets = sliceBuilder.
       join(evenOdd){b => b.addX}.
