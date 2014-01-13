@@ -21,6 +21,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   def keys = input.getKeys.toList
   def values = input.getValues.toList
+  def entries = keys.zip(values)
 
   /**
    * todo: call this "filterKey" ?

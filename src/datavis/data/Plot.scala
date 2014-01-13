@@ -124,7 +124,7 @@ object Plot {
       val dataset = chartstate.dataset  // I'll clean this later
       val currentCount = dataset.getSeriesCount
 
-      val name = options.keyRender(key)
+      val name = options.keyToString(key)
       val seriesId = dataset.addSeries(name)
       options.addSeries(seriesId)
       val env = stream.env
@@ -146,7 +146,7 @@ object Plot {
   class Options[K,X](chartState:ChartState) {
     var seriesList = List[Int]()
 
-    var keyRender:K=>String = (k) => String.valueOf(k)
+    private var keyRender:K=>String = (k) => String.valueOf(k)
     private var _enableShapes = false
     private var _shape:Shape = _
     private var _fillPaint:Paint = _
@@ -167,6 +167,8 @@ object Plot {
       seriesList :+= s
       applySeriesOptions(s)
     }
+
+    protected[Plot] def keyToString(k:K) = keyRender(k)
 
     private def applySeriesOptions(series:Int) {
       if (_enableShapes) chartstate.enableShapes(series)
