@@ -132,7 +132,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     expectedOut should be(List(6, 15, 24, 21))
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.sum.toInt)
+    val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.toInt)
     new StreamTest("mult10", expectedOut, mult10)
   }
 
@@ -141,7 +141,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val elements = "aaAbAB".toCharArray
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val count = stream.reduce_all(new Counter).map(_.c)
+    val count = stream.reduce_all(new Counter)
     new StreamTest("mult10", List(6), count)
   }
 
@@ -150,8 +150,19 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
     expectedOut should be(List(List(2, 4, 6), List(2, 4, 6), List(2, 4, 6), List(2, 4)).flatten)
 
+    import scala.concurrent.duration._
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.fold(new Sum[Int]).each(3).map(_.sum.toInt)
+    val mult10 = stream.accum(new Sum[Int]).every(3.events).map(_.toInt)
+
+//    val mult10 = stream.agg(new Sum[Int]).every(3.events, reset = BEFORE)
+//    val mult10 = stream.agg(new Sum[Int]).every(3.minutes)
+//    val mult10 = stream.reduce(new Sum[Int]).every(3.minutes)
+//    val mult10 = stream.reduce(new Sum[Int])(3.events).lastVal
+//    val mult10 = stream.agg(new Sum[Int]).last.after(3.events)
+//    val mult10 = stream.agg(new Sum[Int]).before(3.minutes)
+//    val mult10 = stream.agg(new Sum[Int]).within(window)
+//    val mult10 = stream.agg(3.events)(new Sum[Int]).last
+//    val mult10 = stream.agg(window)(new Sum[Int]).last
     new StreamTest("fold each", expectedOut, mult10)
   }
 
@@ -162,8 +173,8 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.fold(new Sum[Int]).slice_pre( sliceTrigger ).map(_.sum.toInt)
-    val reduce = stream.reduce(new Sum[Int]).slice_pre( sliceTrigger ).map(_.sum.toInt)
+    val scan = stream.fold(new Sum[Int]).slice_pre( sliceTrigger ).map(_.toInt)
+    val reduce = stream.reduce(new Sum[Int]).slice_pre( sliceTrigger ).map(_.toInt)
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -175,8 +186,8 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.fold(new Sum[Int]).slice_post( sliceTrigger ).map(_.sum.toInt)
-    val reduce = stream.reduce(new Sum[Int]).slice_post( sliceTrigger ).map(_.sum.toInt)
+    val scan = stream.fold(new Sum[Int]).slice_post( sliceTrigger ).map(_.toInt)
+    val reduce = stream.reduce(new Sum[Int]).slice_post( sliceTrigger ).map(_.toInt)
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -206,8 +217,8 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 
     val isOpen = stringStream.map(_ == "Open").asInstanceOf[MacroTerm[Boolean]]
 
-//    val scan = numberStream.fold(new Sum[Int]).window( isOpen ).map(_.sum.toInt)
-    val reduce = numberStream.reduce(new Sum[Int]).window( isOpen ).map(_.sum.toInt)
+//    val scan = numberStream.fold(new Sum[Int]).window( isOpen ).map(_.toInt)
+    val reduce = numberStream.reduce(new Sum[Int]).window( isOpen ).map(_.toInt)
 //    new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -228,8 +239,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
       expectResult(expectOut.keySet, "Keyset mismatch")(countByLetter.input.getKeys.asScala.toSet)
       for (e <- expectOut) {
         var i = countByLetter.input.indexOf(e._1)
-        val reduce = countByLetter.input.get(i)
-        val value = reduce.c
+        val value = countByLetter.input.get(i)
         expectResult(e._2, s"Value mismatch for key ${e._1}, index: $i")(value)
       }
     }

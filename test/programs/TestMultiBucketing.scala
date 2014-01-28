@@ -247,7 +247,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     val div5 = evenOdd.filter(_ % 5 == 0)
 
     val slicer = evenOdd.buildBucketStream(k => new XYCollector)
-    val sliceBuilder = if (reduce) slicer.reduce() else slicer.fold()
+    val sliceBuilder : SliceBuilder[String, XYCollector] = if (reduce) slicer.reduce() else slicer.fold()
     val unslicedBuckets = sliceBuilder.
       join(evenOdd){b => b.addX}.
       join(div5){b => b.addY}
@@ -259,19 +259,20 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
           println("Slice!")
         doIt
       }
-      lazy val sliceOn = counter.filter(mySliceDef)
-      lazy val windowStream = {
-        sliceOn.fold_all(new Reduce[Any] {
+      lazy val sliceOn:MacroTerm[Int] = counter.filter(mySliceDef)
+      lazy val windowStream:MacroTerm[Boolean] = {
+        sliceOn.fold_all(new Reducer[Any, Boolean] {
           var windowOpen = true
+          def value = windowOpen
           def add(x: Any): Unit = {
             windowOpen = !windowOpen;
             println("Window edge. WindowOpen = "+windowOpen)
           }
-        }).map(_.windowOpen)
+        })
       }
       def slicePre() = unslicedBuckets.slice_pre( sliceOn )
       def slicePost() = unslicedBuckets.slice_post( sliceOn )
-      def window() = unslicedBuckets.window( windowStream )
+      def window():VectTerm[String, XYCollector] = unslicedBuckets.window( windowStream )
     }
   }
 

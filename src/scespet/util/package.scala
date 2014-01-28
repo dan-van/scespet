@@ -1,6 +1,6 @@
 package scespet
 
-import core.{Term, VectTerm, MacroTerm}
+import scespet.core.{Events, Term, VectTerm, MacroTerm}
 import java.util.Date
 import scespet.expression.CapturedTerm
 import gsa.esg.mekon.core.Environment
@@ -10,9 +10,19 @@ import gsa.esg.mekon.core.Environment
  */
 package object util {
   def out(prefix:String):TermPrint = new TermPrint(prefix)
+
+  implicit class IntToEvents(i:Int) {
+    def events = new Events(i)
+  }
+
+  val BEFORE = new SliceAlign("BEFORE")
+  val AFTER = new SliceAlign("AFTER")
+
 }
 
 package util {
+  sealed class SliceAlign(val name:String)
+
   class TermPrint(val prefix:String) {
     // todo: errrm, think about whether Term should get a 'time' field
 

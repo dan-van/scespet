@@ -1,6 +1,6 @@
 package scespet.util
 
-import scespet.core.Reduce
+import scespet.core.{SelfAgg, Reducer, Agg}
 
 /**
  * Created with IntelliJ IDEA.
@@ -9,21 +9,22 @@ import scespet.core.Reduce
  * Time: 10:46
  * To change this template use File | Settings | File Templates.
  */
-class Sum[X:Numeric] extends Reduce[X]{
+class Sum[X:Numeric] extends Reducer[X, Double]{
   var sum = 0.0
+  def value = sum
   def add(n:X):Unit = {sum = sum + implicitly[Numeric[X]].toDouble(n)}
 
   override def toString = s"Sum=$sum"
 }
 
-class EWMA(val lambda:Double = 0.98) extends Reduce[Int]{
+class EWMA(val lambda:Double = 0.98) extends SelfAgg[Int]{
   var s:Double = 0;
   def add(i:Int):Unit = { s = Math.pow(i, 1-lambda) + Math.pow(s, lambda) }
 
   override def toString = s"Sum=$s"
 }
 
-class Collect extends Reduce[AnyRef] {
+class Collect extends SelfAgg[AnyRef] {
   val data = collection.mutable.Buffer[AnyRef]()
   def add(x: AnyRef) {data += x}
 }
@@ -32,16 +33,10 @@ class Collect extends Reduce[AnyRef] {
  * todo: how can we genericise Counter to allow type inference to fill in the type param here?
  * @tparam T
  */
-class Counter extends Reduce[Any] {
+class Counter extends Reducer[Any, Int] {
   var c=0
   override def add(x: Any) { c += 1 }
-
-  override def toString = String.valueOf(c)
-}
-class Counter2 extends Reduce[Any] {
-  var c=0
-  def add(x: Any) { c += 1 }
-
+  def value = c
   override def toString = String.valueOf(c)
 }
 

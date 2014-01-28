@@ -86,7 +86,7 @@ object Program1 extends App {
   def v7 = {
     val tradeStream = impl.asStream(trades)
     val counter = tradeStream.fold_all(new Counter)
-    val windows = counter.map(_.c % 3 != 0)
+    val windows = counter.map(_ % 3 != 0)
     out("WindowState: open="){windows}
     out("by name, count within window") {tradeStream.by(_.name).reduce(new Counter).window(windows)}
   }
@@ -94,7 +94,7 @@ object Program1 extends App {
   // test per-element vector windows
   def v8 = {
     val tradeStream = impl.asStream(trades)
-    def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter).map(_.c % 3 != 0).input
+    def windows(name:String) = tradeStream.filter(_.name == name).fold_all(new Counter).map(_ % 3 != 0).input
     out("by name, window %3 count") {tradeStream.by(_.name).reduce(new Counter).window(windows _)}
   }
 

@@ -74,7 +74,7 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     set.keyToStream(key => eventStreams(key).input)
   }
 
-  class NamedSum[X:Numeric](val str:String) extends Reduce[X]{
+  class NamedSum[X:Numeric](val str:String) extends SelfAgg[X]{
     var sum = 0.0
     def add(n:X):Unit = {sum = sum + implicitly[Numeric[X]].toDouble(n)}
 
@@ -170,5 +170,9 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     env.run(1)
     expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2", "FOOBAR.1", "FOOBAR.2"))(expanded.keys)
     expectResult(expanded.keys)(expanded.values)
+  }
+
+  {
+
   }
 }

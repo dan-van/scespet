@@ -9,7 +9,7 @@ import gsa.esg.mekon.core.EventGraphObject
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFuncFromKey:(K) => Y, inputTerm:VectTerm[K, X], emitType:ReduceType,  env:types.Env) extends BucketBuilderVect[K, Y] {
+class BucketBuilderVectImpl[K, X, Y <: Agg[X]](newBFuncFromKey:(K) => Y, inputTerm:VectTerm[K, X], emitType:ReduceType,  env:types.Env) extends BucketBuilderVect[K, Y#OUT] {
   val newBFunc = () => newBFuncFromKey(null.asInstanceOf[K])
   val inputVectorStream: VectorStream[K, X] = inputTerm.input
 
@@ -18,49 +18,49 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFuncFromKey:(K) => Y, inpu
 //    override def getTrigger = h.getTrigger
 //  }
 
-  def slice_pre(trigger: EventGraphObject):VectTerm[K,Y] = {
+  def slice_pre(trigger: EventGraphObject):VectTerm[K,Y#OUT] = {
     val sliceTrigger = trigger
-    val chainedVector = new ChainedVector[K, Y](inputVectorStream, env) {
+    val chainedVector = new ChainedVector[K, Y#OUT](inputVectorStream, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
         val sourceHasVal = inputVectorStream.getValueHolder(i)
         val noArgNewBucketFunc = () => newBFuncFromKey(key)
         new SlicedReduce[X, Y](sourceHasVal, sliceTrigger, true, noArgNewBucketFunc, emitType, env)
       }
     }
-    return new VectTerm[K,Y](env)(chainedVector)
+    return new VectTerm[K,Y#OUT](env)(chainedVector)
   }
 
-  def slice_post(trigger: EventGraphObject):VectTerm[K,Y] = {
+  def slice_post(trigger: EventGraphObject):VectTerm[K,Y#OUT] = {
     val sliceTrigger = trigger
-    val chainedVector = new ChainedVector[K, Y](inputVectorStream, env) {
+    val chainedVector = new ChainedVector[K, Y#OUT](inputVectorStream, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
         val sourceHasVal = inputVectorStream.getValueHolder(i)
         new SlicedReduce[X, Y](sourceHasVal, sliceTrigger, false, newBFunc, emitType, env)
       }
     }
-    return new VectTerm[K,Y](env)(chainedVector)
+    return new VectTerm[K,Y#OUT](env)(chainedVector)
   }
 
 
-  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K,Y] = {
-    val chainedVector = new ChainedVector[K, Y](inputVectorStream, env) {
+  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K,Y#OUT] = {
+    val chainedVector = new ChainedVector[K, Y#OUT](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
         val sourceHasVal = inputVectorStream.getValueHolder(i)
         new WindowedReduce[X,Y](sourceHasVal, windowStream.input, newBFunc, emitType, env)
       }
     }
-    return new VectTerm[K,Y](env)(chainedVector)
+    return new VectTerm[K,Y#OUT](env)(chainedVector)
   }
 
-  def window(windowFunc: K=>HasValue[Boolean]) :VectTerm[K,Y] = {
-    val chainedVector = new ChainedVector[K, Y](inputVectorStream, env) {
+  def window(windowFunc: K=>HasValue[Boolean]) :VectTerm[K,Y#OUT] = {
+    val chainedVector = new ChainedVector[K, Y#OUT](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
         val sourcehasVal = inputVectorStream.getValueHolder(i)
         val perCellWindow = windowFunc(key)
         new WindowedReduce[X,Y](sourcehasVal, perCellWindow, newBFunc, emitType, env)
       }
     }
-    return new VectTerm[K,Y](env)(chainedVector)
+    return new VectTerm[K,Y#OUT](env)(chainedVector)
   }
 
   /**
@@ -68,8 +68,8 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFuncFromKey:(K) => Y, inpu
    * if the other vector does not have the given key, the window will be assumed to be false (i.e. not open)
    * @return
    */
-  def window(windowVect: VectTerm[K, Boolean]): VectTerm[K, Y] = {
-    val chainedVector = new ChainedVector[K, Y](inputVectorStream, env) {
+  def window(windowVect: VectTerm[K, Boolean]): VectTerm[K, Y#OUT] = {
+    val chainedVector = new ChainedVector[K, Y#OUT](inputVectorStream, env) {
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
         val sourcehasVal = inputVectorStream.getValueHolder(i)
         val idx = windowVect.input.indexOf(key)
@@ -77,23 +77,23 @@ class BucketBuilderVectImpl[K, X, Y <: Reduce[X]](newBFuncFromKey:(K) => Y, inpu
         new WindowedReduce[X,Y](sourcehasVal, perCellWindow, newBFunc, emitType, env)
       }
     }
-    return new VectTerm[K,Y](env)(chainedVector)
+    return new VectTerm[K,Y#OUT](env)(chainedVector)
   }
 
-  def each(n: Int):VectTerm[K, Y] = {
+  def each(n: Int):VectTerm[K, Y#OUT] = {
     val sliceFunc:Int => types.EventGraphObject = index => {
       val sourceVect = inputTerm.input
       val cellFiredTrigger: EventGraphObject = sourceVect.getTrigger(index)
       new NthEvent(n, cellFiredTrigger, env)
     }
-    val chainedVector = new ChainedVector[K, Y](inputVectorStream, env) {
+    val chainedVector = new ChainedVector[K, Y#OUT](inputVectorStream, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
         val sourcehasVal = inputVectorStream.getValueHolder(i)
         val perCellSliceTrigger :types.EventGraphObject = sliceFunc(i)
         new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, false, newBFunc, emitType, env)
       }
     }
-    return new VectTerm[K,Y](env)(chainedVector)
+    return new VectTerm[K,Y#OUT](env)(chainedVector)
 //    val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
 //      def create(source: HasVal[X], reduce: Y, env:types.Env) = new NthEvent(n, source.trigger, env)
 //    }

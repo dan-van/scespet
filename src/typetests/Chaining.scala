@@ -35,7 +35,7 @@ trait Window {
 object Chaining {
   // todo: more refinement on the window building
 
-  implicit class NSamplesTrigger[X,R <: Reduce[X]](n:Int) {
+  implicit class NSamplesTrigger[X,R <: Agg[X]](n:Int) {
     def samples():NewBucketTriggerFactory[X,R] = {
       new NewBucketTriggerFactory[X, R] {
         def create(source: HasVal[X], reduce: R, env:Environment) = new NthEvent(n, source.trigger, env)

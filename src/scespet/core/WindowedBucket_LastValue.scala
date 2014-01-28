@@ -2,7 +2,7 @@ package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
 import scespet.core._
-import scespet.core.types
+
 
 /**
  * A window-close takes precedence over a new value to be added

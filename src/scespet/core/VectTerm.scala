@@ -223,14 +223,15 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return newIsomorphicVector(cellBuilder)
   }
 
-  def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y] = {
-    val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y] {
-      val value = reduceBuilder(key)
+  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
+    val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y#OUT] {
+      val agg:Y = reduceBuilder(key)
+      def value = agg.asInstanceOf[Y].value
       // NOTE: The semantics of this field should be consistent with SlicedReduce.initialised
       initialised = false
       def calculate():Boolean = {
         val x: X = input.get(index)
-        value.add(x)
+        agg.add(x)
         initialised = true
         return true
       }
@@ -239,16 +240,16 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   // todo: isn't this identical to the single Term reduceAll implementation?
-  class ReduceAllCell[Y <: Reduce[X]](index:Int, key:K, reduceBuilder : K => Y) extends UpdatingHasVal[Y] {
+  class ReduceAllCell[Y <: Agg[X]](index:Int, key:K, reduceBuilder : K => Y) extends UpdatingHasVal[Y#OUT] {
     val termination = env.getTerminationEvent
     env.addListener(termination, this)
 
-    var value:Y = null.asInstanceOf[Y]
-    val reduction = reduceBuilder(key)
+    var value:Y#OUT = null.asInstanceOf[Y#OUT]
+    val reduction:Y = reduceBuilder(key)
 
     def calculate():Boolean = {
       if (env.hasChanged(termination)) {
-        value = reduction
+        value = reduction.asInstanceOf[Y].value
         initialised = true
         true
       } else {
@@ -260,7 +261,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
 
-  def reduce_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y] = {
+  def reduce_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
     val cellBuilder = (index:Int, key:K) => new ReduceAllCell[Y](index, key, reduceBuilder)
     return newIsomorphicVector(cellBuilder)
   }
@@ -434,7 +435,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @tparam Y
    * @return
    */
-  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
+  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
 
   /**
    * build a vector of Reduce instances that are driven with values from this vector.
@@ -445,7 +446,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @tparam Y
    * @return
    */
-  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 }
 
 class PreSliceBuilder[K,B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {

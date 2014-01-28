@@ -1,10 +1,14 @@
 package scespet.core
 
 import scespet.core._
+import scespet.util._
+
 import reflect.macros.Context
 import scala.reflect.ClassTag
-import gsa.esg.mekon.core.EventGraphObject
+import gsa.esg.mekon.core.{Environment, EventGraphObject}
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle
+import scala.concurrent.duration.Duration
+import scespet.util.SliceAlign
 
 
 /**
@@ -24,9 +28,9 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
    * @tparam Y
    * @return
    */
-  def fold_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
-    val listener = new AbsFunc[X,Y] {
-      value = y
+  def fold_all[Y <: Agg[X]](y: Y):MacroTerm[Y#OUT] = {
+    val listener = new AbsFunc[X,Y#OUT] {
+      override def value = y.value
       initialised = true
       def calculate() = {
         y.add(input.value);
@@ -34,7 +38,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
       }
     }
     env.addListener(input.trigger, listener)
-    return new MacroTerm[Y](env)(listener)
+    return new MacroTerm[Y#OUT](env)(listener)
   }
 
   /**
@@ -44,17 +48,17 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
    * @tparam Y
    * @return
    */
-  def reduce_all[Y <: Reduce[X]](y: Y):MacroTerm[Y] = {
-    val listener = new AbsFunc[X,Y] {
+  def reduce_all[Y <: Agg[X]](y: Y):MacroTerm[Y#OUT] = {
+    val listener = new AbsFunc[X,Y#OUT] {
       val reduction = y
-      value = null.asInstanceOf[Y]
+      value = null.asInstanceOf[Y#OUT]
 
       val termination = env.getTerminationEvent()
       env.addListener(termination, this)
 
       def calculate() = {
         if (env.hasChanged(termination)) {
-          value = reduction
+          value = reduction.asInstanceOf[Y].value
           initialised = true
           true
         } else {
@@ -64,7 +68,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
       }
     }
     env.addListener(input.trigger, listener)
-    return new MacroTerm[Y](env)(listener)
+    return new MacroTerm[Y#OUT](env)(listener)
   }
 
   def map[Y](f: (X) => Y, exposeNull:Boolean = true):MacroTerm[Y] = {
@@ -211,10 +215,55 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
     return new MacroTerm[X](env)(listener)
   }
 
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.LAST, env)
+  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.LAST, env)
 
-  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.CUMULATIVE, env)
+  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.CUMULATIVE, env)
+
+  sealed class FireAct(name:String) {
+  }
+  object FireAct {
+    val Close = new FireAct("Close")
+    val Open = new FireAct("Open")
+  }
+
+  def agg[Y <: Agg[X]](newBFunc: => Y) = new PartialAggOrAcc[X, Y](input, () => newBFunc, ReduceType.LAST, env)
+  def accum[Y <: Agg[X]](newBFunc: => Y) = new PartialAggOrAcc[X, Y](input, () => newBFunc, ReduceType.CUMULATIVE, env)
 }
+
+class PartialAggOrAcc[X, Y <: Agg[X]](val input:HasVal[X], val bucketGen: () => Y, reduceType:ReduceType, val env:Environment) {
+  private var sliceTrigger :EventGraphObject = _
+  private val sliceBefore = true
+
+  def all() = {
+    val slicer = new SlicedReduce[X, Y](input, sliceTrigger, sliceBefore, bucketGen, reduceType, env)
+    new MacroTerm[Y#OUT](env)(slicer)
+  }
+
+  def every[S : SliceTriggerSpec](sliceSpec:S, reset:SliceAlign = AFTER) : MacroTerm[Y#OUT] = {
+    val sliceTrigger = implicitly[SliceTriggerSpec[S]].buildTrigger(sliceSpec, input.getTrigger, env)
+    val sliceBefore = reset == BEFORE
+    val slicer = new SlicedReduce[X, Y](input, sliceTrigger, sliceBefore, bucketGen, reduceType, env)
+    new MacroTerm[Y#OUT](env)(slicer)
+  }
+}
+
 object MacroTerm {
   implicit def termToHasVal[E](term:MacroTerm[E]) :HasVal[E] = term.input
+//  implicit def intToEvents(i:Int) = { Events(i) }
+}
+
+trait SliceTriggerSpec[X] {
+  def buildTrigger(x:X, src:EventGraphObject, env:types.Env) :types.EventGraphObject
+}
+
+object SliceTriggerSpec {
+  implicit object DurationIsTriggerSpec extends SliceTriggerSpec[Duration] {
+    def buildTrigger(duration:Duration, src: EventGraphObject, env: types.Env) = {
+      new Timer(duration)
+    }
+  }
+  implicit object EventsIsTriggerSpec extends SliceTriggerSpec[Events] {
+    def buildTrigger(events:Events, src: EventGraphObject, env: types.Env) = {
+      new NthEvent(events.n, src, env)    }
+  }
 }

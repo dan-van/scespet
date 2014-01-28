@@ -1,15 +1,11 @@
-package programs
+package scespet.util
 
 import gsa.esg.mekon.core.EventSource
 import scespet.core.{types, EventSourceX}
 import scala.concurrent.duration.Duration
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 10/11/2013
- * Time: 23:26
- * To change this template use File | Settings | File Templates.
+ * todo: this needs to change such that there is only one event fired for a given pure time (i.e. two timers that coincide should be atomic)
  */
 class Timer(duration:Duration) extends EventSourceX[Nothing] {
   var nextTime : Long = _

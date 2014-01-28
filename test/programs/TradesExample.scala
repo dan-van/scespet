@@ -28,7 +28,7 @@ class TradesExample {
 
   var trades = IteratorEvents(tradeList)((_,i) => i)
 
-  class TradePrint extends Reduce[Trade]{
+  class TradePrint extends SelfAgg[Trade]{
     var accVol = 0
     def add(t:Trade):Unit = {accVol += t.qty; println("Reduce: "+t+" gave ACCVOL: "+accVol)}
 
@@ -57,9 +57,9 @@ object testReduceEach extends TradesExample with App {
 
 
 object testWindowCausal extends TradesExample with App {
-  val counter: MacroTerm[Counter] = tradeExpr.fold_all(new Counter)
+  val counter: MacroTerm[Int] = tradeExpr.fold_all(new Counter)
   // window defined to be open for the first and last 3 trades
-  val windowStream = counter.map(x => (x.c <= 3 ||  (x.c >= (tradeList.size - 4) && x.c < tradeList.size)))
+  val windowStream = counter.map(x => (x <= 3 ||  (x >= (tradeList.size - 4) && x < tradeList.size)))
   out("test="){counter.join(windowStream)}  // print this window stream as it evolves
 
   // bucket trades into this window definition

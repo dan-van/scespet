@@ -10,14 +10,14 @@ import scespet.core.types.MFunc
  * Time: 21:36
  * To change this template use File | Settings | File Templates.
  */
-class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], emitType:ReduceType, env:types.Env) extends BucketBuilder[X, Y] {
+class BucketBuilderImpl[X, Y <: Agg[X]](newBFunc:() => Y, inputTerm:MacroTerm[X], emitType:ReduceType, env:types.Env) extends BucketBuilder[X, Y#OUT] {
 
-  def window(windowStream: Term[Boolean]) :MacroTerm[Y] = {
+  def window(windowStream: Term[Boolean]) :MacroTerm[Y#OUT] = {
     val windowHasVal = windowStream.asInstanceOf[MacroTerm[Boolean]].input
-    return new MacroTerm[Y](env)(new WindowedReduce[X,Y](inputTerm.input, windowHasVal, newBFunc, emitType, env))
+    return new MacroTerm[Y#OUT](env)(new WindowedReduce[X,Y](inputTerm.input, windowHasVal, newBFunc, emitType, env))
   }
 
-  def all():MacroTerm[Y] = {
+  def all():MacroTerm[Y#OUT] = {
     if (emitType == ReduceType.LAST) {
       val bucketTrigger = new NewBucketTriggerFactory[X, Y] {
         def create(source: HasVal[X], reduce: Y, env:types.Env) = new types.MFunc {
@@ -28,51 +28,51 @@ class BucketBuilderImpl[X, Y <: Reduce[X]](newBFunc:() => Y, inputTerm:MacroTerm
     } else {
       // really simple implementation TODO: clean up fold_all and reduce_all
       val inputCell = inputTerm.input
-      val outputCell = new UpdatingHasVal[Y] {
-        val bucket = newBFunc()
+      val bucket:Y = newBFunc()
+      val outputCell = new UpdatingHasVal[Y#OUT] {
         env.addListener( inputCell.getTrigger, this)
 
         def calculate() = { bucket.add(inputCell.value); true }
-        def value = bucket
+        def value = bucket.value
       }
-      return new MacroTerm[Y](env)(outputCell)
+      return new MacroTerm[Y#OUT](env)(outputCell)
     }
   }
 
-  def each(n: Int):MacroTerm[Y] = {
+  def each(n: Int):MacroTerm[Y#OUT] = {
     val sliceTrigger = new NthEvent(n, inputTerm.input.getTrigger, env)
     val sliceBefore = false // always slice after the event has been added to the bucket
     val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, sliceBefore, newBFunc, emitType, env)
-    return new MacroTerm[Y](env)(slicer)
+    return new MacroTerm[Y#OUT](env)(slicer)
   }
 
-  def slice_pre(trigger: MacroTerm[_]):MacroTerm[Y] = {
+  def slice_pre(trigger: MacroTerm[_]):MacroTerm[Y#OUT] = {
     slice_pre(trigger.input.trigger)
   }
 
-  def slice_pre(trigger: EventGraphObject):MacroTerm[Y] = {
+  def slice_pre(trigger: EventGraphObject):MacroTerm[Y#OUT] = {
     val sliceTrigger = trigger
     val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, true, newBFunc, emitType, env)
-    return new MacroTerm[Y](env)(slicer)
+    return new MacroTerm[Y#OUT](env)(slicer)
   }
 
-  def slice_post(trigger: MacroTerm[_]):MacroTerm[Y] = {
+  def slice_post(trigger: MacroTerm[_]):MacroTerm[Y#OUT] = {
     slice_post(trigger.input.trigger)
   }
 
-  def slice_post(trigger: EventGraphObject):MacroTerm[Y] = {
+  def slice_post(trigger: EventGraphObject):MacroTerm[Y#OUT] = {
     val sliceTrigger = trigger
     val slicer = new SlicedReduce[X, Y](inputTerm.input, sliceTrigger, false, newBFunc, emitType, env)
-    return new MacroTerm[Y](env)(slicer)
+    return new MacroTerm[Y#OUT](env)(slicer)
   }
 
-  def buildTermForBucketStream[Y <: Reduce[X]](newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y]):MacroTerm[Y] = {
+  def buildTermForBucketStream[Y <: Agg[X]](newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y]):MacroTerm[Y#OUT] = {
     // todo: make Window a listenable Func
     // "start new reduce" is a pulse, which is triggered from time, input.trigger, or Y
     val input = inputTerm.input
     val listener = new BucketMaintainer[Y,X](input, newBFunc, triggerBuilder, env)
     env.addListener(input.trigger, listener)
-    return new MacroTerm[Y](env)(listener)
+    return new MacroTerm[Y#OUT](env)(listener)
   }
 }
 

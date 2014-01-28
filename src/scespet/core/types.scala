@@ -116,7 +116,6 @@ trait Func[X,Y] extends UpdatingHasVal[Y] {
 }
 
 case class Events(n:Int)
-case class Time(n:Int)
 
 // sealed, enum, blah blah
 class ReduceType(val name:String) {}
@@ -201,8 +200,28 @@ trait BucketBuilderVect[K, T] {
   def slice_post(trigger: EventGraphObject):VectTerm[K,T]
 }
 
-// TODO: I reckon this should also expose a 'value' type
-trait Reduce[-X] extends Serializable {
+trait Agg[-X] {
+  type OUT
+  def value :OUT
+  def add(x:X)
+}
+
+/**
+ * More traditional parameterised type version of Agg (rather than using dependent object types)
+ * @tparam X
+ * @tparam V
+ */
+trait Reducer[-X, V] extends Agg[X] {
+  type OUT = V
+}
+
+/**
+ * defines an aggregation that uses itself as the exposed aggregated value
+ * @tparam X
+ */
+trait SelfAgg[-X] extends Agg[X] {
+  type OUT = this.type
+  override def value = this
   def add(x:X)
 }
 
@@ -220,14 +239,14 @@ trait Term[X] {
 
   def value:X
 
-  def fold_all[Y <: Reduce[X]](y: Y):Term[Y]
+  def fold_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
   def map[Y](f: (X) => Y, exposeNull:Boolean = true):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
-  def reduce_all[Y <: Reduce[X]](y: Y):Term[Y]
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
+  def reduce_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
+  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
 
-  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilder[X, Y]
+  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
 
   def by[K](f: X => K) :MultiTerm[K,X]
 
@@ -331,16 +350,16 @@ trait MultiTerm[K,X] {
 
   def sample(evt:EventGraphObject):VectTerm[K,X]
 
-  def reduce[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y]
-  def reduce[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, Y] = reduce[Y]((k:K) => newBFunc)
+  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
+  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)
 
-  def reduce_all[Y <: Reduce[X]](newBFunc: K => Y):VectTerm[K,Y]
-  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K,Y]  = reduce_all[Y]((k:K) => newBFunc)
+  def reduce_all[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K,Y#OUT]
+  def reduce_all[Y <: Agg[X]](newBFunc:  => Y):VectTerm[K,Y#OUT]  = reduce_all[Y]((k:K) => newBFunc)
 
-  def fold[Y <: Reduce[X]](newBFunc: K => Y):BucketBuilderVect[K, Y]
-  def fold[Y <: Reduce[X]](newBFunc: => Y):BucketBuilderVect[K, Y] = fold[Y]((k:K) => newBFunc)
-  def fold_all[Y <: Reduce[X]](reduceBuilder : K => Y):VectTerm[K,Y]
-  def fold_all[Y <: Reduce[X]](reduceBuilder : => Y):VectTerm[K,Y]   = fold_all[Y]((k:K) => reduceBuilder)
+  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
+  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = fold[Y]((k:K) => newBFunc)
+  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT]
+  def fold_all[Y <: Agg[X]](reduceBuilder : => Y):VectTerm[K,Y#OUT]   = fold_all[Y]((k:K) => reduceBuilder)
 }
 
 

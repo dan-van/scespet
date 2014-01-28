@@ -7,7 +7,7 @@ package scespet.core
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] {
+class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
     env.addListener(dataEvents.getTrigger, this)
     env.addListener(windowEvents.getTrigger, this)
 
@@ -15,9 +15,9 @@ class WindowedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val windowE
 
   var nextReduce : Y = newReduce()
 
-  var completedReduce : Y = _
+  var completedReduce : Y = newReduce()
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
+  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
 
   def calculate():Boolean = {
     // add data before window close

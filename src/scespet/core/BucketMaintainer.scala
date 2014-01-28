@@ -11,7 +11,7 @@ import gsa.esg.mekon.core.{EventGraphObject, Environment}
  * @tparam Y
  * @tparam X
  */
-class BucketMaintainer[Y <: Reduce[X], X](input:HasVal[X], newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y], env:Environment) extends AbsFunc[X, Y] {
+class BucketMaintainer[Y <: Agg[X], X](input:HasVal[X], newBFunc:() => Y, triggerBuilder: NewBucketTriggerFactory[X, Y], env:Environment) extends AbsFunc[X, Y#OUT] {
   var nextBucket: Y = _
   var newBucketTrigger: EventGraphObject = null
 
@@ -21,12 +21,13 @@ class BucketMaintainer[Y <: Reduce[X], X](input:HasVal[X], newBFunc:() => Y, tri
       // TODO: distinguish between initial event?
       println(s"Starting new reduce. Old = $nextBucket, bucketTrigger = $newBucketTrigger")
       if (nextBucket != null) {
-        value = nextBucket
+        // closed the bucket, expose the value
+        value = nextBucket.value
         initialised = true
         closedBucket = true
       }
       nextBucket = newBFunc.apply()
-      val newTrigger = triggerBuilder.create(input, value, env)
+      val newTrigger = triggerBuilder.create(input, nextBucket, env)
       if (newTrigger != newBucketTrigger) {
         if (newBucketTrigger != null) {
           env.removeListener(newBucketTrigger, this)

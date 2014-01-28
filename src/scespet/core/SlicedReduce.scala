@@ -9,7 +9,7 @@ import gsa.esg.mekon.core.EventGraphObject.Lifecycle
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y] {
+class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
   var newSliceNextEvent = false
 
   env.addListener(dataEvents.getTrigger, this)
@@ -21,9 +21,9 @@ class SlicedReduce[X, Y <: Reduce[X]](val dataEvents :HasValue[X], val sliceEven
   }
 
   var nextReduce : Y = newReduce()
-  var completedReduce : Y = _
+  var completedReduce : Y = newReduce()
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
+  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket

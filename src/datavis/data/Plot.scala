@@ -120,7 +120,7 @@ object Plot {
 
   def plot[K, X:Numeric](stream: VectTerm[K, X]) :Options[K,X] = {
     val options = new Options[K, X](chartstate)
-    class DatasetAdder(key:K, options:Options[K, X]) extends Reduce[X] {
+    class DatasetAdder(key:K, options:Options[K, X]) extends SelfAgg[X] {
       val dataset = chartstate.dataset  // I'll clean this later
       val currentCount = dataset.getSeriesCount
 

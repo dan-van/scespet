@@ -22,13 +22,13 @@ class ExprPrinter() extends Builder {
 
     def filter(accept: (X) => Boolean): Term[X] = this
 
-    def reduce_all[Y <: Reduce[X]](y: Y) = ???
+    def reduce_all[Y <: Agg[X]](y: Y) = ???
 
-    def fold_all[Y <: Reduce[X]](y: Y) = ???
+    def fold_all[Y <: Agg[X]](y: Y) = ???
 
-    def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
+    def reduce[Y <: Agg[X]](newBFunc: => Y) = ???
 
-    def fold[Y <: Reduce[X]](newBFunc: => Y) = ???
+    def fold[Y <: Agg[X]](newBFunc: => Y) = ???
 
     def value = ???
 
@@ -76,13 +76,13 @@ class ExprPrinter() extends Builder {
       }
     }
 
-    def reduce_all[Y <: Reduce[X]](y: Y) = ???
+    def reduce_all[Y <: Agg[X]](y: Y) = ???
 
-    def fold_all[Y <: Reduce[X]](y: Y) = ???
+    def fold_all[Y <: Agg[X]](y: Y) = ???
 
-    def reduce[Y <: Reduce[X]](newBFunc: => Y) = ???
+    def reduce[Y <: Agg[X]](newBFunc: => Y) = ???
 
-    def fold[Y <: Reduce[X]](newBFunc: => Y) = ???
+    def fold[Y <: Agg[X]](newBFunc: => Y) = ???
 
     def value = ???
 

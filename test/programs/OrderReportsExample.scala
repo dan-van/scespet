@@ -35,7 +35,7 @@ abstract class OrderReportsExample extends App {
   orderEventList += Fill(26000, "ord2", 1.4, 20)
   orderEventList += Terminate(27000, "ord2")
 
-  class OrderState extends Reduce[OrderEvent] {
+  class OrderState extends SelfAgg[OrderEvent] {
     var orderId:String = _
     var stock:String = _
     var orderQty:Integer = _
@@ -96,7 +96,7 @@ object Test4 extends OrderReportsExample {
     val orderIdToName = eventsById.filterType[NewOrder]().map(_.stock)
     val orderIdToIsOpen = eventsById.map(!_.isInstanceOf[Terminate])
     val orderIdToTrades = orderIdToName.keyToStream(id => priceFactory.getTrades( orderIdToName(id).value ))
-    val accVolPerOrder = orderIdToTrades.map(_.qty).fold(new Sum[Double]).window(orderIdToIsOpen).map(_.sum)
+    val accVolPerOrder = orderIdToTrades.map(_.qty).fold(new Sum[Double]).window(orderIdToIsOpen)
     Plot.plot (accVolPerOrder)
   }
 }

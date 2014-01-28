@@ -72,13 +72,13 @@ class Scesspet {
 
     def filter(accept: (X) => Boolean) = new FilterTerm[X](this, accept)
 
-    def reduce_all[Y <: Reduce[X]](y: Y) = reduce(y).all()
+    def reduce_all[Y <: Agg[X]](y: Y) = reduce(y).all()
 
-    def reduce[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](false, this, newBFunc)
+    def reduce[Y <: Agg[X]](newBFunc: => Y) = new CollectCapture[Y, X](false, this, newBFunc)
 
-    def fold[Y <: Reduce[X]](newBFunc: => Y) = new CollectCapture[Y, X](true, this, newBFunc)
+    def fold[Y <: Agg[X]](newBFunc: => Y) = new CollectCapture[Y, X](true, this, newBFunc)
 
-    def fold_all[Y <: Reduce[X]](y: Y) = new FoldAllTerm[X,Y](this, y)
+    def fold_all[Y <: Agg[X]](y: Y) = new FoldAllTerm[X,Y](this, y)
 
     def by[K](f: (X) => K): MultiTerm[K, X] = ???
 
@@ -146,16 +146,24 @@ class Scesspet {
   }
 
   @deprecated("This should be unnecessary when bucketBuilder supports fold")
-  class FoldAllTerm[X, Y <: Reduce[X] ](source:CapturedTerm[_, X], val fold: Y) extends CapturedTerm[X, Y](source) {
-    def applyTo(term: Term[X]): Term[Y] = {
+  class FoldAllTerm[X, Y <: Agg[X] ](source:CapturedTerm[_, X], val fold: Y) extends CapturedTerm[X, Y#OUT](source) {
+    def applyTo(term: Term[X]): Term[Y#OUT] = {
       term.fold_all(fold)
     }
   }
 
+/**
+ * This was an experiment investigating capturing the expression graph of some scespet expressions (rather than generating event-graph listener objects), for the purpose of optimising and
+ * distributing across a grid.
+ * I've parked the idea for now.
+ * @param collectCapture
+ * @param bucketBuilderCall
+ * @tparam IN
+ * @tparam X
+ */
+  class CollectTerm[IN, X <: Agg[IN]](collectCapture:CollectCapture[X, IN]) (bucketBuilderCall:(BucketBuilder[IN, X#OUT]) => Term[X#OUT]) extends CapturedTerm[IN, X#OUT](collectCapture.input) {
 
-  class CollectTerm[IN, X <: Reduce[IN]](collectCapture:CollectCapture[X, IN]) (bucketBuilderCall:(BucketBuilder[IN, X]) => Term[X]) extends CapturedTerm[IN, X](collectCapture.input) {
-
-    def applyTo(term: Term[IN]): Term[X] = {
+    def applyTo(term: Term[IN]): Term[X#OUT] = {
       if (collectCapture.continuousOutput) {
 //        val bucketBuilder = term.fold(collectCapture.reduce)
 //        bucketBuilderCall.apply(bucketBuilder)
@@ -167,12 +175,12 @@ class Scesspet {
     }
   }
 
-  class CollectCapture[T <: Reduce[X], X](val continuousOutput:Boolean, val input:CapturedTerm[_, X], val reduce:T) extends BucketBuilder[X,T] {
+  class CollectCapture[T <: Agg[X], X](val continuousOutput:Boolean, val input:CapturedTerm[_, X], val reduce:T) extends BucketBuilder[X,T#OUT] {
     def each(n: Int) = ???
 
     def window(windowStream: Term[Boolean]) = ???
 
-    def all() = new CollectTerm[X, T](this)( _.all() )
+    def all() = ???
 
     //
     def slice_pre(trigger: MacroTerm[_]) = ???
