@@ -71,7 +71,7 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
   }
 
 
-  val getNewColumnTrigger = new ReshapeSignal(env) {
+  val getNewColumnTrigger :ReshapeSignal = new ReshapeSignal(env) {
     var x_seenKeys = 0
     var y_seenKeys = 0
 
