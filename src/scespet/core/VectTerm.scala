@@ -463,7 +463,17 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
     this
   }
 
-  def each(n:Int):VectTerm[K,B] = ???
+  def each(n:Int):VectTerm[K,B] = {
+    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+      def createBucketCell(key:K): BucketCell[B] = {
+        val newBFuncFromKey = () => newBFunc(key)
+        val bucketStreamCell = new SliceAfterBucket[B](null, newBFuncFromKey, emitType, env)
+//        return bucketStreamCell
+        ???
+      }
+    }
+    return new VectTerm[K,B](env)(bucketJoinVector)
+  }
 
   /**
    * window the whole vector by a single bucket stream (e.g. 9:00-17:00 EU)

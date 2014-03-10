@@ -7,6 +7,7 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import scespet.util.{_}
 import scespet.EnvTermBuilder
+import scala.collection.mutable
 
 //import org.msgpack._
 //import org.msgpack.annotation.Message
@@ -19,11 +20,7 @@ import scala.concurrent.duration.{Duration, TimeUnit}
 import scala.io.Source
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 31/10/2013
- * Time: 21:41
- * To change this template use File | Settings | File Templates.
+ * This uses real trading data acquired on demmand (then cached) from http://hopey.netfonds.no/tradedump.php?date=
  */
 abstract class RealTradeTests extends App with Logged {
   val date="20131029"
@@ -229,3 +226,27 @@ object TradeCategories extends RealTradeTests {
   env.run(100000)
 }
 
+object SimpleSpreadStats extends RealTradeTests {
+  val universe = impl.asVector(List("MSFT.O"))
+
+  class SpreadStats(key:String) extends Bucket {
+    val quotes = getQuoteEvents(key)
+    env.addListener(quotes.getTrigger, this)
+
+    val spreadCounts = mutable.HashMap[Double, Int]()
+    override def calculate(): Boolean = {
+      val spread = quotes.value.ask - quotes.value.bid
+      val now = spreadCounts.getOrElse(spread, 0)
+      spreadCounts.put(spread, now + 1)
+      true
+    }
+
+    def mode() = {
+      spreadCounts.maxBy(e => e._2)._1
+    }
+  }
+  val spreadCounters = universe.buildBucketStream(new SpreadStats(_)).reduce().each(10000) //all()
+  val modeSpread = spreadCounters.map(_.mode)
+  out("ModeSpread")(modeSpread)
+  env.run()
+}

@@ -200,6 +200,7 @@ trait BucketBuilderVect[K, T] {
   def slice_post(trigger: EventGraphObject):VectTerm[K,T]
 }
 
+// todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
 trait Agg[-X] {
   type OUT
   def value :OUT

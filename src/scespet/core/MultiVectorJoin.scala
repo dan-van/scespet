@@ -77,7 +77,7 @@ abstract class MultiVectorJoin[K, B <: Bucket](
 
   override def getValueHolder(i: Int): SlicedBucket[B] = super.getValueHolder(i).asInstanceOf[SlicedBucket[B]]
 
-  val getNewColumnTrigger :ReshapeSignal = new ReshapeSignal(env) {
+  val getNewColumnTrigger :VectorStream.ReshapeSignal = new ReshapeSignal(env) {
     var x_seenKeys = 0  // rename to thisSeenKeys
 
     val x_changeSignal = sourceShape.getNewColumnTrigger

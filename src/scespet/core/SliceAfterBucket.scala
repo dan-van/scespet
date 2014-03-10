@@ -156,5 +156,12 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, new
     if (emitType == ReduceType.LAST && env.hasChanged(termination)) return true
     false
   }
+
+  /**
+   * allows an external actor to force this bucket builder to seal off the current bucket and use a new one next event.
+   */
+  def setNewSliceNextEvent() {
+    joinValueRendezvous.sliceNextEvent = true
+  }
 }
 
