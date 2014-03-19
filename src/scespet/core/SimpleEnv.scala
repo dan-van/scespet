@@ -130,6 +130,10 @@ class SimpleEnv() extends Environment {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
   }
 
+  def hasChanged(trigger: EventGraphObject):Boolean = {
+    graph.hasChanged(trigger)
+  }
+
   def getTriggers(function: scala.Any): Iterable[EventGraphObject] = {
     graph.getTriggers(function.asInstanceOf[EventGraphObject])
   }

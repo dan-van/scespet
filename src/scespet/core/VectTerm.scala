@@ -205,6 +205,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return newIsomorphicVector(cellBuilder)
   }
 
+  /**
+   * remember that fo symmetry, this operates on the VALUES.
+   * If you want a subset of keys, use "subset"
+   * @param accept
+   * @return
+   */
   def filter(accept: (X) => Boolean):VectTerm[K,X] = {
     class MapCell(index:Int) extends UpdatingHasVal[X] {
       //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
