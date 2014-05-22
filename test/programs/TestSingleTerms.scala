@@ -7,6 +7,8 @@ import org.junit.Test
 import org.scalatest.matchers.Matchers
 import scespet.core.types.MFunc
 import scespet.EnvTermBuilder
+import scala.concurrent.duration._
+import scespet.core.types._
 
 
 /**
@@ -21,7 +23,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
 @RunWith(classOf[JUnitRunner])
-class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
+class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
   case class Trade(name:String, price:Double, qty:Int)
   var tradeList = new ArrayBuffer[Trade]()
   tradeList += new Trade("VOD.L", 1.12, 1)
@@ -105,17 +107,6 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 //  remoteRun
 //  impl.run
 
-  class StreamTest[X](name:String, expected:Iterable[X], stream:Term[X]) {
-    var eventI = 0
-    val expectIter = expected.iterator
-    stream.map(next => {
-      assert(expectIter.hasNext, s"Stream $name, Event $eventI with value $next was additional to expected")
-      val expect = expectIter.next()
-      expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
-      println(s"Observed event: $name-$eventI \t $next as expected")
-      eventI += 1
-    })
-  }
 
   test("stream increment") {
     val elements = 0 to 20
@@ -150,9 +141,14 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
     expectedOut should be(List(List(2, 4, 6), List(2, 4, 6), List(2, 4, 6), List(2, 4)).flatten)
 
-    import scala.concurrent.duration._
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.accum(new Sum[Int]).every(3.events).map(_.toInt)
+
+    // need to express the following combinations:
+    // scan, reset every X
+    // lastValue, reset every X
+    // scan, all
+    // lastValue
+    val mult10 = stream.reduce2(new Sum[Int]).every(3.events).all.map(_.toInt)
 
 //    val mult10 = stream.agg(new Sum[Int]).every(3.events, reset = BEFORE)
 //    val mult10 = stream.agg(new Sum[Int]).every(3.minutes)

@@ -54,6 +54,10 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
         return initialised;
     }
 
+    protected VectorStream<K, ?> getSourceVector() {
+        return sourceVector;
+    }
+
     @Override
     public VectorStream.ReshapeSignal getNewColumnTrigger() {
         return reshapeSignal;

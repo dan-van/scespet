@@ -12,6 +12,13 @@ package object types {
   type EventGraphObject = gsa.esg.mekon.core.EventGraphObject
   type MFunc = gsa.esg.mekon.core.Function
   type EventSource = gsa.esg.mekon.core.EventSource
+
+  case class Events(n:Int) extends AnyVal
+  implicit class IntToEvents(val i:Int) extends AnyVal {
+    def events = new Events(i)
+  }
+
+
 }
 
 /**
@@ -115,7 +122,6 @@ trait Func[X,Y] extends UpdatingHasVal[Y] {
 
 }
 
-case class Events(n:Int)
 
 // sealed, enum, blah blah
 class ReduceType(val name:String) {}
@@ -246,6 +252,8 @@ trait Term[X] {
 
   def reduce_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
   def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
+
+  def reduce2[Y <: Agg[X]](newBFunc: => Y):PartialAggOrAcc[X, Y]
 
   def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
 

@@ -2,7 +2,6 @@ package scespet.core
 
 import collection.mutable
 import gsa.esg.mekon.core._
-import scespet.expression.{Scesspet, RootTerm, CapturedTerm}
 import java.util.TimeZone
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 import java.lang.Iterable

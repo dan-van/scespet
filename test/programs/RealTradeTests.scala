@@ -13,11 +13,14 @@ import scala.collection.mutable
 //import org.msgpack.annotation.Message
 //import org.msgpack.ScalaMessagePack._
 import org.scalatest.time.Minutes
-import scala.concurrent.duration.{Duration, TimeUnit}
+import scala.concurrent.duration._
 
 // <- import MessagePack instance for scala
 
 import scala.io.Source
+
+case class Trade(time:Long,	price:Double,	quantity:Long,	board:String,	source:String,	buyer:String,	seller:String,	initiator:String)
+case class Quote(time:Long,	bid:Double,	bidDepth:Long, ask:Double, askDepth:Long)
 
 /**
  * This uses real trading data acquired on demmand (then cached) from http://hopey.netfonds.no/tradedump.php?date=
@@ -26,11 +29,9 @@ abstract class RealTradeTests extends App with Logged {
   val date="20131029"
   val dataRoot = new File("./testdata")
   //time	price	quantity	board	source	buyer	seller	initiator
-  case class Trade(time:Long,	price:Double,	quantity:Long,	board:String,	source:String,	buyer:String,	seller:String,	initiator:String)
 
   //time	bid	bid_depth	bid_depth_total	offer	offer_depth	offer_depth_total
 //  20131030T090001	515.1	300	300	518.9	300	300
-  case class Quote(time:Long,	bid:Double,	bidDepth:Long, ask:Double, askDepth:Long)
 
   implicit val env = new SimpleEnv
   val impl = EnvTermBuilder(env)
@@ -101,14 +102,52 @@ object TestTrade extends RealTradeTests {
 }
 
 object TestPlots extends RealTradeTests {
-  val trades = impl.asStream( getTradeEvents("MSFT.O") )
-  val quotes = impl.asStream( getQuoteEvents("MSFT.O") )
+  val universe = impl.asVector(List("AAPL.O", "MSFT.O"))
+//  val trades = impl.asStream( getTradeEvents("MSFT.O") )
+  val trades = universe.keyToStream(name => getTradeEvents(name) )
+//  val quotes = impl.asStream( getQuoteEvents("MSFT.O") )
   //  val accvol = trades.map(_.quantity).fold_all(new Sum[Long])
-  Plot.plot(quotes.map(_.bid), "Bid")
-  Plot.plot(quotes.map(_.ask), "Ask")
-  Plot.plot(trades.map(_.price), "Trade")
-  env.run(10000)
+//  Plot.plot(quotes.map(_.bid), "Bid")
+//  Plot.plot(quotes.map(_.ask), "Ask")
+  val sizes = trades.map(_.quantity)
+  val big = sizes.filter(_ > 25000)
+  import scala.concurrent.duration._
+  val s = sizes.red(new Sum[Long]).every(10.minutes)//(SliceTriggerSpec.toTriggerSpec( big ) )
+//  Plot.plot(sizes).seriesNames(_ + "Size")
+  Plot.plot(s).seriesNames(_ + "buckets")
+  env.run(100000)
 }
+
+class TradeQuoteStats(key:String) extends Bucket {
+  def value: TradeQuoteStats = this
+
+  var t:Trade = _
+  var q:Quote = _
+  var events:Int = 0
+
+  def addTrade(t:Trade) {
+    this.t = t
+  }
+  def addQuote(q:Quote) {
+    this.q = q
+  }
+
+  def calculate(): Boolean = {
+    events += 1
+    true
+  }
+
+  override def toString: String = s"trade:$t, quote:$q, events:$events"
+}
+
+
+object TestTradeQuoteJoin extends RealTradeTests {
+  val trades = getTradeEvents("MSFT.O")
+  val quotes = getQuoteEvents("MSFT.O")
+  impl.streamOf(new TradeQuoteStats("MSFT.O")).bind(trades)(_.addTrade).bind(quotes)(_.addQuote).all()
+  impl.streamOf(new TradeQuoteStats("MSFT.O")).bind(trades)(_.addTrade).bind(quotes)(_.addQuote).every(3.minutes)
+}
+
 
 object TestReduce extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O", "AAPL.O", "IBM.N"))
@@ -116,31 +155,11 @@ object TestReduce extends RealTradeTests {
   val trades = universe.keyToStream(u => getTradeEvents(u))
   val quotes = universe.keyToStream(u => getQuoteEvents(u))
 
-  class Red(key:String) extends Bucket {
-    def value: Red = this
-
-    var t:Trade = _
-    var q:Quote = _
-    var events:Int = 0
-
-    def addTrade(t:Trade) {
-      this.t = t
-    }
-    def addQuote(q:Quote) {
-      this.q = q
-    }
-
-
-    def calculate(): Boolean = {
-      events += 1
-      true
-    }
-
-    override def toString: String = s"trade:$t, quote:$q, events:$events"
-  }
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
-  val summary = trades.buildBucketStream(new Red(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
+//  val summary = trades.keyToStream(key => reduce(new TradeQuoteStats(_)).join(trades)(_.addTrade).join(quotes)(_.addQuote).every(oneMinute)
+  // TODO: this seems pointless - we actually want a stream of buckets for the given keyset. How is this different form keyToStream?
+  val summary = trades.buildBucketStream(new TradeQuoteStats(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
   out("Summary")(summary)
 //  Plot.plot(summary.map(_.q.ask))
   env.run(50000)
@@ -185,7 +204,8 @@ object TestBucket extends RealTradeTests {
   }
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
-  val summary = universe.buildBucketStream(new Red(_)) reduce() slice_post(oneMinute)
+  // hmmm, buildBucketStream is really not much different from a completely independent 'bucketStreamBuilder' function...
+  val summary = universe.buildBucketStream(new Red(_)).reduce().slice_post(oneMinute)
   Plot.plot(summary.map(_.events))
   env.run(10000)
 }
@@ -250,3 +270,4 @@ object SimpleSpreadStats extends RealTradeTests {
   out("ModeSpread")(modeSpread)
   env.run()
 }
+

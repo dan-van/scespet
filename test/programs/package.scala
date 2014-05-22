@@ -11,7 +11,7 @@ import scespet.core.types
  * To change this template use File | Settings | File Templates.
  */
 package object programs {
-  case class Trade(name:String, price:Double, qty:Double)
+  case class SimpleTrade(name:String, price:Double, qty:Double)
 
   abstract class EventGenerator[X](nextTime:Long) extends EventSourceX[X] {
     var hasNext = true
@@ -57,7 +57,7 @@ package object programs {
 
   class PriceFactory(val env:types.Env) {
     val nameToMidStream = Map[String, HasVal[Double]]()
-    val nameToTradeStream = Map[String, HasVal[Trade]]()
+    val nameToTradeStream = Map[String, HasVal[SimpleTrade]]()
 
     def getMids(name:String) = {
       var midStreamO = nameToMidStream.get(name)
@@ -73,11 +73,11 @@ package object programs {
       tradeStreamO.getOrElse({
         val rand = new Random()
         val mids =  getMids(name)
-        val trades = new EventGenerator[Trade](env.getEventTime) {
-          override def generate(): (Trade, Long) = {
+        val trades = new EventGenerator[SimpleTrade](env.getEventTime) {
+          override def generate(): (SimpleTrade, Long) = {
             val mid = mids.value
             val offset = (rand.nextDouble() - 0.5) / mid
-            val trade = new Trade(name, mid + offset, rand.nextInt(1000))
+            val trade = new SimpleTrade(name, mid + offset, rand.nextInt(1000))
             val nextTime = env.getEventTime + rand.nextInt(60000)
             (trade, nextTime)
           }

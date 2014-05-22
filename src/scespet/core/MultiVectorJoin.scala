@@ -5,7 +5,11 @@ import gsa.esg.mekon.core.EventGraphObject
 import scespet.core.MultiVectorJoin.BucketCell
 
 /**
- * This takes a Stream and demultiplexes it into a VectorStream using a value -> key function
+ * This maintains a vector of buckets by binding elements of a number of input vectors to different callback methods on the given bucket
+ *
+ * TODO: why is this necessary? Doesn't it make more sense to just treat each bucket stream as completely independent?
+ * TODO: maybe this approach is more efficient? Lets build the simple case to check (and then maybe delete this class)
+ *
  *
  * Created with IntelliJ IDEA.
  * User: danvan
@@ -13,8 +17,6 @@ import scespet.core.MultiVectorJoin.BucketCell
  * Time: 21:14
  * To change this template use File | Settings | File Templates.
  */
-// this one uses pur function calls and tracks updated indicies.
-// we could try a verison that uses wakeup nodes.
 class BucketJoin[K,V,B](val source:VectorStream[K,V], val joinFunc:B=>V=>Unit)
 
 abstract class MultiVectorJoin[K, B <: Bucket](

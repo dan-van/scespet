@@ -1,12 +1,14 @@
 package scespet.core
 
-import gsa.esg.mekon.core.EventGraphObject
+import gsa.esg.mekon.core.{Environment, EventGraphObject}
 import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
 
 
 import scespet.core.MultiVectorJoin.BucketCell
+import scespet.util._
+import scala.Some
 
 /**
  * Created with IntelliJ IDEA.
@@ -240,30 +242,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return newIsomorphicVector(cellBuilder)
   }
 
-  // todo: isn't this identical to the single Term reduceAll implementation?
-  class ReduceAllCell[Y <: Agg[X]](index:Int, key:K, reduceBuilder : K => Y) extends UpdatingHasVal[Y#OUT] {
-    val termination = env.getTerminationEvent
-    env.addListener(termination, this)
-
-    var value:Y#OUT = null.asInstanceOf[Y#OUT]
-    val reduction:Y = reduceBuilder(key)
-
-    def calculate():Boolean = {
-      if (env.hasChanged(termination)) {
-        value = reduction.asInstanceOf[Y].value
-        initialised = true
-        true
-      } else {
-        val x: X = input.get(index)
-        reduction.add(x)
-        false
-      }
-    }
-  }
-
-
   def reduce_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
-    val cellBuilder = (index:Int, key:K) => new ReduceAllCell[Y](index, key, reduceBuilder)
+    val cellBuilder = (index:Int, key:K) => new ReduceAllCell[K, X, Y](env, input, index, key, reduceBuilder, ReduceType.LAST)
     return newIsomorphicVector(cellBuilder)
   }
 
@@ -280,7 +260,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 //  }
 
 
-  private def newIsomorphicVector[Y](cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
+  private [core] def newIsomorphicVector[Y](cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
     val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
@@ -448,6 +428,15 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @return
    */
   def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+
+  // TODO: rename to reduce
+  def red[Y <: Agg[X]](newBFunc: => Y):PartialReduceOrScanVect[K, X, Y] = red[Y]((k:K) => newBFunc)
+
+  def red[Y <: Agg[X]](newBFunc: K => Y):PartialReduceOrScanVect[K, X, Y] = new PartialReduceOrScanVect[K, X, Y](VectTerm.this, newBFunc, ReduceType.LAST, env)
+
+  def scan[Y <: Agg[X]](newBFunc: => Y):PartialReduceOrScanVect[K, X, Y] = scan[Y]((k:K) => newBFunc)
+
+  def scan[Y <: Agg[X]](newBFunc: K => Y):PartialReduceOrScanVect[K, X, Y] = new PartialReduceOrScanVect[K, X, Y](VectTerm.this, newBFunc, ReduceType.CUMULATIVE, env)
 }
 
 class PreSliceBuilder[K,B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {

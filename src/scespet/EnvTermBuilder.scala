@@ -2,8 +2,8 @@ package scespet
 
 import core._
 import core.types
-import scespet.expression.{HasValRoot, RootTerm, CapturedTerm}
 import gsa.esg.mekon.core.EventSource
+import scespet.core.types.MFunc
 
 /**
  * This needs to have 'init(env)' called before you can use it.
@@ -46,19 +46,6 @@ class EnvTermBuilder() extends DelayedInit {
     return new MacroTerm[X](env)(data)
   }
 
-  def query[X,Y](value: CapturedTerm[X, Y]) :Term[Y] = {
-    if (value.parent != null) {
-      val localParent = query(value.parent)
-      val localThis = value.applyTo(localParent)
-      localThis
-    } else if (value.isInstanceOf[ RootTerm[Y] ]) {
-      var hasVal = value.asInstanceOf[RootTerm[Y]].buildHasVal(env)
-      new MacroTerm[Y](env)(hasVal)
-    } else {
-      ???
-    }
-  }
-
   def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
     val hasVal = newHasVal(env)
     asStream(hasVal)
@@ -68,6 +55,15 @@ class EnvTermBuilder() extends DelayedInit {
     import scala.collection.JavaConverters._
     new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
   }
+
+  def streamOf[X <: Bucket](data: X) : PartialAggOrAcc[X, _] = {
+//    if (data.isInstanceOf[EventSource]) {
+//      env.registerEventSource(data.asInstanceOf[EventSource])
+//    }
+//    return new PartialAggOrAcc[X, ](env)(data)
+    ???
+  }
+
 
 //  def reduce[B <: types.MFunc](aggregateBuilder: => B) :ReduceBuilder[B] = {
 //    new ReduceBuilder[B](aggregateBuilder)
