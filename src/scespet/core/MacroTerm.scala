@@ -10,7 +10,7 @@ import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 import scala.concurrent.duration.Duration
 import scespet.util.SliceAlign
 import scespet.core.SliceTriggerSpec.MacroIsTriggerSpec
-import scespet.core.types.Events
+import scespet.core.types.{MFunc, Events}
 
 
 /**
@@ -276,7 +276,20 @@ class PartialAggOrAcc[X, Y <: Agg[X]](val input:HasVal[X], val bucketGen: () => 
     new GroupedTerm[X, Y](partialSlicer, env)(input)
   }
 
-  def bind[S](stream:HasVal[S])(adder:X => S => Unit) :PartialAggOrAcc[X,Y] = ???
+  def bind[S](stream:HasVal[S])(adder:Y => S => Unit) :PartialAggOrAcc[X,Y] = {
+    // NODEPLOY - store the adder, then build a bucketGen on call to last or all or every
+    val bucketFunc = bucketGen()
+    val listenerBind = new MFunc{
+      override def calculate(): Boolean = {
+        val newSValue = stream.value
+        adder.apply(bucketFunc)(newSValue)
+        true
+      }
+    }
+    env.addListener(stream.trigger, listenerBind)
+    env.addListener(listenerBind, bucketFunc.asInstanceOf[MFunc])
+    this
+  }
 }
 
 object MacroTerm {

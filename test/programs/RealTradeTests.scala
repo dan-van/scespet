@@ -144,8 +144,8 @@ class TradeQuoteStats(key:String) extends Bucket {
 object TestTradeQuoteJoin extends RealTradeTests {
   val trades = getTradeEvents("MSFT.O")
   val quotes = getQuoteEvents("MSFT.O")
-  impl.streamOf(new TradeQuoteStats("MSFT.O")).bind(trades)(_.addTrade).bind(quotes)(_.addQuote).all()
-  impl.streamOf(new TradeQuoteStats("MSFT.O")).bind(trades)(_.addTrade).bind(quotes)(_.addQuote).every(3.minutes)
+//  impl.streamOf2(new TradeQuoteStats("MSFT.O")).bind(trades)(_.addTrade).bind(quotes)(_.addQuote).all()
+//  impl.streamOf2(new TradeQuoteStats("MSFT.O")).bind(trades)(_.addTrade).bind(quotes)(_.addQuote).every(3.minutes)
 }
 
 

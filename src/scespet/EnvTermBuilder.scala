@@ -46,6 +46,16 @@ class EnvTermBuilder() extends DelayedInit {
     return new MacroTerm[X](env)(data)
   }
 
+//  def asStream2[Y <: UpdatingHasVal[X], X](newCell: => Y) : PartialAggOrAcc[X, Y] = {
+////    if (data.isInstanceOf[EventSource]) {
+////      env.registerEventSource(data.asInstanceOf[EventSource])
+////    }
+//    val input:HasVal[X] = newCell
+//    // TODO: I think bucketGen should call close() on cell, and return newCell if Y is a Bucket type
+//    val bucketGen = () => newCell
+//    return new PartialAggOrAcc[X, Y](input, bucketGen, env)
+//  }
+
   def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
     val hasVal = newHasVal(env)
     asStream(hasVal)
@@ -56,7 +66,7 @@ class EnvTermBuilder() extends DelayedInit {
     new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
   }
 
-  def streamOf[X <: Bucket](data: X) : PartialAggOrAcc[X, _] = {
+  def streamOf[X <: Agg[_]](data: X) : PartialAggOrAcc[_, X] = {
 //    if (data.isInstanceOf[EventSource]) {
 //      env.registerEventSource(data.asInstanceOf[EventSource])
 //    }

@@ -52,6 +52,7 @@ trait FuncCollector {
 
 /**
  * Something that provides a value (i.e. a source)
+ * todo: rename me to ListenableHasVal
  * @tparam X
  */
 trait HasVal[X] extends HasValue[X]{
@@ -69,6 +70,7 @@ trait HasVal[X] extends HasValue[X]{
 }
 
 object HasVal {
+  // TODO: unify this with IsVal
   implicit def funcToHasVal[F <: EventGraphObject](f:F) = new HasVal[F] {
     val value = f
     def trigger = value.asInstanceOf[EventGraphObject]
@@ -207,6 +209,7 @@ trait BucketBuilderVect[K, T] {
 }
 
 // todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
+// todo: I think I could split this into a 'Provides' interface
 trait Agg[-X] {
   type OUT
   def value :OUT

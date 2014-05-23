@@ -1,11 +1,7 @@
 package scespet.core
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 31/01/2013
- * Time: 21:17
- * To change this template use File | Settings | File Templates.
+ * An UpdatingHasVal cell that triggers when setValue is called.
  */
 class ValueFunc[V](env:types.Env) extends UpdatingHasVal[V] {
   var value:V = _
