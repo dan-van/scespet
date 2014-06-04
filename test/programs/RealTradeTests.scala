@@ -161,7 +161,7 @@ object TestReduce extends RealTradeTests {
 //  val summary = trades.keyToStream(key => reduce(new TradeQuoteStats(_)).join(trades)(_.addTrade).join(quotes)(_.addQuote).every(oneMinute)
   // TODO: this seems pointless - we actually want a stream of buckets for the given keyset. How is this different form keyToStream?
   //NODEPLOY
-  val summary = trades.keyToStream(k => impl.streamOf2(new TradeQuoteStats(k)).bind(trades(k))(_.addTrade).bind(quotes(k))(_.addQuote).every(oneMinute).last())
+  val summary = trades.keyToStream(k => impl.streamOf2(new TradeQuoteStats(k)).bind(trades(k))(_.addTrade).bind(quotes(k))(_.addQuote).group(oneMinute).last())
 //  val summary = trades.reduce(new TradeQuoteStats(_)).bind(quotes)(_.addQuote).every(oneMinute).last()
 //  out("Summary")(summary)
 //  Plot.plot(summary.map(_.q.ask))
@@ -209,7 +209,7 @@ object TestBucket extends RealTradeTests {
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
   // hmmm, buildBucketStream is really not much different from a completely independent 'bucketStreamBuilder' function...
-  val summary = universe.keyToStream(k => impl.streamOf2(new Red(k)).every(oneMinute).last())
+  val summary = universe.keyToStream(k => impl.streamOf2(new Red(k)).group(oneMinute).last())
   Plot.plot(summary)
   env.run(10000)
 }
@@ -273,7 +273,7 @@ object SimpleSpreadStats extends RealTradeTests {
     }
   }
   import scespet.core.types._
-  val spreadCounters = universe.keyToStream(k => impl.streamOf2(new SpreadStats(k)).every(10000.events).last()) //all()
+  val spreadCounters = universe.keyToStream(k => impl.streamOf2(new SpreadStats(k)).group(10000.events).last()) //all()
   val modeSpread = spreadCounters.map(_.mode)
   out("ModeSpread")(modeSpread)
   env.run()

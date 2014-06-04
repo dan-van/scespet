@@ -32,7 +32,10 @@ class PartialReduceOrScanVect[K, X, Y <: Agg[X]](val input:VectTerm[K, X], val b
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
         val sourcehasVal = getSourceVector.getValueHolder(i).asInstanceOf[HasVal[X]]
         val perCellSliceTrigger :types.EventGraphObject = sliceFunc(i)
-        val noArgNewBucketFunc = () => bucketGen(key)
+        val noArgNewBucketFunc = new SliceCellLifecycle[Y] {
+          override def newCell(): Y = bucketGen(key)
+          override def closeCell(c: Y): Unit = {}
+        }
         val sliceBefore = reset == BEFORE
         new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, sliceBefore, noArgNewBucketFunc, reduceType, env)
       }

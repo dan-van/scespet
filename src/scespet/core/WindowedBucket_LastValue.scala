@@ -17,6 +17,8 @@ import scespet.core._
  *             |            +----------------+
  * windowEdge -+----------------------------/
  *
+ * todo: remove code duplication with WindowedBucket_Continuous
+ *
  *
  * todo: remove code duplication with SlicedBucket. Hang on, is that possible?
  * todo: thinks.... window edges are defined by boolean transitions, therefore I cannot have

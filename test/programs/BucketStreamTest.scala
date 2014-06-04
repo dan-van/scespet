@@ -54,25 +54,25 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   }
 
   test("scan") {
-    val out = stream.reduce2(new Append[Char]).all
+    val out = stream.scan(new Append[Char])
     val expected = generateAppendScan(data)
     new StreamTest("scan", expected, out)
   }
 
-  test("fold") {
-    val out = stream.reduce2(new Append[Char]).last()
+  test("reduce") {
+    val out = stream.reduce(new Append[Char])
     val expected = List(data.foldLeft(Seq[Char]())(_ :+ _))
     new StreamTest("scan", expected, out)
   }
 
   test("grouped scan") {
-    val out = stream.reduce2(new Append[Char]).every(3.events).all
+    val out = stream.group(3.events).scan(new Append[Char])
     val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     new StreamTest("scan", expected, out)
   }
 
-  test("grouped fold") {
-    val out = stream.reduce2(new Append[Char]).every(3.events).last
+  test("grouped reduce") {
+    val out = stream.group(3.events).reduce(new Append[Char])
     val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
     new StreamTest("scan", expected, out)
   }

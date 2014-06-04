@@ -7,15 +7,15 @@ package scespet.core
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
+class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
     env.addListener(dataEvents.getTrigger, this)
     env.addListener(windowEvents.getTrigger, this)
 
   var inWindow = windowEvents.value
 
-  var nextReduce : Y = newReduce()
+  var nextReduce : Y = newReduce.newCell()
 
-  var completedReduce : Y = newReduce()
+  var completedReduce : Y = newReduce.newCell()
 
   def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
 
@@ -29,7 +29,7 @@ class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEven
     }
     if (isNowOpen && !inWindow) {
       // window started
-      nextReduce = newReduce()
+      nextReduce = newReduce.newCell
       inWindow = true
     }
     if (env.hasChanged(dataEvents.getTrigger)) {
@@ -42,6 +42,7 @@ class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEven
     if (inWindow && !isNowOpen) {
       // window closed. snap the current reduction and get ready for a new one
       completedReduce = nextReduce
+      newReduce.closeCell(completedReduce)
       inWindow = false
       fire = true
     }

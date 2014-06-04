@@ -7,6 +7,8 @@ import gsa.esg.mekon.core.EventGraphObject
  * A window-close takes precedence over a new value to be added
  * i.e if the window close event is atomic with a value for the bucket, that value is deemed to be not-in the bucket
 
+ * todo: remove code duplication with WindowedBucket_LastValue
+
  *
  * todo: remove code duplication with SlicedBucket. Hang on, is that possible?
  * todo: thinks.... window edges are defined by boolean transitions, therefore I cannot have

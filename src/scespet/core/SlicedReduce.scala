@@ -9,7 +9,7 @@ import gsa.esg.mekon.core.EventGraphObject.Lifecycle
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
+class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
   var newSliceNextEvent = false
 
   env.addListener(dataEvents.getTrigger, this)
@@ -20,8 +20,8 @@ class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents 
     env.addListener(termination, this)
   }
 
-  var nextReduce : Y = newReduce()
-  var completedReduce : Y = newReduce()
+  var nextReduce : Y = cellLifecycle.newCell()
+  var completedReduce : Y = cellLifecycle.newCell()
 
   def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
 //  initialised = value != null
@@ -42,7 +42,8 @@ class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents 
     }
     if (newSliceNextEvent) {
       completedReduce = nextReduce
-      nextReduce = newReduce()
+      cellLifecycle.closeCell(completedReduce)
+      nextReduce = cellLifecycle.newCell()
       newSliceNextEvent = false
       // just sliced, don't slice again!
       sliceTrigger = false
@@ -54,6 +55,7 @@ class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents 
       newSliceNextEvent = true
       if (emitType == ReduceType.LAST) {
         completedReduce = nextReduce
+        cellLifecycle.closeCell(completedReduce)
         fire = true
       }
     }

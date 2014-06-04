@@ -56,14 +56,6 @@ class EnvTermBuilder() extends DelayedInit {
     new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
   }
 
-  def streamOf[X <: Agg[_]](data: X) : PartialAggOrAcc[_, X] = {
-//    if (data.isInstanceOf[EventSource]) {
-//      env.registerEventSource(data.asInstanceOf[EventSource])
-//    }
-//    return new PartialAggOrAcc[X, ](env)(data)
-    ???
-  }
-
   def streamOf2[Y <: Bucket](newCellFunc: => Y) : PartialBuiltSlicedBucket[Y] = {
     //    if (data.isInstanceOf[EventSource]) {
     //      env.registerEventSource(data.asInstanceOf[EventSource])

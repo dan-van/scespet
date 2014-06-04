@@ -49,10 +49,10 @@ object testFoldAll extends TradesExample with App {
 
 object testReduceEach extends TradesExample with App {
   // bucket pairs of trades into a TradePrint
-  val tradeBuckets = tradeExpr.reduce2(new TradePrint).every(2.events).last()
+  val tradeBuckets = tradeExpr.group(2.events).reduce(new TradePrint)
   out("tradePrint fired="){tradeBuckets}
   // bucket pairs of TradePrint into a sum (i.e. accVol of 4 trades)
-  out("Sum="){ tradeBuckets.map(_.accVol).reduce2(new Sum[Int]).every(2.events).last() }
+  out("Sum="){ tradeBuckets.map(_.accVol).group(2.events).reduce(new Sum[Int]) }
   env.run()
 }
 
@@ -64,7 +64,7 @@ object testWindowCausal extends TradesExample with App {
   out("test="){counter.join(windowStream)}  // print this window stream as it evolves
 
   // bucket trades into this window definition
-  val tradeBuckets = tradeExpr.reduce2(new TradePrint).window(windowStream).last()
+  val tradeBuckets = tradeExpr.window(windowStream).reduce(new TradePrint)
   out("tradeBucket="){tradeBuckets}
   env.run()
 }

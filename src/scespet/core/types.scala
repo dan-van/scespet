@@ -5,6 +5,7 @@ import gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
+import scespet.util._
 
 
 package object types {
@@ -247,7 +248,7 @@ trait SelfAgg[-X] extends Agg[X] {
 trait Bucket extends Cell with MFunc {
 }
 
-trait SliceCellLifecycle[C] {
+trait SliceCellLifecycle[C <: Cell] {
   def newCell():C
   def closeCell(c:C)
 }
@@ -261,13 +262,11 @@ trait Term[X] {
   def map[Y](f: (X) => Y, exposeNull:Boolean = true):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
-//  def reduce_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
-//  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
+  def reduce[Y <: Agg[X]](newBFunc: => Y):Term[Y#OUT]
 
-  def reduce2[Y <: Agg[X]](newBFunc: => Y):PartialAggOrAcc[X, Y]
-
-//  @Deprecated
-//  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
+  def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedTerm[X]
+  
+  def window(window:HasValue[Boolean]) : GroupedTerm[X]
 
   def by[K](f: X => K) :MultiTerm[K,X]
 
@@ -277,6 +276,7 @@ trait Term[X] {
 
   /**
    * emit an updated tuples of (this.value, y) when either series fires
+   * yes, this is like 'zip', but because 'take' is similar I didn't want to use that term
    */
   def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)]
 

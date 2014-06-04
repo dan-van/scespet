@@ -83,7 +83,7 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
   def v2 = {
     out("Vod trade bucket:") {
       var map = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
-      map.reduce2(new Sum[Int]).every(2.events).last()
+      map.group(2.events).reduce(new Sum[Int])
     }
   }
   def v3 = {
@@ -123,7 +123,7 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
     expectedOut should be(List(6, 15, 24, 21))
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.reduce2(new Sum[Int]).every(3.events).last().map(_.toInt)
+    val mult10 = stream.group(3.events).reduce(new Sum[Int]).map(_.toInt)
     new StreamTest("mult10", expectedOut, mult10)
   }
 
@@ -148,7 +148,7 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
     // lastValue, reset every X
     // scan, all
     // lastValue
-    val mult10 = stream.reduce2(new Sum[Int]).every(3.events).all.map(_.toInt)
+    val mult10 = stream.group(3.events).scan(new Sum[Int]).map(_.toInt)
 
 //    val mult10 = stream.agg(new Sum[Int]).every(3.events, reset = BEFORE)
 //    val mult10 = stream.agg(new Sum[Int]).every(3.minutes)
@@ -169,8 +169,8 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.reduce2(new Sum[Int]).every( sliceTrigger, BEFORE ).all()
-    val reduce = stream.reduce2(new Sum[Int]).every( sliceTrigger, BEFORE ).last()
+    val scan = stream.group( sliceTrigger, BEFORE).scan(new Sum[Int])
+    val reduce = stream.group( sliceTrigger, BEFORE).reduce(new Sum[Int])
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -182,8 +182,8 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.reduce2(new Sum[Int]).every( sliceTrigger, AFTER ).all()
-    val reduce = stream.reduce2(new Sum[Int]).every( sliceTrigger, AFTER ).last()
+    val scan = stream.group( sliceTrigger, AFTER).scan(new Sum[Int])
+    val reduce = stream.group( sliceTrigger, AFTER).reduce(new Sum[Int])
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -214,7 +214,7 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
     val isOpen = stringStream.map(_ == "Open").asInstanceOf[MacroTerm[Boolean]]
 
 //    val scan = numberStream.fold(new Sum[Int]).window( isOpen ).map(_.toInt)
-    val reduce = numberStream.reduce2(new Sum[Int]).window( isOpen ).last()
+    val reduce = numberStream.window(isOpen).reduce(new Sum[Int])
 //    new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -245,7 +245,7 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
   test("Simple reduce each") {
     out("Vod trade bucket:") {
       var qty: MacroTerm[Int] = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
-      qty.reduce2(new Sum[Int]).every(2.events).all()
+      qty.group(2.events).reduce(new Sum[Int])
     }
   }
 
@@ -254,7 +254,7 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
     out("Vod Trade")(vodTrades)
     out("Vod trade bucket:") {
       var qty: MacroTerm[Int] = vodTrades.map(_.qty)
-      qty.scan(new Sum[Int]).every(2.events).all()
+      qty.group(2.events).scan(new Sum[Int])
     }
   }
 
