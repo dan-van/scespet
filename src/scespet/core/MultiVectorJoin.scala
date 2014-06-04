@@ -1,8 +1,6 @@
 package scespet.core
 
 import scespet.core.VectorStream.ReshapeSignal
-import gsa.esg.mekon.core.EventGraphObject
-import scespet.core.MultiVectorJoin.BucketCell
 
 /**
  * This maintains a vector of buckets by binding elements of a number of input vectors to different callback methods on the given bucket
@@ -19,10 +17,10 @@ import scespet.core.MultiVectorJoin.BucketCell
  */
 class BucketJoin[K,V,B](val source:VectorStream[K,V], val joinFunc:B=>V=>Unit)
 
-abstract class MultiVectorJoin[K, B <: Bucket](
+abstract class MultiVectorJoin[K, X, B <: Bucket](
                       sourceShape:VectorStream[K,_],
                       sourceJoins:List[BucketJoin[K, _, B]],
-                      env:types.Env) extends AbstractVectorStream[K, B](env) with types.MFunc {
+                      env:types.Env) extends AbstractVectorStream[K, B#OUT](env) with types.MFunc {
   def isInitialised: Boolean = sourceShape.isInitialised
 
   /*
@@ -37,10 +35,10 @@ abstract class MultiVectorJoin[K, B <: Bucket](
         val k = inVector.getKey(i)
         val myIndex = indexOf(k)
         if (myIndex >= 0) {
-          val bucketCell :SlicedBucket[B] = getValueHolder(myIndex)
-          type X = Any
-          val joinInputHasVal = inVector.getValueHolder(i).asInstanceOf[HasVal[X]]
-          val bucketJoinDefinition = joinDef.asInstanceOf[BucketJoin[K, X, B]]
+          type IN = Any
+          val bucketCell :SlicedBucket[B] = getValueHolder(myIndex).asInstanceOf[SlicedBucket[B]]
+          val joinInputHasVal = inVector.getValueHolder(i).asInstanceOf[HasVal[IN]]
+          val bucketJoinDefinition = joinDef.asInstanceOf[BucketJoin[K, IN, B]]
           val adder = bucketJoinDefinition.joinFunc
           bucketCell.addInputBinding(joinInputHasVal, adder)
           updated = true
@@ -98,7 +96,7 @@ abstract class MultiVectorJoin[K, B <: Bucket](
     }
   }
 
-  def newCell(i: Int, key: K) = {
+  def newCell(i: Int, key: K):SlicedBucket[B] = {
     val bucketCell = createBucketCell(key)
     // bind the cell up to listen to all its input bindings.
     for (joinDef <- sourceJoins) {
@@ -109,17 +107,14 @@ abstract class MultiVectorJoin[K, B <: Bucket](
         val joinInputHasVal = inVector.getValueHolder(i).asInstanceOf[HasVal[X]]
         val bucketJoinDefinition = joinDef.asInstanceOf[BucketJoin[K, X, B]]
         val adder = bucketJoinDefinition.joinFunc
-        val addedValue = bucketCell.addInputBinding(joinInputHasVal, adder)
+        val addedValue = bucketCell.addInputBinding[X](joinInputHasVal, adder)
       }
     }
     bucketCell
   }
 
-  def createBucketCell(key:K) :BucketCell[B]
+  def createBucketCell(key:K) :SlicedBucket[B]
 }
 
 object MultiVectorJoin {
-  trait BucketCell[B] extends HasVal[B] {
-    def addInputBinding[X](in:HasVal[X], adder:B=>X=>Unit)
-  }
 }

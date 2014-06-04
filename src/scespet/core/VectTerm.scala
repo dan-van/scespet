@@ -6,7 +6,6 @@ import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
 
 
-import scespet.core.MultiVectorJoin.BucketCell
 import scespet.util._
 import scala.Some
 
@@ -242,11 +241,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return newIsomorphicVector(cellBuilder)
   }
 
-  def reduce_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
-    val cellBuilder = (index:Int, key:K) => new ReduceAllCell[K, X, Y](env, input, index, key, reduceBuilder, ReduceType.LAST)
-    return newIsomorphicVector(cellBuilder)
-  }
-
+//  def reduce_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
+//    val cellBuilder = (index:Int, key:K) => new ReduceAllCell[K, X, Y](env, input, index, key, reduceBuilder, ReduceType.LAST)
+//    return newIsomorphicVector(cellBuilder)
+//  }
+//
 //  def reduce_all[Y <: Reduce[X]](newBFunc:  => Y):VectTerm[K, Y] = {
 //    // todo: why isn't this the same shape as fold_all?
 //    val newBucketAsFunc = () => newBFunc
@@ -366,17 +365,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
 
-  /**
-   * todo: naming
-   * build a vector of sliced Bucket instances with the same shape as this vector
-   *
-   * @param newBFunc
-   * @tparam B
-   * @return
-   */
-  def buildBucketStream[B <: Bucket](newBFunc: K => B):PreSliceBuilder[K, B] = new PreSliceBuilder[K, B](newBFunc, VectTerm.this.input, env)
-
-  
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
     return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=true))
   }
@@ -416,7 +404,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @tparam Y
    * @return
    */
-  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
+  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = ???
+  //new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
 
   /**
    * build a vector of Reduce instances that are driven with values from this vector.
@@ -427,7 +416,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * @tparam Y
    * @return
    */
-  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
+  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = ???
+  //new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 
   // TODO: rename to reduce
   def red[Y <: Agg[X]](newBFunc: => Y):PartialReduceOrScanVect[K, X, Y] = red[Y]((k:K) => newBFunc)
@@ -439,29 +429,30 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def scan[Y <: Agg[X]](newBFunc: K => Y):PartialReduceOrScanVect[K, X, Y] = new PartialReduceOrScanVect[K, X, Y](VectTerm.this, newBFunc, ReduceType.CUMULATIVE, env)
 }
 
-class PreSliceBuilder[K,B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
-  def fold() = new SliceBuilder(newBFunc, input, ReduceType.CUMULATIVE, env)
-  def reduce() = new SliceBuilder(newBFunc, input, ReduceType.LAST, env)
-}
+//class PreSliceBuilder[K,B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
+//  def fold() = new SliceBuilder(newBFunc, input, ReduceType.CUMULATIVE, env)
+//  def reduce() = new SliceBuilder(newBFunc, input, ReduceType.LAST, env)
+//}
 
-class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], emitType:ReduceType, env:types.Env) {
+class SliceBuilder[K, OUT, B <: Bucket](cellLifecycle:SliceCellLifecycle[B], input:VectorStream[K, _], emitType:ReduceType, env:types.Env) {
   private var joins = List[BucketJoin[K, _, B]]()
 
-  def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :SliceBuilder[K, B] = {
+  def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :SliceBuilder[K, OUT, B] = {
     joins :+= new BucketJoin[K, X, B](term.input, adder)
     this
   }
 
   def each(n:Int):VectTerm[K,B] = {
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-      def createBucketCell(key:K): BucketCell[B] = {
-        val newBFuncFromKey = () => newBFunc(key)
-        val bucketStreamCell = new SliceAfterBucket[B](null, newBFuncFromKey, emitType, env)
-//        return bucketStreamCell
-        ???
-      }
-    }
-    return new VectTerm[K,B](env)(bucketJoinVector)
+//    val bucketJoinVector = new MultiVectorJoin[K, OUT, B](input, joins, env) {
+//      def createBucketCell(key:K): SlicedBucket[OUT, B] = {
+//        val newBFuncFromKey = () => newBFunc(key)
+//        val bucketStreamCell = new SliceAfterBucket[OUT, B](slice, cellLifecycle, emitType, env)
+////        return bucketStreamCell
+//        ???
+//      }
+//    }
+//    return new VectTerm[K,B](env)(bucketJoinVector)
+    ???
   }
 
   /**
@@ -482,17 +473,18 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
    * @return
    */
   def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, B] = {
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-      def createBucketCell(key:K): BucketCell[B] = {
-        val newBFuncFromKey = () => newBFunc(key)
-        val cellWindowFunc = windowFunc(key)
-        emitType match {
-          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc, newBFuncFromKey, env)
-          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc, newBFuncFromKey, env)
-        }
-      }
-    }
-    return new VectTerm[K,B](env)(bucketJoinVector)
+//    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+//      def createBucketCell(key:K): BucketCell[B] = {
+//        val newBFuncFromKey = () => newBFunc(key)
+//        val cellWindowFunc = windowFunc(key)
+//        emitType match {
+//          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc, newBFuncFromKey, env)
+//          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc, newBFuncFromKey, env)
+//        }
+//      }
+//    }
+//    return new VectTerm[K,B](env)(bucketJoinVector)
+    ???
   }
 
   /**
@@ -501,60 +493,17 @@ class SliceBuilder[K, B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], e
    * @return
    */
   def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, B] = {
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-      def createBucketCell(key:K): BucketCell[B] = {
-        val newBFuncFromKey = () => newBFunc(key)
-        val cellWindowFunc = windowVect(key)
-        emitType match {
-          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc.input, newBFuncFromKey, env)
-          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc.input, newBFuncFromKey, env)
-        }
-      }
-    }
-    return new VectTerm[K,B](env)(bucketJoinVector)
-  }
-
-  def slice_pre(term: MacroTerm[_]):VectTerm[K,B] = slice_pre(term.input.trigger)
-
-  /**
-   * collect data into buckets that get 'closed' *before* the given event fires.
-   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
-   * e.g. bucket trades into buckets created whenever the trade direction changes
-   *
-   * @see #slice_post
-   * @param trigger
-   * @return
-   */
-  def slice_pre(trigger: EventGraphObject):VectTerm[K,B] = {
-    val sliceTrigger = trigger
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-      def createBucketCell(key:K): BucketCell[B] = {
-        val newBFuncFromKey = () => newBFunc(key)
-        new SliceBeforeBucket[B](sliceTrigger, newBFuncFromKey, emitType, env)
-      }
-    }
-    return new VectTerm[K,B](env)(bucketJoinVector)
-  }
-
-  def slice_post(term: MacroTerm[_]):VectTerm[K,B] = slice_post(term.input.trigger)
-
-  /**
-   * collect data into buckets that get 'closed' *after* the given event fires.
-   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
-   * e.g. bucket trades between trade events where the size is < median trade.
-   *
-   * @see reset_pre
-   * @param trigger
-   * @return
-   */
-  def slice_post(trigger: EventGraphObject):VectTerm[K,B] = {
-    val sliceTrigger = trigger
-    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-      def createBucketCell(key:K): BucketCell[B] = {
-        val newBFuncFromKey = () => newBFunc(key)
-        new SliceAfterBucket[B](sliceTrigger, newBFuncFromKey, emitType, env)
-      }
-    }
-    return new VectTerm[K,B](env)(bucketJoinVector)
+//    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
+//      def createBucketCell(key:K): BucketCell[B] = {
+//        val newBFuncFromKey = () => newBFunc(key)
+//        val cellWindowFunc = windowVect(key)
+//        emitType match {
+//          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc.input, newBFuncFromKey, env)
+//          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc.input, newBFuncFromKey, env)
+//        }
+//      }
+//    }
+//    return new VectTerm[K,B](env)(bucketJoinVector)
+    ???
   }
 }

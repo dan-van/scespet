@@ -65,7 +65,8 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   }
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
-  class XYCollector() extends Bucket with Cloneable {
+  class XYCollector() extends Bucket {
+    type OUT=XYCollector
     def value = this
     var firstX:Int = -1
     var lastX:Int = -1
@@ -246,11 +247,11 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
     val div5 = evenOdd.filter(_ % 5 == 0)
 
-    val slicer = evenOdd.buildBucketStream(k => new XYCollector)
-    val sliceBuilder : SliceBuilder[String, XYCollector] = if (reduce) slicer.reduce() else slicer.fold()
-    val unslicedBuckets = sliceBuilder.
-      join(evenOdd){b => b.addX}.
-      join(div5){b => b.addY}
+//    val slicer = evenOdd.keyToStream(k => impl.streamOf2(new XYCollector).bind(evenOdd)(_.addX).bind(div5)(_.addY))
+//    val sliceBuilder : SliceBuilder[String, _, XYCollector] = if (reduce) slicer.reduce() else slicer.fold()
+//    val unslicedBuckets = sliceBuilder.
+//      join(evenOdd){b => b.addX}.
+//      join(div5){b => b.addY}
 
     new {
       private def mySliceDef(i:Int) = {
@@ -270,9 +271,9 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
           }
         })
       }
-      def slicePre() = unslicedBuckets.slice_pre( sliceOn )
-      def slicePost() = unslicedBuckets.slice_post( sliceOn )
-      def window():VectTerm[String, XYCollector] = unslicedBuckets.window( windowStream )
+      def slicePre():VectTerm[String, XYCollector] = ??? //unslicedBuckets.slice_pre( sliceOn )
+      def slicePost():VectTerm[String, XYCollector] = ??? //unslicedBuckets.slice_post( sliceOn )
+      def window():VectTerm[String, XYCollector] = ??? // unslicedBuckets.window( windowStream )
     }
   }
 

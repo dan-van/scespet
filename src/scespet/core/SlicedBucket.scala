@@ -1,7 +1,6 @@
 package scespet.core
 
 
-import scespet.core.MultiVectorJoin.BucketCell
 import gsa.esg.mekon.core.EventGraphObject
 import scespet.util.Logged
 
@@ -20,6 +19,7 @@ import scespet.util.Logged
  *
  */
  
-abstract class SlicedBucket[Y <: Bucket] extends UpdatingHasVal[Y] with BucketCell[Y] with Logged {
+abstract class SlicedBucket[C <: Cell] extends UpdatingHasVal[C#OUT] with Logged {
+  def addInputBinding[IN](in:HasVal[IN], adder:C=>IN=>Unit)
 }
 

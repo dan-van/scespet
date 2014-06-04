@@ -6,9 +6,6 @@ import scespet.util._
 /**
  * Created by danvan on 16/04/2014.
  */
-/**
- * Created by danvan on 16/04/2014.
- */
 class PartialReduceOrScanVect[K, X, Y <: Agg[X]](val input:VectTerm[K, X], val bucketGen: (K) => Y, reduceType:ReduceType, val env:Environment) {
   private var sliceTrigger :EventGraphObject = _
   private val sliceBefore = true
@@ -29,7 +26,7 @@ class PartialReduceOrScanVect[K, X, Y <: Agg[X]](val input:VectTerm[K, X], val b
     val sliceFunc:Int => types.EventGraphObject = index => {
       val sourceVect = input.input
       val cellFiredTrigger: EventGraphObject = sourceVect.getTrigger(index)
-      ev.buildTrigger(sliceSpec, cellFiredTrigger, env)
+      ev.buildTrigger(sliceSpec, Set(cellFiredTrigger), env)
     }
     val chainedVector = new ChainedVector[K, Y#OUT](input.input, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {

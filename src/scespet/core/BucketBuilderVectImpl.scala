@@ -84,7 +84,7 @@ class BucketBuilderVectImpl[K, X, Y <: Agg[X]](newBFuncFromKey:(K) => Y, inputTe
     val sliceFunc:Int => types.EventGraphObject = index => {
       val sourceVect = inputTerm.input
       val cellFiredTrigger: EventGraphObject = sourceVect.getTrigger(index)
-      new NthEvent(n, cellFiredTrigger, env)
+      new NthEvent(n, Set(cellFiredTrigger), env)
     }
     val chainedVector = new ChainedVector[K, Y#OUT](inputVectorStream, env) {
       def newCell(i: Int, key: K): SlicedReduce[X, Y] = {

@@ -1,6 +1,5 @@
 package scespet.core
 
-import scespet.core.MultiVectorJoin.BucketCell
 import gsa.esg.mekon.core.EventGraphObject
 import scespet.util.Logged
 
@@ -19,7 +18,7 @@ import scespet.util.Logged
  *
  */
  
-class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends SlicedBucket[Y] {
+class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends SlicedBucket[Y] {
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
@@ -99,14 +98,14 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, new
     if (nextReduce != null) {
       env.removeListener(joinValueRendezvous, nextReduce)
       env.removeListener(nextReduce, this)
-      nextReduce.complete()
+      cellLifecycle.closeCell(nextReduce)
     }
     completedReduce = nextReduce
   }
 
   // NOTE: closeCurrentBucket should always be called before this!
   private def readyNextReduce() {
-    nextReduce = newReduce()
+    nextReduce = cellLifecycle.newCell()
     // join values trigger the bucket
     env.addListener(joinValueRendezvous, nextReduce)
     // listen to it so that we propagate value updates to the bucket
@@ -118,7 +117,7 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, new
   
   private var completedReduce : Y = _
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
+  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket

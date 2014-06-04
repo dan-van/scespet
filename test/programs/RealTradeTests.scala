@@ -119,6 +119,7 @@ object TestPlots extends RealTradeTests {
 }
 
 class TradeQuoteStats(key:String) extends Bucket {
+  type OUT=TradeQuoteStats
   def value: TradeQuoteStats = this
 
   var t:Trade = _
@@ -159,8 +160,10 @@ object TestReduce extends RealTradeTests {
   val oneMinute = new Timer(1 minute)
 //  val summary = trades.keyToStream(key => reduce(new TradeQuoteStats(_)).join(trades)(_.addTrade).join(quotes)(_.addQuote).every(oneMinute)
   // TODO: this seems pointless - we actually want a stream of buckets for the given keyset. How is this different form keyToStream?
-  val summary = trades.buildBucketStream(new TradeQuoteStats(_)).reduce().join(trades)(_.addTrade).join(quotes)(_.addQuote).slice_post(oneMinute)
-  out("Summary")(summary)
+  //NODEPLOY
+  val summary = trades.keyToStream(k => impl.streamOf2(new TradeQuoteStats(k)).bind(trades(k))(_.addTrade).bind(quotes(k))(_.addQuote).every(oneMinute).last())
+//  val summary = trades.reduce(new TradeQuoteStats(_)).bind(quotes)(_.addQuote).every(oneMinute).last()
+//  out("Summary")(summary)
 //  Plot.plot(summary.map(_.q.ask))
   env.run(50000)
 }
@@ -171,7 +174,8 @@ object TestBucket extends RealTradeTests {
   val trades = universe.keyToStream(u => getTradeEvents(u))
   val quotes = universe.keyToStream(u => getQuoteEvents(u))
 
-  class Red(key:String) extends Bucket with types.MFunc {
+  class Red(key:String) extends Bucket {
+    type OUT=Int
     var t:Trade = _
     var q:Quote = _
     var events:Int = 0
@@ -205,8 +209,8 @@ object TestBucket extends RealTradeTests {
   import scala.concurrent.duration._
   val oneMinute = new Timer(1 minute)
   // hmmm, buildBucketStream is really not much different from a completely independent 'bucketStreamBuilder' function...
-  val summary = universe.buildBucketStream(new Red(_)).reduce().slice_post(oneMinute)
-  Plot.plot(summary.map(_.events))
+  val summary = universe.keyToStream(k => impl.streamOf2(new Red(k)).every(oneMinute).last())
+  Plot.plot(summary)
   env.run(10000)
 }
 
@@ -231,10 +235,10 @@ object TradeCategories extends RealTradeTests {
   val sells = tradeCategory.filter(_._1 == "SELL")
   val mid = tradeCategory.filter(_._1 == "NONE")
 
-  val buyPressure = buys.fold_all(new Counter)
-  val sellPressure = sells.fold_all(new Counter)
+  val buyPressure = buys.scan(new Counter).all()
+  val sellPressure = sells.scan(new Counter).all()
 //  val midCountbuckets = mid.reduce(new Counter).slice_post(Timer 5 Minutes)
-  val midCount = mid.fold_all(new Counter)
+  val midCount = mid.scan(new Counter).all()
 
 //  val buyPressure = buys.map(_._2.quantity).fold_all(new Sum[Long]).map(_.sum)
 //  val sellPressure = sells.map(_._2.quantity).fold_all(new Sum[Long]).map(_.sum)
@@ -250,6 +254,9 @@ object SimpleSpreadStats extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O"))
 
   class SpreadStats(key:String) extends Bucket {
+    type OUT=SpreadStats
+    val value = this
+
     val quotes = getQuoteEvents(key)
     env.addListener(quotes.getTrigger, this)
 
@@ -265,7 +272,8 @@ object SimpleSpreadStats extends RealTradeTests {
       spreadCounts.maxBy(e => e._2)._1
     }
   }
-  val spreadCounters = universe.buildBucketStream(new SpreadStats(_)).reduce().each(10000) //all()
+  import scespet.core.types._
+  val spreadCounters = universe.keyToStream(k => impl.streamOf2(new SpreadStats(k)).every(10000.events).last()) //all()
   val modeSpread = spreadCounters.map(_.mode)
   out("ModeSpread")(modeSpread)
   env.run()

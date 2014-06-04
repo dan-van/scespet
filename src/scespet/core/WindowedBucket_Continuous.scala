@@ -14,13 +14,14 @@ import gsa.esg.mekon.core.EventGraphObject
  * todo: seems so similar in concept that it feels odd to have two different classes.
  * todo: will think more on this.
  */
-class WindowedBucket_Continuous[Y <: Bucket](val windowEvents :HasValue[Boolean], newReduce :()=>Y, env :types.Env) extends SlicedBucket[Y] {
+class WindowedBucket_Continuous[Y <: Bucket](val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], env :types.Env) extends SlicedBucket[Y] {
   private var inWindow = if (windowEvents == null) true else windowEvents.value
 
   private var nextReduce : Y = _
   private var completedReduce : Y = _
 
-  var value : Y = _ // this has to toggle between nextReduce, and completedReduce
+  var valueSrc:Y = _ // this has to toggle between nextReduce, and completedReduce
+  def value : Y#OUT = valueSrc.value
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
@@ -112,22 +113,22 @@ class WindowedBucket_Continuous[Y <: Bucket](val windowEvents :HasValue[Boolean]
     if (nextReduce != null) {
       env.removeListener(joinValueRendezvous, nextReduce)
       env.removeListener(nextReduce, this)
-      nextReduce.complete()
+      cellLifecycle.closeCell(nextReduce)
     }
     completedReduce = nextReduce
     // expose this one
-    value = completedReduce
+    valueSrc = completedReduce
   }
 
   // NOTE: closeCurrentBucket should always be called before this!
   private def readyNextReduce() {
-    nextReduce = newReduce()
+    nextReduce = cellLifecycle.newCell()
     // join values trigger the bucket
     env.addListener(joinValueRendezvous, nextReduce)
     // listen to it so that we propagate value updates to the bucket
     env.addListener(nextReduce, this)
     // this is the next bucket, expose it
-    value = nextReduce
+    valueSrc = nextReduce
   }
 
   def calculate():Boolean = {

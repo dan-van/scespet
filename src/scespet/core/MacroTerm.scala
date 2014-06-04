@@ -11,6 +11,7 @@ import scala.concurrent.duration.Duration
 import scespet.util.SliceAlign
 import scespet.core.SliceTriggerSpec.MacroIsTriggerSpec
 import scespet.core.types.{MFunc, Events}
+import scespet.core.types.Events
 
 
 /**
@@ -217,24 +218,18 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] {
     return new MacroTerm[X](env)(listener)
   }
 
-  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.LAST, env)
-
-  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT] = new BucketBuilderImpl[X,Y](() => newBFunc, MacroTerm.this, ReduceType.CUMULATIVE, env)
-
-  sealed class FireAct(name:String) {
-  }
-  object FireAct {
-    val Close = new FireAct("Close")
-    val Open = new FireAct("Open")
-  }
-
-  // NODEPLOY rename to reduce
+  // NODEPLOY rename to reduce, make the return already have a grouping of 'all'
   def reduce2[Y <: Agg[X]](newBFunc: => Y) = new PartialAggOrAcc[X, Y](input, () => newBFunc, env)
+  // NODEPLOY make the return already have a grouping of 'last'
+  def scan[Y <: Agg[X]](newBFunc: => Y) = new PartialAggOrAcc[X, Y](input, () => newBFunc, env)
+
+  // NODEPLOY - build a class that will take a reduce or scan function call to complete it
+//  def group[S](s:S)(implicit ev:SliceTriggerSpec[S]) :GroupedTerm
 }
 
 class GroupedTerm[X, R <: Agg[X]](reduceBuilder:(ReduceType)=>SlicedReduce[X, R], val env:types.Env)(val input:HasVal[X]) {
   private lazy val scanTerm :MacroTerm[R#OUT] = {
-    val slicer = reduceBuilder(ReduceType.CUMULATIVE)
+    val slicer:HasVal[R#OUT] = reduceBuilder(ReduceType.CUMULATIVE)
     new MacroTerm[R#OUT](env)(slicer)
   }
 
@@ -247,7 +242,25 @@ class GroupedTerm[X, R <: Agg[X]](reduceBuilder:(ReduceType)=>SlicedReduce[X, R]
   def all() = scanTerm
 }
 
+class GroupedBucketTerm[C <: Bucket](reduceBuilder:(ReduceType)=>SlicedBucket[C], val env:types.Env) {
+  private lazy val scanTerm :MacroTerm[C#OUT] = {
+    val slicer = reduceBuilder(ReduceType.CUMULATIVE)
+    new MacroTerm[C#OUT](env)(slicer)
+  }
+
+  def last() = {
+    val slicer = reduceBuilder(ReduceType.LAST)
+    new MacroTerm[C#OUT](env)(slicer)
+  }
+
+  // NODEPLOY - evaporate this method by using delegation onto lazyVal
+  def all() = scanTerm
+}
+
+
 // NODEPLOY this should be a Term that also supports partitioning operations
+// NODEPLOY - I think this is a simpler case of an aggreggation that is not listenable (or capable of generating events itself)
+// NODEPLOY - so we should be able to use it as a base case, and go to SlicedBucket if the bucket has evidence of being a Function
 class PartialAggOrAcc[X, Y <: Agg[X]](val input:HasVal[X], val bucketGen: () => Y, val env:Environment) {
   private var sliceTrigger :EventGraphObject = _
   private val sliceBefore = true
@@ -263,34 +276,65 @@ class PartialAggOrAcc[X, Y <: Agg[X]](val input:HasVal[X], val bucketGen: () => 
     new MacroTerm[Y#OUT](env)(slicer)
   }
 
-//  def every(macroTerm:MacroTerm[_], reset:SliceAlign = AFTER) : MacroTerm[Y#OUT] = {
-//    every[MacroTerm[_]](macroTerm, reset = AFTER)(new MacroTermSliceTrigger)
-//  }
-//
+  def window[W](window:HasValue[Boolean]) : GroupedTerm[X, Y] = ???
+
+  // NODEPLOY move this up to Term, slicing should occur before reduce/scan
   def every[S](sliceSpec:S, reset:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) : GroupedTerm[X, Y] = {
-//  def every[S : SliceTriggerSpec](sliceSpec:S, reset:SliceAlign = AFTER) : MacroTerm[Y#OUT] = {
-//    val sliceTrigger = ev.buildTrigger(sliceSpec, input.getTrigger, env)
-    val sliceTrigger = ev.buildTrigger(sliceSpec, input.getTrigger, env)
+    val sliceTrigger = ev.buildTrigger(sliceSpec, Set(input.getTrigger), env)
     val sliceBefore = reset == BEFORE
     val partialSlicer = (reduceType:ReduceType) => new SlicedReduce[X, Y](input, sliceTrigger, sliceBefore, bucketGen, reduceType, env)
     new GroupedTerm[X, Y](partialSlicer, env)(input)
   }
 
   def bind[S](stream:HasVal[S])(adder:Y => S => Unit) :PartialAggOrAcc[X,Y] = {
-    // NODEPLOY - store the adder, then build a bucketGen on call to last or all or every
-    val bucketFunc = bucketGen()
-    val listenerBind = new MFunc{
-      override def calculate(): Boolean = {
-        val newSValue = stream.value
-        adder.apply(bucketFunc)(newSValue)
-        true
-      }
-    }
-    env.addListener(stream.trigger, listenerBind)
-    env.addListener(listenerBind, bucketFunc.asInstanceOf[MFunc])
+    ???
+  }
+}
+
+// NODEPLOY this should be a Term that also supports partitioning operations
+class PartialBuiltSlicedBucket[Y <: Bucket](val cellLifecycle: SliceCellLifecycle[Y], val env:Environment) {
+  var bindings = List[(HasVal[_],(_ => _ => Unit))]()
+
+  def last() = {
+    type O = Y#OUT
+    val slicer:HasVal[Y#OUT] = new SliceBeforeBucket[Y](null, cellLifecycle, ReduceType.LAST, env).asInstanceOf[HasVal[Y#OUT]]
+    new MacroTerm[O](env)(slicer)
+  }
+
+  // NODEPLOY - do the same delegation trick as GroupedTerm
+  def all():MacroTerm[Y#OUT] = {
+    ???
+//    val slicer = new SliceBeforeBucket[Y#OUT, Y](null, cellLifecycle, ReduceType.CUMULATIVE, env)
+//    new MacroTerm[Y#OUT](env)(slicer)
+  }
+
+  //  def every(macroTerm:MacroTerm[_], reset:SliceAlign = AFTER) : MacroTerm[Y#OUT] = {
+  //    every[MacroTerm[_]](macroTerm, reset = AFTER)(new MacroTermSliceTrigger)
+  //  }
+  //
+  def every[S](sliceSpec:S, reset:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) : GroupedBucketTerm[Y] = {
+???
+//    def partialSlicer(reduceType :ReduceType):SlicedBucket[Y#OUT, Y] = {
+//      val inputs = bindings.map(pair => pair._1.trigger).toSet
+//      val sliceEvents = ev.buildTrigger(sliceSpec, inputs, env)
+//      val slicer = new SliceBeforeBucket[Y#OUT, Y](sliceEvents, cellLifecycle, reduceType, env)
+//      // add the captured bindings
+//      bindings.foreach(pair => {
+//        val (hasVal, adder) = pair
+//        type IN = Any
+//        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+//      })
+//      slicer
+//    }
+//    new GroupedBucketTerm[Y#OUT, Y](partialSlicer, env)
+  }
+
+  def bind[S](stream:HasVal[S])(adder:Y => S => Unit) :PartialBuiltSlicedBucket[Y] = {
+    bindings :+= (stream, adder)
     this
   }
 }
+
 
 object MacroTerm {
   implicit def termToHasVal[E](term:MacroTerm[E]) :HasVal[E] = term.input
@@ -298,26 +342,31 @@ object MacroTerm {
 }
 
 trait SliceTriggerSpec[-X] {
-  def buildTrigger(x:X, src:EventGraphObject, env:types.Env) :types.EventGraphObject
+  def buildTrigger(x:X, src:Set[EventGraphObject], env:types.Env) :types.EventGraphObject
 }
 
 object SliceTriggerSpec {
   implicit object DurationIsTriggerSpec extends SliceTriggerSpec[Duration] {
-    def buildTrigger(duration:Duration, src: EventGraphObject, env: types.Env) = {
+    def buildTrigger(duration:Duration, src: Set[EventGraphObject], env: types.Env) = {
       new Timer(duration)
     }
   }
   implicit object EventsIsTriggerSpec extends SliceTriggerSpec[Events] {
-    def buildTrigger(events:Events, src: EventGraphObject, env: types.Env) = {
+    def buildTrigger(events:Events, src: Set[EventGraphObject], env: types.Env) = {
       new NthEvent(events.n, src, env)    }
   }
+  implicit object EventObjIsTriggerSpec extends SliceTriggerSpec[EventGraphObject] {
+    def buildTrigger(events:EventGraphObject, src: Set[EventGraphObject], env: types.Env) = {
+      events
+    }
+  }
   implicit object MacroIsTriggerSpec extends SliceTriggerSpec[MacroTerm[_]] {
-    def buildTrigger(events:MacroTerm[_], src: EventGraphObject, env: types.Env) = {
+    def buildTrigger(events:MacroTerm[_], src: Set[EventGraphObject], env: types.Env) = {
       events.input.getTrigger
     }
   }
   implicit class MacroTermSliceTrigger[T](t:MacroTerm[T]) extends SliceTriggerSpec[MacroTerm[T]] {
-    override def buildTrigger(x: MacroTerm[T], src: EventGraphObject, env: _root_.scespet.core.types.Env): _root_.scespet.core.types.EventGraphObject =  x.getTrigger
+    override def buildTrigger(x: MacroTerm[T], src: Set[EventGraphObject], env: _root_.scespet.core.types.Env): _root_.scespet.core.types.EventGraphObject =  x.getTrigger
   }
 
   implicit def toTriggerSpec[T](m:MacroTerm[T]) :SliceTriggerSpec[MacroTerm[T]] = new MacroTermSliceTrigger[T](m)

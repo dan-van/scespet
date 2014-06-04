@@ -37,7 +37,8 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     override def add(x: X): Unit = value :+= x
   }
   
-  class AppendFunc[X] extends UpdatingHasVal[Seq[X]] {
+  class AppendFunc[X] extends Bucket {
+    type OUT = Seq[X]
     var value = Seq[X]()
 
     def add(x:X) {
@@ -78,11 +79,11 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
 
   // -------- the same tests with a HasVal with binds instead of A Reducer
 
-//  test("bind scan") {
-//    val out = impl.asStream2(new AppendFunc[Char]).bind(stream.input)(_.add).all()
-//    val expected = generateAppendScan(data)
-//    new StreamTest("scan", expected, out)
-//  }
+  test("bind scan") {
+    val out = impl.streamOf2(new AppendFunc[Char]).bind(stream.input)(_.add).all()
+    val expected = generateAppendScan(data)
+    new StreamTest("scan", expected, out)
+  }
 //
 //  test("bind fold") {
 //    val out = stream.reduce2(new Append[Char]).last()

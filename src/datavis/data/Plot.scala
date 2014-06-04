@@ -135,7 +135,7 @@ object Plot {
         dataset.add(seriesId, x, y)
       }
     }
-    stream.reduce_all(new DatasetAdder(_, options))
+    stream.reduce(new DatasetAdder(_, options))
     options
   }
 

@@ -210,10 +210,18 @@ trait BucketBuilderVect[K, T] {
 
 // todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
 // todo: I think I could split this into a 'Provides' interface
-trait Agg[-X] {
+trait Agg[-X] extends Cell {
+  def add(x:X)
+}
+
+trait Cell {
   type OUT
   def value :OUT
-  def add(x:X)
+
+  /**
+   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
+   */
+  def complete(){}
 }
 
 /**
@@ -236,12 +244,12 @@ trait SelfAgg[-X] extends Agg[X] {
 }
 
 // todo - I think I want to merge Reduce and Bucket
-//trait Bucket extends {
-trait Bucket extends types.MFunc with Serializable {
-  /**
-   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
-   */
-  def complete(){}
+trait Bucket extends Cell with MFunc {
+}
+
+trait SliceCellLifecycle[C] {
+  def newCell():C
+  def closeCell(c:C)
 }
 
 trait Term[X] {
@@ -249,16 +257,17 @@ trait Term[X] {
 
   def value:X
 
-  def fold_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
+//  def fold_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
   def map[Y](f: (X) => Y, exposeNull:Boolean = true):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
-  def reduce_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
-  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
+//  def reduce_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
+//  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
 
   def reduce2[Y <: Agg[X]](newBFunc: => Y):PartialAggOrAcc[X, Y]
 
-  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
+//  @Deprecated
+//  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
 
   def by[K](f: X => K) :MultiTerm[K,X]
 
@@ -362,16 +371,20 @@ trait MultiTerm[K,X] {
 
   def sample(evt:EventGraphObject):VectTerm[K,X]
 
+  //NODEPLOY add this
+//  def group[S](s:S)(implicit ev:SliceTriggerSpec[S]) :GroupedVectorTerm
+
   def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
   def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)
 
-  def reduce_all[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K,Y#OUT]
-  def reduce_all[Y <: Agg[X]](newBFunc:  => Y):VectTerm[K,Y#OUT]  = reduce_all[Y]((k:K) => newBFunc)
-
+//  def reduce_all[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K,Y#OUT]
+//  def reduce_all[Y <: Agg[X]](newBFunc:  => Y):VectTerm[K,Y#OUT]  = reduce_all[Y]((k:K) => newBFunc)
+//
+  // NODEPLOY rename to scan
   def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
   def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = fold[Y]((k:K) => newBFunc)
-  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT]
-  def fold_all[Y <: Agg[X]](reduceBuilder : => Y):VectTerm[K,Y#OUT]   = fold_all[Y]((k:K) => reduceBuilder)
+//  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT]
+//  def fold_all[Y <: Agg[X]](reduceBuilder : => Y):VectTerm[K,Y#OUT]   = fold_all[Y]((k:K) => reduceBuilder)
 }
 
 

@@ -46,16 +46,6 @@ class EnvTermBuilder() extends DelayedInit {
     return new MacroTerm[X](env)(data)
   }
 
-//  def asStream2[Y <: UpdatingHasVal[X], X](newCell: => Y) : PartialAggOrAcc[X, Y] = {
-////    if (data.isInstanceOf[EventSource]) {
-////      env.registerEventSource(data.asInstanceOf[EventSource])
-////    }
-//    val input:HasVal[X] = newCell
-//    // TODO: I think bucketGen should call close() on cell, and return newCell if Y is a Bucket type
-//    val bucketGen = () => newCell
-//    return new PartialAggOrAcc[X, Y](input, bucketGen, env)
-//  }
-
   def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
     val hasVal = newHasVal(env)
     asStream(hasVal)
@@ -74,8 +64,20 @@ class EnvTermBuilder() extends DelayedInit {
     ???
   }
 
+  def streamOf2[Y <: Bucket](newCellFunc: => Y) : PartialBuiltSlicedBucket[Y] = {
+    //    if (data.isInstanceOf[EventSource]) {
+    //      env.registerEventSource(data.asInstanceOf[EventSource])
+    //    }
+    val cellLifeCycle:SliceCellLifecycle[Y] = new SliceCellLifecycle[Y] {
+      override def newCell(): Y = newCellFunc
+      override def closeCell(c: Y): Unit = c.complete()
+    }
+    return new PartialBuiltSlicedBucket[Y](cellLifeCycle, env)
+  }
 
-//  def reduce[B <: types.MFunc](aggregateBuilder: => B) :ReduceBuilder[B] = {
+
+
+  //  def reduce[B <: types.MFunc](aggregateBuilder: => B) :ReduceBuilder[B] = {
 //    new ReduceBuilder[B](aggregateBuilder)
 //  }
 
