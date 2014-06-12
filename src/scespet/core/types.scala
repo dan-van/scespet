@@ -70,6 +70,16 @@ trait HasVal[X] extends HasValue[X]{
   def getTrigger: EventGraphObject = trigger
 }
 
+trait ToHasVal[T,X] {
+  def toHasVal(t:T) :HasVal[X]
+}
+
+object ToHasVal {
+  implicit class MacroTermToHasVal[X](term:MacroTerm[X]) extends ToHasVal[MacroTerm[X], X] {
+    override def toHasVal(h: MacroTerm[X]): HasVal[X] = h.input
+  }
+}
+
 object HasVal {
   // TODO: unify this with IsVal
   implicit def funcToHasVal[F <: EventGraphObject](f:F) = new HasVal[F] {
@@ -225,6 +235,13 @@ trait Cell {
   def complete(){}
 }
 
+class CellFromAgg[A <: Agg[_]] extends Cell {
+  type OUT = A#OUT
+  var agg:A = _
+  // argh - why the asInstanceOf?
+  override def value = agg.value.asInstanceOf[OUT]
+}
+
 /**
  * More traditional parameterised type version of Agg (rather than using dependent object types)
  * @tparam X
@@ -245,16 +262,19 @@ trait SelfAgg[-X] extends Agg[X] {
 }
 
 // todo - I think I want to merge Reduce and Bucket
+// NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
 trait Bucket extends Cell with MFunc {
 }
 
 trait SliceCellLifecycle[C <: Cell] {
   def newCell():C
+  def reset(c:C)
   def closeCell(c:C)
 }
 
 trait Term[X] {
   implicit def eventObjectToHasVal[E <: types.EventGraphObject](evtObj:E) :HasVal[E] = new IsVal(evtObj)
+//  implicit def toHasVal():HasVal[X]
 
   def value:X
 
@@ -300,6 +320,11 @@ trait Term[X] {
 
   //  private def valueToSingleton[X,Y] = (x:X) => Traversable(x.asInstanceOf[Y])
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
+}
+
+trait PartialGroupedBucketStream[B <: Bucket] {
+  def all():MacroTerm[B#OUT]
+  def last():MacroTerm[B#OUT]
 }
 
 trait MultiTerm[K,X] {

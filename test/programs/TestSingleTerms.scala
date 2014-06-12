@@ -48,14 +48,9 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
 
-  val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
-  }
-
-  def addPostCheck(name:String)(check: => Unit) {
-    postRunChecks.append(() => { check })
   }
 
   var names = IteratorEvents(nameList)((_,_) => 0L)
@@ -67,9 +62,7 @@ class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterE
 
   override protected def afterEach() {
     env.run()
-    for (r <- postRunChecks) {
-      r()
-    }
+    super.afterEach()
   }
 
   def v1 = {

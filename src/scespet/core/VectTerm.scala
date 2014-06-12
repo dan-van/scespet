@@ -364,6 +364,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, Y](env)(output)
   }
 
+//  def keyToStream2[Y, SY : ToHasVal[SY, Y]]( cellFromKey:K=>SY ):VectTerm[K,Y] = {
+//    val keyToHasVal = cellFromKey.andThen( implicitly[ToHasVal[SY, Y]].toHasVal )
+//    keyToStream(keyToHasVal)
+//  }
 
   def join[Y, K2]( other:VectTerm[K2,Y], keyMap:K => K2) :VectTerm[K,(X,Y)] = {
     return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=true))

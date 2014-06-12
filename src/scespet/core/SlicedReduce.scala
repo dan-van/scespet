@@ -9,9 +9,10 @@ import gsa.esg.mekon.core.EventGraphObject.Lifecycle
  * Time: 21:29
  * To change this template use File | Settings | File Templates.
  */
-class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents :types.EventGraphObject, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
+class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S]) extends UpdatingHasVal[Y#OUT] {
   var newSliceNextEvent = false
-
+  val sliceEvents = sliceBuilder.buildTrigger(sliceSpec, Set(dataEvents.getTrigger), env)
+  
   env.addListener(dataEvents.getTrigger, this)
   if (sliceEvents != null) env.addListener(sliceEvents, this)
 
@@ -49,7 +50,8 @@ class SlicedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceEvents 
       sliceTrigger = false
     }
     if (env.hasChanged(dataEvents.getTrigger)) {
-      nextReduce.add(dataEvents.value)
+      val newValue = dataEvents.value
+      nextReduce.add(newValue)
     }
     if (!sliceBefore && sliceTrigger) {
       newSliceNextEvent = true

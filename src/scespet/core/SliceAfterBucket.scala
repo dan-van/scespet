@@ -18,26 +18,12 @@ import scespet.util.Logged
  *
  */
  
-class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends SlicedBucket[Y] {
+class SliceAfterBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y] {
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
-    var doneSlice = false
-    var sliceNextEvent = false
 
     def calculate(): Boolean = {
-      doneSlice = false
-      // slice now if we're in sliceBefore mode and the slice event has fired
-      if (sliceNextEvent) {
-        readyNextReduce()
-        doneSlice = true
-        sliceNextEvent = false
-      }
-
-      if (sliceTriggered()) {
-        sliceNextEvent = true
-      }
-
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
       var addedValueToBucket = false
@@ -48,18 +34,7 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cel
           addedValueToBucket = true
         }
       }
-      if (doneSlice && addedValueToBucket) {
-        // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
-        // still pending wiring.
-        // The contract is that a bucket will receive a calculate after it has had its inputs added
-        // therefore, we'll send a fire after establishing listener edges to preserve this contract.
-        env.fireAfterChangingListeners(nextReduce)
-      }
-      
-      val fireBucketCell = addedValueToBucket || doneSlice
-      // need to wake up the slicer to do the slice.
-      if (sliceNextEvent) env.wakeupThisCycle(SliceAfterBucket.this)
-      fireBucketCell
+      addedValueToBucket
     }
 
     def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
@@ -80,11 +55,6 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cel
     }
   }
 
-  // wire up slice listening:
-  if (sliceEvents != null) {
-    env.addListener(sliceEvents, joinValueRendezvous)
-  }
-
   // not 100% sure about this - if we are only emitting completed buckets, we close and emit a bucket when the system finishes
   private val termination = env.getTerminationEvent
   if (emitType == ReduceType.LAST) {
@@ -96,34 +66,41 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cel
 
   private def closeCurrentBucket() {
     if (nextReduce != null) {
-      env.removeListener(joinValueRendezvous, nextReduce)
-      env.removeListener(nextReduce, this)
       cellLifecycle.closeCell(nextReduce)
+      completedReduceValue = nextReduce.value
     }
-    completedReduce = nextReduce
   }
 
   // NOTE: closeCurrentBucket should always be called before this!
   private def readyNextReduce() {
-    nextReduce = cellLifecycle.newCell()
-    // join values trigger the bucket
-    env.addListener(joinValueRendezvous, nextReduce)
-    // listen to it so that we propagate value updates to the bucket
-    env.addListener(nextReduce, this)
+    cellLifecycle.reset(nextReduce)
   }
 
-  private var nextReduce : Y = _
-  readyNextReduce()
-  
-  private var completedReduce : Y = _
+  private val nextReduce : Y = cellLifecycle.newCell()
+  // join values trigger the bucket
+  env.addListener(joinValueRendezvous, nextReduce)
+  // listen to it so that we propagate value updates to the bucket
+  env.addListener(nextReduce, this)
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
+
+  private var completedReduceValue : Y#OUT = _
+
+  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduceValue
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
 
   def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
     joinValueRendezvous.addInputBinding(in, adder)
+  }
+
+  var sliceEvents :types.EventGraphObject = _
+  def bindingsComplete() {
+    sliceEvents = ev.buildTrigger(sliceSpec, Set(nextReduce), env)
+    // wire up slice listening:
+    if (sliceEvents != null) {
+      env.addListener(sliceEvents, this)
+    }
   }
 
   private class InputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
@@ -134,15 +111,18 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cel
 
   def calculate():Boolean = {
     val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
-      env.hasChanged(value)
+      env.hasChanged(nextReduce)
     } else {
       false
     }
-    val sliceFire = if (joinValueRendezvous.sliceNextEvent) {
-        // this means that we're in slicePost mode, a slice event was fired, all data is added to the bucket, and it is now time to close it.
-        closeCurrentBucket()
-        true
-      } else false
+    val sliceFire = if (sliceTriggered()) {
+      closeCurrentBucket()
+      // NOTE: we could lazily ready next reduce if we had to
+      readyNextReduce()
+      true
+    } else {
+      false
+    }
 
     val fire = bucketFire || sliceFire
     if (fire)
@@ -154,13 +134,6 @@ class SliceAfterBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cel
     if (sliceEvents != null && env.hasChanged(sliceEvents)) return true
     if (emitType == ReduceType.LAST && env.hasChanged(termination)) return true
     false
-  }
-
-  /**
-   * allows an external actor to force this bucket builder to seal off the current bucket and use a new one next event.
-   */
-  def setNewSliceNextEvent() {
-    joinValueRendezvous.sliceNextEvent = true
   }
 }
 

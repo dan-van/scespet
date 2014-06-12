@@ -20,6 +20,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   var stream: MacroTerm[Char] = _
 
   override protected def beforeEach() {
+    super.beforeEach()
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
     data = "abcdefghijk".toCharArray
@@ -27,17 +28,25 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   }
   override protected def afterEach() {
     env.run()
-//    for (r <- postRunChecks) {
-//      r()
-//    }
+    super.afterEach()
   }
 
   class Append[X] extends Reducer[X, Seq[X]] {
     var value: Seq[X] = Seq[X]()
     override def add(x: X): Unit = value :+= x
   }
-  
-  class AppendFunc[X] extends Bucket {
+
+  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
+    type OUT = Seq[X]
+    var value = Seq[X]()
+    env.addListener(in.trigger, this)
+    override def calculate(): Boolean = {
+      value :+= in.value
+      true
+    }
+  }
+
+  class BindableAppendFunc[X] extends Bucket {
     type OUT = Seq[X]
     var value = Seq[X]()
 
@@ -80,23 +89,50 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   // -------- the same tests with a HasVal with binds instead of A Reducer
 
   test("bind scan") {
-    val out = impl.streamOf2(new AppendFunc[Char]).bind(stream.input)(_.add).all()
+    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).all()
     val expected = generateAppendScan(data)
     new StreamTest("scan", expected, out)
   }
-//
-//  test("bind fold") {
-//    val out = stream.reduce2(new Append[Char]).last()
-//    val expected = List(data.foldLeft(Seq[Char]())(_ :+ _))
-//    new StreamTest("scan", expected, out)
-//  }
-//
-//  test("bind grouped scan") {
-//    val out = stream.reduce2(new Append[Char]).every(3.events).all
-//    val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
-//    new StreamTest("scan", expected, out)
-//  }
-//
+
+  test("bind reduce") {
+    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).last()
+    val expected = List(data.foldLeft(Seq[Char]())(_ :+ _))
+    new StreamTest("scan", expected, out)
+  }
+
+  test("bind grouped scan") {
+    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).group(3.events).all()
+    val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+    new StreamTest("scan", expected, out)
+  }
+
+  test("bind grouped reduce") {
+    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).group(3.events).all()
+    val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
+    new StreamTest("scan", expected, out)
+  }
+
+// -------------- Pure old-style function streams
+  test("MFunc scan") {
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).all()
+    val expected = generateAppendScan(data)
+    new StreamTest("scan", expected, out)
+  }
+
+  test("MFunc reduce") {
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).last()
+    val expected = List(data.foldLeft(Seq[Char]())(_ :+ _))
+    new StreamTest("scan", expected, out)
+  }
+
+  test("MFunc grouped scan") {
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).group(3.events).all()
+    val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+    new StreamTest("scan", expected, out)
+  }
+
+
+  //
 //  test("bind grouped fold") {
 //    val out = stream.reduce2(new Append[Char]).every(3.events).last
 //    val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq

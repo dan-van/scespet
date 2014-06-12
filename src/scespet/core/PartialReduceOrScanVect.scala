@@ -20,27 +20,25 @@ class PartialReduceOrScanVect[K, X, Y <: Agg[X]](val input:VectTerm[K, X], val b
   //  }
   //
   def every[S](sliceSpec:S, reset:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) : VectTerm[K, Y#OUT] = {
-    //  def every[S : SliceTriggerSpec](sliceSpec:S, reset:SliceAlign = AFTER) : MacroTerm[Y#OUT] = {
-    //    val sliceTrigger = ev.buildTrigger(sliceSpec, input.getTrigger, env)
-
-    val sliceFunc:Int => types.EventGraphObject = index => {
-      val sourceVect = input.input
-      val cellFiredTrigger: EventGraphObject = sourceVect.getTrigger(index)
-      ev.buildTrigger(sliceSpec, Set(cellFiredTrigger), env)
-    }
-    val chainedVector = new ChainedVector[K, Y#OUT](input.input, env) {
-      def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
-        val sourcehasVal = getSourceVector.getValueHolder(i).asInstanceOf[HasVal[X]]
-        val perCellSliceTrigger :types.EventGraphObject = sliceFunc(i)
-        val noArgNewBucketFunc = new SliceCellLifecycle[Y] {
-          override def newCell(): Y = bucketGen(key)
-          override def closeCell(c: Y): Unit = {}
-        }
-        val sliceBefore = reset == BEFORE
-        new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, sliceBefore, noArgNewBucketFunc, reduceType, env)
-      }
-    }
-    return new VectTerm[K,Y#OUT](env)(chainedVector)
+???
+//    val sliceFunc:Int => types.EventGraphObject = index => {
+//      val sourceVect = input.input
+//      val cellFiredTrigger: EventGraphObject = sourceVect.getTrigger(index)
+//      ev.buildTrigger(sliceSpec, Set(cellFiredTrigger), env)
+//    }
+//    val chainedVector = new ChainedVector[K, Y#OUT](input.input, env) {
+//      def newCell(i: Int, key: K): SlicedReduce[X, Y] = {
+//        val sourcehasVal = getSourceVector.getValueHolder(i).asInstanceOf[HasVal[X]]
+//        val perCellSliceTrigger :types.EventGraphObject = sliceFunc(i)
+//        val noArgNewBucketFunc = new SliceCellLifecycle[Y] {
+//          override def newCell(): Y = bucketGen(key)
+//          override def closeCell(c: Y): Unit = {}
+//        }
+//        val sliceBefore = reset == BEFORE
+//        new SlicedReduce[X,Y](sourcehasVal, perCellSliceTrigger, sliceBefore, noArgNewBucketFunc, reduceType, env)
+//      }
+//    }
+//    return new VectTerm[K,Y#OUT](env)(chainedVector)
   }
 
   // TODO: add support for windows

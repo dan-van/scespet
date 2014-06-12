@@ -27,7 +27,7 @@ import scespet.util.Logged
  *
  */
  
-class SliceBeforeBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends SlicedBucket[Y] {
+class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y] {
   if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
@@ -83,6 +83,7 @@ class SliceBeforeBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, ce
   }
 
   // wire up slice listening:
+  val sliceEvents = ev.buildTrigger(sliceSpec, Set(this), env)
   if (sliceEvents != null) {
     env.addListener(sliceEvents, joinValueRendezvous)
   }
@@ -97,29 +98,25 @@ class SliceBeforeBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, ce
 
 
   private def closeCurrentBucket() {
-    if (nextReduce != null) {
-      env.removeListener(joinValueRendezvous, nextReduce)
-      env.removeListener(nextReduce, this)
-      cellLifecycle.closeCell(nextReduce)
-    }
-    completedReduce = nextReduce
+    cellLifecycle.closeCell(nextReduce)
+    completedReduce = nextReduce.value
   }
 
   // NOTE: closeCurrentBucket should always be called before this!
   private def readyNextReduce() {
-    nextReduce = cellLifecycle.newCell()
-    // join values trigger the bucket
-    env.addListener(joinValueRendezvous, nextReduce)
-    // listen to it so that we propagate value updates to the bucket
-    env.addListener(nextReduce, this)
+    cellLifecycle.reset(nextReduce)
   }
 
-  private var nextReduce : Y = _
-  readyNextReduce()
-  
-  private var completedReduce : Y = _
+  private val nextReduce : Y = cellLifecycle.newCell()
+  // join values trigger the bucket
+  env.addListener(joinValueRendezvous, nextReduce)
+  // listen to it so that we propagate value updates to the bucket
+  env.addListener(nextReduce, this)
 
-  def value:Y#OUT = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
+
+  private var completedReduce : Y#OUT = _
+
+  def value:Y#OUT = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
