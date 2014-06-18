@@ -19,16 +19,13 @@ import scespet.util.Logged
  */
  
 class SliceAfterBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y] {
-  var openReduceNextEvent = false
+  var awaitingNextEventAfterReset = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
 
     def calculate(): Boolean = {
-      if (openReduceNextEvent) {
-        readyNextReduce()
-      }
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
       var addedValueToBucket = false
@@ -62,18 +59,13 @@ class SliceAfterBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCel
   env.addListener(joinValueRendezvous, this)
 
 
-  private def closeCurrentBucket() {
+  private def resetCurrentReduce() {
     if (nextReduce != null) {
       cellLifecycle.closeCell(nextReduce)
       completedReduceValue = nextReduce.value  // Intellij thinks this a a compile error - it isn't
-      openReduceNextEvent = true
+      cellLifecycle.reset(nextReduce)
     }
-  }
-
-  // NOTE: closeCurrentBucket should always be called before this!
-  private def readyNextReduce() {
-    cellLifecycle.reset(nextReduce)
-    openReduceNextEvent = false
+    awaitingNextEventAfterReset = true
   }
 
   private val nextReduce : Y = cellLifecycle.newCell()
@@ -84,7 +76,8 @@ class SliceAfterBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCel
 
   private var completedReduceValue : Y#OUT = _
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduceValue
+  // if awaitingNextEventAfterReset then the nextReduce has been reset, and we should be exposing the last snap (even if we're in CUMULATIVE mode)
+  def value = if (emitType == ReduceType.LAST || awaitingNextEventAfterReset) completedReduceValue else nextReduce.value
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
@@ -114,8 +107,12 @@ class SliceAfterBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCel
   }
 
   def calculate():Boolean = {
-    if (openReduceNextEvent) {
-      readyNextReduce()
+    if (awaitingNextEventAfterReset) {
+      // got one - though not sure if I should move this block into the if below?
+      awaitingNextEventAfterReset = false
+      if (!env.hasChanged(nextReduce)) {
+        logger.warning("Not expecting this")
+      }
     }
 
     val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
@@ -124,7 +121,7 @@ class SliceAfterBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCel
       false
     }
     val sliceFire = if (sliceTriggered()) {
-      closeCurrentBucket()
+      resetCurrentReduce()
       true
     } else {
       false
