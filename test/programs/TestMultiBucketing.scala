@@ -88,6 +88,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     }
     def addX(x:Int) = {xChanged += 1; lastX = x; if (firstX == -1) firstX = x}
     def addY(x:Int) = yChanged += 1
+    override def open(): Unit = ???
 
     override def toString: String = s"firstX:$firstX x:$lastX nx:$countX, ny:$countY, nboth:$countBoth, done:$done"
 

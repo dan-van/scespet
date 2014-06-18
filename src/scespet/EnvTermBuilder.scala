@@ -60,10 +60,8 @@ class EnvTermBuilder() extends DelayedInit {
     //    if (data.isInstanceOf[EventSource]) {
     //      env.registerEventSource(data.asInstanceOf[EventSource])
     //    }
-    val cellLifeCycle:SliceCellLifecycle[Y] = new SliceCellLifecycle[Y] {
+    val cellLifeCycle:SliceCellLifecycle[Y] = new BucketCellLifecycle[Y] {
       override def newCell(): Y = newCellFunc
-      override def closeCell(c: Y): Unit = c.complete()
-      override def reset(c: Y): Unit = {}
     }
     return new PartialBuiltSlicedBucket[Y](cellLifeCycle, env)
   }

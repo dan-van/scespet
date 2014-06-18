@@ -105,6 +105,7 @@ class WindowedBucket_Continuous[Y <: Bucket](val windowEvents :HasValue[Boolean]
     joinValueRendezvous.addInputBinding(in, adder)
   }
 
+
   private class InputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
     def addValueToBucket(bucket:Y) {
       adder(bucket)(in.value)

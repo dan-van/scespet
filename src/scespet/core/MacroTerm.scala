@@ -281,8 +281,8 @@ class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.En
     // NODEPLOY - if I make a mutable Cell[X] which delegates to an instance of Agg[X], then I can implement reset
     val lifecycle :SliceCellLifecycle[Y] = new SliceCellLifecycle[Y] {
       override def newCell(): Y = newBFunc
-      override def closeCell(c: Y): Unit = c.complete()
-      override def reset(c: Y): Unit = ???
+      override def closeCell(c: Y): Unit = {}
+      override def reset(c: Y): Unit = {}
     }
     val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[A](lifecycle.asInstanceOf[SliceCellLifecycle[A]], ReduceType.LAST).asInstanceOf[HasVal[Y#OUT]]
     new MacroTerm[Y#OUT](env)(slicer)
@@ -306,7 +306,7 @@ class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.En
     val lifecycle = new SliceCellLifecycle[Y] {
       override def newCell(): Y = newBFunc
 
-      override def closeCell(c: Y): Unit = {c.complete()}
+      override def closeCell(c: Y): Unit = {}
 
       override def reset(c: Y): Unit = {}
     }
@@ -328,7 +328,6 @@ class PartialBuiltSlicedBucket[Y <: Bucket](val cellLifecycle: SliceCellLifecycl
       type IN = Any
       slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
     })
-    slicer.bindingsComplete()
     new MacroTerm[Y#OUT](env)(slicer)
   }
 
@@ -356,14 +355,8 @@ class PartialBuiltSlicedBucket[Y <: Bucket](val cellLifecycle: SliceCellLifecycl
   //NODEPLOY - think:
   // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
   // this avoids needing a new slice trigger definition each slice.
-  def group[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[Y] = {
-    type IN = Any
-    val uncollapsed = new UncollapsedGroupWithTrigger[S, IN](null, sliceSpec, triggerAlign, env, ev)
-    // NODEPLOY formalise:
-    new PartialGroupedBucketStream[Y] {
-      def all():MacroTerm[Y#OUT] = new MacroTerm(env)(uncollapsed.applyB(cellLifecycle, ReduceType.CUMULATIVE))
-      def last():MacroTerm[Y#OUT] = new MacroTerm(env)(uncollapsed.applyB(cellLifecycle, ReduceType.LAST))
-    }
+  def group[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y] = {
+    new PartialGroupedBucketStream[S, Y](triggerAlign, cellLifecycle, bindings, sliceSpec, ev, env)
   }
 }
 

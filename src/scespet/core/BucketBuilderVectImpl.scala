@@ -94,7 +94,7 @@ class BucketBuilderVectImpl[K, X, Y <: Agg[X]](newBFuncFromKey:(K) => Y, inputTe
       def newCell(i: Int, key: K): WindowedReduce[X, Y] = {
         val noArgNewBucketFunc = new SliceCellLifecycle[Y] {
           override def newCell(): Y = newBFuncFromKey(key)
-          override def closeCell(c: Y): Unit = c.complete()
+          override def closeCell(c: Y): Unit = {}
           override def reset(c: Y): Unit = {}
         }
         val sourcehasVal = inputVectorStream.getValueHolder(i)

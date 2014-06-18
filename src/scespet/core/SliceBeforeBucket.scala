@@ -99,7 +99,7 @@ class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCe
 
   private def closeCurrentBucket() {
     cellLifecycle.closeCell(nextReduce)
-    completedReduce = nextReduce.value
+    completedReduce = nextReduce.value  // Intellij thinks this a a compile error - it isn't
   }
 
   // NOTE: closeCurrentBucket should always be called before this!
@@ -116,7 +116,12 @@ class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCe
 
   private var completedReduce : Y#OUT = _
 
-  def value:Y#OUT = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce
+  def value:Y#OUT = {
+    if (emitType == ReduceType.CUMULATIVE)
+      nextReduce.value // Intellij thinks this a a compile error - it isn't
+    else
+      completedReduce
+  }
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket

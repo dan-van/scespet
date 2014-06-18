@@ -44,6 +44,8 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
       value :+= in.value
       true
     }
+
+    override def open(): Unit = value = Nil
   }
 
   class BindableAppendFunc[X] extends Bucket {
@@ -55,7 +57,9 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     }
     override def calculate(): Boolean = {
       true
-    } 
+    }
+
+    override def open(): Unit = value = Nil
   }
 
   def generateAppendScan(dat:Seq[Char]):Seq[Seq[Char]] = {
@@ -107,7 +111,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   }
 
   test("bind grouped reduce") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).group(3.events).all()
+    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).group(3.events).last()
     val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
     new StreamTest("scan", expected, out)
   }

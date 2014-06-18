@@ -8,6 +8,7 @@ import scala.reflect.ClassTag
 import scespet.util._
 
 
+
 package object types {
   type Env = gsa.esg.mekon.core.Environment
   type EventGraphObject = gsa.esg.mekon.core.EventGraphObject
@@ -228,11 +229,6 @@ trait Agg[-X] extends Cell {
 trait Cell {
   type OUT
   def value :OUT
-
-  /**
-   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
-   */
-  def complete(){}
 }
 
 class CellFromAgg[A <: Agg[_]] extends Cell {
@@ -264,12 +260,27 @@ trait SelfAgg[-X] extends Agg[X] {
 // todo - I think I want to merge Reduce and Bucket
 // NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
 trait Bucket extends Cell with MFunc {
+  def open():Unit
+  /**
+   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
+   * NODEPLOY - rename to Close
+   */
+  def complete(){}
 }
 
-trait SliceCellLifecycle[C <: Cell] {
+abstract class BucketCellLifecycle[C <: Bucket] extends SliceCellLifecycle[C] {
+  def newCell():C
+
+  override def reset(c: C): Unit = c.open()
+
+  override def closeCell(c: C): Unit = c.complete()
+}
+
+trait SliceCellLifecycle[C] {
   def newCell():C
   def reset(c:C)
   def closeCell(c:C)
+  // NODEPLOY - I think we should have a callback on every 'row' e.g. updated
 }
 
 trait Term[X] {
@@ -322,9 +333,29 @@ trait Term[X] {
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
-trait PartialGroupedBucketStream[B <: Bucket] {
-  def all():MacroTerm[B#OUT]
-  def last():MacroTerm[B#OUT]
+class PartialGroupedBucketStream[S, Y <: Bucket](triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
+  def buildSliced(reduceType:ReduceType) :SlicedBucket[Y] = {
+    val slicedBucket = triggerAlign match {
+      case BEFORE => new SliceBeforeBucket[S, Y](sliceSpec, lifecycle, reduceType, env, ev)
+      case AFTER => new SliceAfterBucket[S, Y](sliceSpec, lifecycle, reduceType, env, ev)
+    }
+    bindings.foreach(pair => {
+      val (hasVal, adder) = pair
+      type IN = Any
+      slicedBucket.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+    })
+    slicedBucket
+  }
+
+  def all():MacroTerm[Y#OUT] = {
+    val hasVal = buildSliced(ReduceType.CUMULATIVE)
+    new MacroTerm(env)(hasVal)
+  }
+
+  def last():MacroTerm[Y#OUT] = {
+    val hasVal = buildSliced(ReduceType.LAST)
+    new MacroTerm(env)(hasVal)
+  }
 }
 
 trait MultiTerm[K,X] {

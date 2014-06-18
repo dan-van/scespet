@@ -138,6 +138,11 @@ class TradeQuoteStats(key:String) extends Bucket {
     true
   }
 
+
+  override def open(): Unit = {
+    ???
+  }
+
   override def toString: String = s"trade:$t, quote:$q, events:$events"
 }
 
@@ -203,6 +208,9 @@ object TestBucket extends RealTradeTests {
       println("event on bucket")
       true
     }
+
+
+    override def open(): Unit = ???
 
     def value: Int = events
   }
@@ -271,6 +279,8 @@ object SimpleSpreadStats extends RealTradeTests {
     def mode() = {
       spreadCounts.maxBy(e => e._2)._1
     }
+    override def open(): Unit = ???
+
   }
   import scespet.core.types._
   val spreadCounters = universe.keyToStream(k => impl.streamOf2(new SpreadStats(k)).group(10000.events).last()) //all()

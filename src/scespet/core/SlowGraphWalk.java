@@ -4,6 +4,7 @@ import gsa.esg.mekon.core.EventGraphObject;
 import gsa.esg.mekon.core.Function;
 
 import java.util.*;
+import java.util.logging.Logger;
 
 /**
  * This is a very simplistic, inefficient implementation of a state propagation graph.
@@ -19,6 +20,7 @@ import java.util.*;
  *
  */
 public class SlowGraphWalk {
+    private static final Logger logger = Logger.getLogger(SlowGraphWalk.class.getName());
 
     public class Node {
         private int lastFired = -1;
@@ -26,6 +28,7 @@ public class SlowGraphWalk {
         private Set<Node> out = new HashSet<Node>(2);
         private EventGraphObject graphObject;
         private int order = -1;
+        private int lastPropagationSweep = -1;
 
         private Node(EventGraphObject graphObject) {
             this.graphObject = graphObject;
@@ -98,6 +101,7 @@ public class SlowGraphWalk {
     });
     private IdentityHashMap<EventGraphObject, Node> nodes = new IdentityHashMap<EventGraphObject, Node>();
     private int cycleCount = -1;
+    private int propagationSweep = 0; // to avoid recursion in cyclic graphs
     private boolean isFiring = false;
     private boolean isChanging = false;
     // graph changes should occur between propagations to avoid very complex behaviour semantics
@@ -137,6 +141,7 @@ public class SlowGraphWalk {
             Node targetNode = getNode(target);
             sourceNode.addOut(targetNode);
             targetNode.addIn(sourceNode);
+            propagationSweep++;
             propagateOrder(targetNode, sourceNode.order);
         }
     }
@@ -178,12 +183,17 @@ public class SlowGraphWalk {
     }
 
     private void propagateOrder(Node targetNode, int greaterThan) {
-        if (targetNode.order <= greaterThan) {
-            int newGreater = greaterThan + 1;
-            targetNode.order = newGreater;
-            for (Node child : targetNode.out) {
-                propagateOrder(child, newGreater);
+        if (targetNode.lastPropagationSweep < propagationSweep) {
+            if (targetNode.order <= greaterThan) {
+                targetNode.lastPropagationSweep = propagationSweep;
+                int newGreater = greaterThan + 1;
+                targetNode.order = newGreater;
+                for (Node child : targetNode.out) {
+                    propagateOrder(child, newGreater);
+                }
             }
+        } else {
+            logger.info("Cyclic graph - I'm hoping my dumb implementation doesn't have to support this (though there are plenty of legitimate reasons to support this)");
         }
     }
 
