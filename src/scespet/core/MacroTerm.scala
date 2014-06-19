@@ -355,7 +355,7 @@ class PartialBuiltSlicedBucket[Y <: Bucket](val cellLifecycle: SliceCellLifecycl
   //NODEPLOY - think:
   // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
   // this avoids needing a new slice trigger definition each slice.
-  def group[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y] = {
+  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y] = {
     new PartialGroupedBucketStream[S, Y](triggerAlign, cellLifecycle, bindings, sliceSpec, ev, env)
   }
 }
