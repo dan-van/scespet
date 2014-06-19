@@ -108,10 +108,9 @@ class SliceAfterBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCel
 
   def calculate():Boolean = {
     if (awaitingNextEventAfterReset) {
-      // got one - though not sure if I should move this block into the if below?
-      awaitingNextEventAfterReset = false
-      if (!env.hasChanged(nextReduce)) {
-        logger.warning("Not expecting this")
+      if (env.hasChanged(nextReduce)) {
+        // got one.
+        awaitingNextEventAfterReset = false
       }
     }
 

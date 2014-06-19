@@ -334,7 +334,7 @@ trait Term[X] {
 }
 
 class PartialGroupedBucketStream[S, Y <: Bucket](triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
-  def buildSliced(reduceType:ReduceType) :SlicedBucket[Y] = {
+  private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y] = {
     val slicedBucket = triggerAlign match {
       case BEFORE => new SliceBeforeBucket[S, Y](sliceSpec, lifecycle, reduceType, env, ev)
       case AFTER => new SliceAfterBucket[S, Y](sliceSpec, lifecycle, reduceType, env, ev)

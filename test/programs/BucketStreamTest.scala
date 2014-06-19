@@ -41,8 +41,12 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     var value = Seq[X]()
     env.addListener(in.trigger, this)
     override def calculate(): Boolean = {
-      value :+= in.value
+      append(in.value)
       true
+    }
+
+    def append(x: X) {
+      value :+= x
     }
 
     override def open(): Unit = value = Nil
@@ -135,17 +139,86 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     new StreamTest("scan", expected, out)
   }
 
+  test("MFunc grouped reduce") {
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).group(3.events).last()
+    val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
+    new StreamTest("reduce", expected, out)
+  }
 
-  //
-//  test("bind grouped fold") {
-//    val out = stream.reduce2(new Append[Char]).every(3.events).last
-//    val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
-//    new StreamTest("scan", expected, out)
-//  }
+// -------------- tricky composition of self-generator and binding
+  test("MFunc bind scan") {
+    val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
+      var accept = false
+      override def apply(v1: Char): Boolean = { accept = !accept; accept }
+    }
+    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).all()
+    val expected = List(
+      "Aa",
+      "Aab",
+      "AabCc",
+      "AabCcd",
+      "AabCcdEe",
+      "AabCcdEef",
+      "AabCcdEefGg",
+      "AabCcdEefGgh",
+      "AabCcdEefGghIi",
+      "AabCcdEefGghIij",
+      "AabCcdEefGghIijKk"
+    ).map(_.toCharArray.toSeq)
 
-  //
-//    val mult10 = streamOf(new Append[Char]).bind(_.add)(stream)
-//    val mult10 = streamOf(new Append[Char]).bind(_.add)(stream).every(3.events)
-//    val mult10 = streamOf(new Append[Char]).bind(_.add)(stream).last
-//    val mult10 = streamOf(new Append[Char]).bind(_.add)(stream).last.every(3.events)
+    new StreamTest("scan", expected, out)
+  }
+
+  test("MFunc bind reduce") {
+    val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
+      var accept = false
+      override def apply(v1: Char): Boolean = { accept = !accept; accept }
+    }
+    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).last()
+    val expected = List("AabCcdEefGghIijKk".toCharArray.toSeq)
+    new StreamTest("scan", expected, out)
+  }
+
+  test("MFunc bind grouped scan") {
+    val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
+      var accept = false
+      override def apply(v1: Char): Boolean = { accept = !accept; accept }
+    }
+    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).group(3.events).all()
+    val expected = List(
+      "Aa",
+      "Aab",
+      "AabCc",
+           "d",
+           "dEe",
+           "dEef",
+               "Gg",
+               "Ggh",
+               "GghIi",
+                    "j",
+                    "jKk"
+    ).map(_.toCharArray.toSeq)
+
+    new StreamTest("scan", expected, out)
+  }
+
+  test("MFunc bind grouped reduce") {
+    val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
+      var accept = false
+      override def apply(v1: Char): Boolean = { accept = !accept; accept }
+    }
+    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
+    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).group(3.events).last()
+    val expected = List(
+      "AabCc",
+           "dEef",
+               "GghIi",
+                    "jKk"
+    ).map(_.toCharArray.toSeq)
+
+    new StreamTest("scan", expected, out)
+  }
 }
