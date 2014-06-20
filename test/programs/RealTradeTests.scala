@@ -243,10 +243,10 @@ object TradeCategories extends RealTradeTests {
   val sells = tradeCategory.filter(_._1 == "SELL")
   val mid = tradeCategory.filter(_._1 == "NONE")
 
-  val buyPressure = buys.scan(new Counter).all()
-  val sellPressure = sells.scan(new Counter).all()
+  val buyPressure = buys.scan(new Counter)
+  val sellPressure = sells.scan(new Counter)
 //  val midCountbuckets = mid.reduce(new Counter).slice_post(Timer 5 Minutes)
-  val midCount = mid.scan(new Counter).all()
+  val midCount = mid.scan(new Counter)
 
 //  val buyPressure = buys.map(_._2.quantity).fold_all(new Sum[Long]).map(_.sum)
 //  val sellPressure = sells.map(_._2.quantity).fold_all(new Sum[Long]).map(_.sum)

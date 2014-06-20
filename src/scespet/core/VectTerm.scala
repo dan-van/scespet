@@ -401,18 +401,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   /**
    * build a vector of Reduce instances that are driven with values from this vector.
-   * the Reduce instances do not expose intermediate state, but will only fire when the bucket is closed.
-   * e.g. if 'Sum' then we are exposing the total summation once the bucket is sealed (e.g. daily trade volume)
-   * @see #fold
-   * @param newBFunc
-   * @tparam Y
-   * @return
-   */
-  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = ???
-  //new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.LAST, env)
-
-  /**
-   * build a vector of Reduce instances that are driven with values from this vector.
    * the Reduce instances expose their state changes.
    * e.g. if 'Sum' then we are exposing the current cumulative sum as time goes by (e.g. accumulated trade volume)
    * @see #reduce
@@ -423,14 +411,30 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = ???
   //new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 
-  // TODO: rename to reduce
+  // NODEPLOY: rename to reduce
   def red[Y <: Agg[X]](newBFunc: => Y):PartialReduceOrScanVect[K, X, Y] = red[Y]((k:K) => newBFunc)
 
   def red[Y <: Agg[X]](newBFunc: K => Y):PartialReduceOrScanVect[K, X, Y] = new PartialReduceOrScanVect[K, X, Y](VectTerm.this, newBFunc, ReduceType.LAST, env)
 
-  def scan[Y <: Agg[X]](newBFunc: => Y):PartialReduceOrScanVect[K, X, Y] = scan[Y]((k:K) => newBFunc)
 
-  def scan[Y <: Agg[X]](newBFunc: K => Y):PartialReduceOrScanVect[K, X, Y] = new PartialReduceOrScanVect[K, X, Y](VectTerm.this, newBFunc, ReduceType.CUMULATIVE, env)
+  // THINK: this could be special cased to be faster
+//  def reduce[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K, Y#OUT] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)
+
+  def reduce[Y <: Agg[X]](newBFunc: => Y):VectTerm[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)
+  // THINK: this could be special cased to be faster
+  def reduce[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K, Y#OUT] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)
+
+  def scan[Y <: Agg[X]](newBFunc: => Y):VectTerm[K, Y#OUT] = scan[Y]((k:K) => newBFunc)
+  // THINK: this could be special cased to be faster
+  def scan[Y <: Agg[X]](newBFunc: K => Y) = group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)
+
+  def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedVectTerm[K, X] = {
+    val uncollapsed = new UncollapsedVectGroupWithTrigger[S, K, X](input, sliceSpec, triggerAlign, env, ev)
+    new GroupedVectTerm[K, X](this, uncollapsed, env)
+  }
+  def window[W](windowSpec:W):GroupedVectTerm[K, X] = {
+    ???
+  }
 }
 
 //class PreSliceBuilder[K,B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
@@ -509,5 +513,60 @@ class SliceBuilder[K, OUT, B <: Bucket](cellLifecycle:SliceCellLifecycle[B], inp
 //    }
 //    return new VectTerm[K,B](env)(bucketJoinVector)
     ???
+  }
+}
+
+class VectAggLifecycle[K, X, Y <: Agg[X]](newCellF: K => Y) extends KeyToSliceCellLifecycle[K,Y]{
+  override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new AggSliceCellLifecycle[X, Y](newCellF(k))
+}
+
+class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: UncollapsedVectGroup[K, X], val env:types.Env) {
+  def reduce[Y <: Agg[X]](newBFunc:  => Y)(implicit ev:Y <:< Agg[X]) :VectTerm[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)(ev)
+  def reduce[Y <: Agg[X]](newBFunc: K => Y)(implicit ev:Y <:< Agg[X]) :VectTerm[K, Y#OUT] = {
+    val lifecycle :VectAggLifecycle[K, X, Y] = new VectAggLifecycle[K, X, Y](newBFunc)
+    val cellBuilder = uncollapsedGroup.applyAgg[Y](lifecycle, ReduceType.LAST)
+    return input.newIsomorphicVector[Y#OUT](cellBuilder)
+  }
+
+  def scan[Y <: Agg[X]](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :VectTerm[K, Y#OUT] = scan[Y]((k:K) => newBFunc)(ev)
+  def scan[Y <: Agg[X]](newBFunc: K => Y)(implicit ev:Y <:< Agg[X]) :VectTerm[K, Y#OUT] = {
+    val lifecycle :VectAggLifecycle[K, X, Y] = new VectAggLifecycle[K, X, Y](newBFunc)
+    val cellBuilder = uncollapsedGroup.applyAgg[Y](lifecycle, ReduceType.CUMULATIVE)
+    return input.newIsomorphicVector[Y#OUT](cellBuilder)
+  }
+}
+
+trait UncollapsedVectGroup[K, IN] {
+  def applyB[B <: Bucket](lifecycle:KeyToSliceCellLifecycle[K, B], reduceType:ReduceType) :(Int,K)=>UpdatingHasVal[B#OUT]
+  def applyAgg[A <: Agg[IN]](lifecycle:KeyToSliceCellLifecycle[K, A], reduceType:ReduceType) :(Int,K)=>UpdatingHasVal[A#OUT]
+}
+
+class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN], sliceSpec:S, triggerAlign:SliceAlign, env:types.Env, ev: SliceTriggerSpec[S]) extends UncollapsedVectGroup[K, IN] {
+  def applyAgg[A <: Agg[IN]](lifecycle: KeyToSliceCellLifecycle[K, A], reduceType:ReduceType): (Int, K) => UpdatingHasVal[A#OUT] = {
+    (i:Int, k:K) => {
+      val sourceCell = inputVector.getValueHolder(i)
+      val cellLifecycle = lifecycle.lifeCycleForKey(k)
+      new SlicedReduce[S, IN, A](sourceCell, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, ev)
+    }
+  }
+
+  def applyB[B <: Bucket](lifecycle: KeyToSliceCellLifecycle[K, B], reduceType: ReduceType): (Int, K) => UpdatingHasVal[B#OUT] = {
+    triggerAlign match {
+      case BEFORE => {
+        (i:Int, k:K) => {
+          val sourceCell = inputVector.getValueHolder(i)
+          val cellLifecycle = lifecycle.lifeCycleForKey(k)
+          new SliceBeforeBucket[S, B](sliceSpec, cellLifecycle, reduceType, env, ev)
+        }
+      }
+      case AFTER => {
+        (i:Int, k:K) => {
+          val sourceCell = inputVector.getValueHolder(i)
+          val cellLifecycle = lifecycle.lifeCycleForKey(k)
+          new SliceAfterBucket[S, B](sliceSpec, cellLifecycle, reduceType, env, ev)
+        }
+      }
+      case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
+    }
   }
 }

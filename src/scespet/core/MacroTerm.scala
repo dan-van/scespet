@@ -223,7 +223,6 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   }
 
   // THINK: this could be special cased to be faster
-  // NODEPLOY rename to reduce
   def reduce[Y <: Agg[X]](newBFunc: => Y):Term[Y#OUT] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)
 
   // THINK: this could be special cased to be faster
@@ -275,42 +274,15 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, trigge
 class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.Env) {
 //  def reduce[Y <: Cell](newBFunc: => Y) :Term[Y#OUT] = ???
 //  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-    // damn, my implicit evidence doesn't seem to help the compiler realise that Y <: Agg[X]. Hack time.
-    type A = Y with Agg[X]
-    // NODEPLOY - if I make a mutable Cell[X] which delegates to an instance of Agg[X], then I can implement reset
-    val lifecycle :SliceCellLifecycle[Y] = new SliceCellLifecycle[Y] {
-      override def newCell(): Y = newBFunc
-      override def closeCell(c: Y): Unit = {}
-      override def reset(c: Y): Unit = {}
-    }
-    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[A](lifecycle.asInstanceOf[SliceCellLifecycle[A]], ReduceType.LAST).asInstanceOf[HasVal[Y#OUT]]
+  def reduce[Y <: Agg[X]](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
+    val lifecycle = new AggSliceCellLifecycle[X, Y](newBFunc)
+    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[Y](lifecycle, ReduceType.LAST)
     new MacroTerm[Y#OUT](env)(slicer)
   }
 
   // NODEPLOY bring this up to Cell
   def scan[Y <: Agg[X]](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-    // damn, my implicit evidence doesn't seem to help the compiler realise that Y <: Agg[X]. Hack time.
-    // NODEPLOY - if I make a mutable Cell[X] which delegates to an instance of Agg[X], then I can implement reset
-//    val lifecycle = new SliceCellLifecycle[CellFromAgg[Y]] {
-//      override def newCell(): CellFromAgg[Y] = {
-//        val cell = new CellFromAgg[Y]
-//        reset(cell)
-//        cell
-//      }
-//      override def closeCell(c: CellFromAgg[Y]): Unit = c.complete()
-//      override def reset(c: CellFromAgg[Y]): Unit = {
-//        c.agg = newBFunc.asInstanceOf[Y]
-//      }
-//    }
-    val lifecycle = new SliceCellLifecycle[Y] {
-      override def newCell(): Y = newBFunc
-
-      override def closeCell(c: Y): Unit = {}
-
-      override def reset(c: Y): Unit = {}
-    }
-//    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[A](lifecycle.asInstanceOf[SliceCellLifecycle[A]], ReduceType.CUMULATIVE).asInstanceOf[HasVal[Y#OUT]]
+    val lifecycle = new AggSliceCellLifecycle[X, Y](newBFunc)
     val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg(lifecycle, ReduceType.CUMULATIVE).asInstanceOf[HasVal[Y#OUT]]
     new MacroTerm[Y#OUT](env)(slicer)
   }

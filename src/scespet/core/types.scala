@@ -283,6 +283,18 @@ trait SliceCellLifecycle[C] {
   // NODEPLOY - I think we should have a callback on every 'row' e.g. updated
 }
 
+class AggSliceCellLifecycle[X, A <: Agg[X]](newCellF: => A) extends SliceCellLifecycle[A]{
+  override def newCell(): A = newCellF
+  override def closeCell(c: A): Unit = {}
+  override def reset(c: A): Unit = {}
+}
+
+// NODEPLOY - union with above?
+trait KeyToSliceCellLifecycle[K, C] {
+  def lifeCycleForKey(k:K):SliceCellLifecycle[C]
+}
+
+
 trait Term[X] {
   implicit def eventObjectToHasVal[E <: types.EventGraphObject](evtObj:E) :HasVal[E] = new IsVal(evtObj)
 //  implicit def toHasVal():HasVal[X]
@@ -430,15 +442,15 @@ trait MultiTerm[K,X] {
   //NODEPLOY add this
 //  def group[S](s:S)(implicit ev:SliceTriggerSpec[S]) :GroupedVectorTerm
 
-  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
-  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)
+//  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
+//  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)
 
 //  def reduce_all[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K,Y#OUT]
 //  def reduce_all[Y <: Agg[X]](newBFunc:  => Y):VectTerm[K,Y#OUT]  = reduce_all[Y]((k:K) => newBFunc)
 //
   // NODEPLOY rename to scan
-  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
-  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = fold[Y]((k:K) => newBFunc)
+//  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
+//  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = fold[Y]((k:K) => newBFunc)
 //  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT]
 //  def fold_all[Y <: Agg[X]](reduceBuilder : => Y):VectTerm[K,Y#OUT]   = fold_all[Y]((k:K) => reduceBuilder)
 }
