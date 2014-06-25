@@ -83,58 +83,79 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("scan :Digits", expectedDigits, out("Digit"))
     new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
-/*
+
   test("reduce") {
     val out = stream.reduce(new Append[Char])
-    val expected = List(data_chars.foldLeft(Seq[Char]())(_ :+ _))
-    new StreamTest("scan", expected, out)
+    val expectedDigits = Seq(generateAppendScan(data_digit).last)
+    val expectedAlpha = Seq(generateAppendScan(data_chars).last)
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
   test("grouped scan") {
     val out = stream.group(3.events).scan(new Append[Char])
-    val expected = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
-    new StreamTest("scan", expected, out)
+    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+
+    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
+    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
   test("grouped reduce") {
     val out = stream.group(3.events).reduce(new Append[Char])
-    val expected = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
-    new StreamTest("scan", expected, out)
+    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
+    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
+
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
   // -------- the same tests with a HasVal with binds instead of A Reducer
-
   test("bind scan") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).all()
-    val expected = generateAppendScan(data_chars)
-    new StreamTest("scan", expected, out)
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).all()
+    val expectedDigits = generateAppendScan(data_digit)
+    val expectedAlpha = generateAppendScan(data_chars)
+    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
+    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
   test("bind reduce") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).last()
-    val expected = List(data_chars.foldLeft(Seq[Char]())(_ :+ _))
-    new StreamTest("scan", expected, out)
+    val out = stream.keyToStream(key => impl.streamOf2(new BindableAppendFunc[Char]).bind(stream(key).input)(_.add).last() )
+    val expectedDigits = Seq(generateAppendScan(data_digit).last)
+    val expectedAlpha = Seq(generateAppendScan(data_chars).last)
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
   test("bind grouped scan") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).reset(3.events).all()
-    val expected = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
-    new StreamTest("scan", expected, out)
+    val out = stream.keyToStream(key => impl.streamOf2(new BindableAppendFunc[Char]).bind(stream(key).input)(_.add).reset(3.events).all() )
+    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+
+    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
+    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
   test("bind grouped reduce") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).reset(3.events).last()
-    val expected = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
-    new StreamTest("scan", expected, out)
+    val out = stream.keyToStream(key => impl.streamOf2(new BindableAppendFunc[Char]).bind(stream(key).input)(_.add).reset(3.events).last() )
+    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
+    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
+
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
+
 
 // -------------- Pure old-style function streams
   test("MFunc scan") {
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).all()
-    val expected = generateAppendScan(data_chars)
-    new StreamTest("scan", expected, out)
-  }
+    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key).input, env)).all() )
+    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
+    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
 
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
+  }
+/*
   test("MFunc reduce") {
     val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).last()
     val expected = List(data_chars.foldLeft(Seq[Char]())(_ :+ _))

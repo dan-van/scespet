@@ -97,25 +97,25 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   // -------- the same tests with a HasVal with binds instead of A Reducer
 
   test("bind scan") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).all()
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).all()
     val expected = generateAppendScan(data)
     new StreamTest("scan", expected, out)
   }
 
   test("bind reduce") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).last()
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).last()
     val expected = List(data.foldLeft(Seq[Char]())(_ :+ _))
     new StreamTest("scan", expected, out)
   }
 
   test("bind grouped scan") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).reset(3.events).all()
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).all()
     val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     new StreamTest("scan", expected, out)
   }
 
   test("bind grouped reduce") {
-    val out = impl.streamOf2(new BindableAppendFunc[Char]).bind(stream.input)(_.add).reset(3.events).last()
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).last()
     val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
     new StreamTest("scan", expected, out)
   }

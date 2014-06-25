@@ -249,6 +249,13 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
     val uncollapsed = new UncollapsedGroupWithTrigger[S, X](input, sliceSpec, triggerAlign, env, ev)
     new GroupedTerm[X](uncollapsed, env)
   }
+
+  def bindTo[B <: Bucket](newBFunc: => B)(adder: B => X => Unit) :PartialBuiltSlicedBucket[B] = {
+    val cellLifeCycle:SliceCellLifecycle[B] = new BucketCellLifecycle[B] {
+      override def newCell(): B = newBFunc
+    }
+    return new PartialBuiltSlicedBucket[B](cellLifeCycle, env).bind(this)(adder)
+  }
 }
 
 //type UncollapsedGroup[C <: Cell] = (C) => C#OUT

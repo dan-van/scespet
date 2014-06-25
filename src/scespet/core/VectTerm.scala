@@ -428,6 +428,16 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   // THINK: this could be special cased to be faster
   def scan[Y <: Agg[X]](newBFunc: K => Y) = group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)
 
+  def bindTo[B <: Bucket](newBFunc: => B)(adder: B => X => Unit) :PartialBuiltSlicedVectBucket[K, B] = {
+    val cellLifeCycle:SliceCellLifecycle[B] = new BucketCellLifecycle[B] {
+      override def newCell(): B = newBFunc
+    }
+    val keyToCellLifecycle = new KeyToSliceCellLifecycle[K, B] {
+      override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = cellLifeCycle
+    }
+    new PartialBuiltSlicedVectBucket[K, B](this, keyToCellLifecycle, env)
+  }
+
   def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedVectTerm[K, X] = {
     val uncollapsed = new UncollapsedVectGroupWithTrigger[S, K, X](input, sliceSpec, triggerAlign, env, ev)
     new GroupedVectTerm[K, X](this, uncollapsed, env)
@@ -568,5 +578,59 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
       }
       case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
     }
+  }
+}
+
+// NODEPLOY this should be a Term that also supports partitioning operations
+class PartialBuiltSlicedVectBucket[K, Y <: Bucket](input:VectTerm[K, _], val keyCellLifecycle: KeyToSliceCellLifecycle[K, Y], val env:Environment) {
+  var bindings = List[(VectTerm[K, _], (_ => _ => Unit))]()
+
+  private lazy val scanAllTerm: VectTerm[K, Y#OUT] = {
+    val cellBuilder = (i:Int, k:K) => {
+      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
+      val slicer = new SliceAfterBucket[Null, Y](null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL)
+      // add the captured bindings
+      bindings.foreach(pair => {
+        val (vectTerm, adder) = pair
+        type IN = Any
+        val hasVal = vectTerm(k).input
+        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+      })
+      slicer
+    }
+    input.newIsomorphicVector(cellBuilder)
+  }
+
+
+  def last(): VectTerm[K, Y#OUT] = {
+    val cellBuilder = (i:Int, k:K) => {
+      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
+      val slicer = new SliceBeforeBucket[Any, Y](null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION)
+      // add the captured bindings
+      bindings.foreach(pair => {
+        val (hasVal, adder) = pair
+        type IN = Any
+        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+      })
+      slicer
+    }
+    input.newIsomorphicVector(cellBuilder)
+  }
+
+  // NODEPLOY - delegate remaining Term interface calls here using lazyVal approach
+  def all(): VectTerm[K, Y#OUT] = scanAllTerm
+
+  def bind[S](stream: VectTerm[K, S])(adder: Y => S => Unit): PartialBuiltSlicedVectBucket[K, Y] = {
+    bindings :+=(stream, adder)
+    this
+  }
+
+  // NODEPLOY - I think this would be better named as 'reset', once you already have a stream->reducer binding, talking about grouping is confusing.
+  //NODEPLOY - think:
+  // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
+  // this avoids needing a new slice trigger definition each slice.
+  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y] = {
+    ???
+//    new PartialGroupedBucketStream[S, Y](triggerAlign, cellLifecycle, bindings, sliceSpec, ev, env)
   }
 }
