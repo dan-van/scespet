@@ -435,7 +435,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     val keyToCellLifecycle = new KeyToSliceCellLifecycle[K, B] {
       override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = cellLifeCycle
     }
-    new PartialBuiltSlicedVectBucket[K, B](this, keyToCellLifecycle, env)
+    new PartialBuiltSlicedVectBucket[K, B](this, keyToCellLifecycle, env).bind(this)(adder)
   }
 
   def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedVectTerm[K, X] = {
@@ -586,35 +586,37 @@ class PartialBuiltSlicedVectBucket[K, Y <: Bucket](input:VectTerm[K, _], val key
   var bindings = List[(VectTerm[K, _], (_ => _ => Unit))]()
 
   private lazy val scanAllTerm: VectTerm[K, Y#OUT] = {
-    val cellBuilder = (i:Int, k:K) => {
-      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
-      val slicer = new SliceAfterBucket[Null, Y](null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL)
-      // add the captured bindings
-      bindings.foreach(pair => {
-        val (vectTerm, adder) = pair
-        type IN = Any
-        val hasVal = vectTerm(k).input
-        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-      })
-      slicer
-    }
-    input.newIsomorphicVector(cellBuilder)
+    reset[Null](null)(SliceTriggerSpec.NULL).all()
+//    val cellBuilder = (i:Int, k:K) => {
+//      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
+//      val slicer = new SliceAfterBucket[Null, Y](null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL)
+//      // add the captured bindings
+//      bindings.foreach(pair => {
+//        val (vectTerm, adder) = pair
+//        type IN = Any
+//        val hasVal = vectTerm(k).input
+//        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+//      })
+//      slicer
+//    }
+//    input.newIsomorphicVector(cellBuilder)
   }
 
 
   def last(): VectTerm[K, Y#OUT] = {
-    val cellBuilder = (i:Int, k:K) => {
-      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
-      val slicer = new SliceBeforeBucket[Any, Y](null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION)
-      // add the captured bindings
-      bindings.foreach(pair => {
-        val (hasVal, adder) = pair
-        type IN = Any
-        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-      })
-      slicer
-    }
-    input.newIsomorphicVector(cellBuilder)
+    reset[Null](null)(SliceTriggerSpec.NULL).last()
+//    val cellBuilder = (i:Int, k:K) => {
+//      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
+//      val slicer = new SliceBeforeBucket[Any, Y](null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION)
+//      // add the captured bindings
+//      bindings.foreach(pair => {
+//        val (hasVal, adder) = pair
+//        type IN = Any
+//        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+//      })
+//      slicer
+//    }
+//    input.newIsomorphicVector(cellBuilder)
   }
 
   // NODEPLOY - delegate remaining Term interface calls here using lazyVal approach
@@ -629,8 +631,35 @@ class PartialBuiltSlicedVectBucket[K, Y <: Bucket](input:VectTerm[K, _], val key
   //NODEPLOY - think:
   // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
   // this avoids needing a new slice trigger definition each slice.
-  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y] = {
-    ???
-//    new PartialGroupedBucketStream[S, Y](triggerAlign, cellLifecycle, bindings, sliceSpec, ev, env)
+  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedVectBucketStream[K, S, Y] = {
+    new PartialGroupedVectBucketStream[K, S, Y](input, triggerAlign, keyCellLifecycle, bindings, sliceSpec, ev, env)
   }
+}
+
+class PartialGroupedVectBucketStream[K, S, Y <: Bucket](input:VectTerm[K,_],
+                                                        triggerAlign:SliceAlign,
+                                                        keyCellLifecycle:KeyToSliceCellLifecycle[K, Y],
+                                                        bindings :List[(VectTerm[K, _], (_ => _ => Unit))],
+                                                        sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
+  private def buildSliced(reduceType:ReduceType) :VectTerm[K, Y#OUT] = {
+    val cellBuilder = (i:Int, k:K) => {
+      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
+      val slicer = triggerAlign match {
+        case BEFORE => new SliceBeforeBucket[S, Y](sliceSpec, cellLifecycle, reduceType, env, ev)
+        case AFTER => new SliceAfterBucket[S, Y](sliceSpec, cellLifecycle, reduceType, env, ev)
+      }
+      // add the captured bindings
+      bindings.foreach(pair => {
+        val (vectTerm, adder) = pair
+        type IN = Any
+        val hasVal = vectTerm(k).input
+        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+      })
+      slicer
+    }
+    input.newIsomorphicVector(cellBuilder)
+  }
+
+  def all():VectTerm[K, Y#OUT] = buildSliced(ReduceType.CUMULATIVE)
+  def last():VectTerm[K, Y#OUT] = buildSliced(ReduceType.LAST)
 }

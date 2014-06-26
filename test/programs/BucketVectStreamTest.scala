@@ -120,7 +120,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("bind reduce") {
-    val out = stream.keyToStream(key => impl.streamOf2(new BindableAppendFunc[Char]).bind(stream(key).input)(_.add).last() )
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).last()
     val expectedDigits = Seq(generateAppendScan(data_digit).last)
     val expectedAlpha = Seq(generateAppendScan(data_chars).last)
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
@@ -128,7 +128,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("bind grouped scan") {
-    val out = stream.keyToStream(key => impl.streamOf2(new BindableAppendFunc[Char]).bind(stream(key).input)(_.add).reset(3.events).all() )
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).all()
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
 
@@ -137,7 +137,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("bind grouped reduce") {
-    val out = stream.keyToStream(key => impl.streamOf2(new BindableAppendFunc[Char]).bind(stream(key).input)(_.add).reset(3.events).last() )
+    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).last()
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
 
