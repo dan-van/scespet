@@ -36,6 +36,11 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     override def add(x: X): Unit = value :+= x
   }
 
+  class SelfAppend[X] extends Agg[X] {
+    var value: Seq[X] = Seq[X]()
+    override def add(x: X): Unit = value :+= x
+  }
+
   class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
     type OUT = Seq[X]
     var value = Seq[X]()

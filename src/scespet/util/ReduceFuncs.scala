@@ -24,6 +24,15 @@ class EWMA(val lambda:Double = 0.98) extends SelfAgg[Int]{
   override def toString = s"Sum=$s"
 }
 
+class UberEWMA extends EWMA {
+  var n:Int = 0
+  override def add(i: Int): Unit = {
+    super.add(i)
+    n += 1
+  }
+  override def toString = s"Sum=$s, N=$n"
+}
+
 class Collect extends SelfAgg[AnyRef] {
   val data = collection.mutable.Buffer[AnyRef]()
   def add(x: AnyRef) {data += x}
