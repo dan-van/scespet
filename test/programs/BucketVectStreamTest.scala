@@ -166,25 +166,24 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
-/*
-  test("MFunc reduce") {
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).last()
-    val expected = List(data_chars.foldLeft(Seq[Char]())(_ :+ _))
-    new StreamTest("scan", expected, out)
-  }
-
   test("MFunc grouped scan") {
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).all()
-    val expected = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
-    new StreamTest("scan", expected, out)
+    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).all() )
+    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+
+    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
+    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
   test("MFunc grouped reduce") {
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).last()
-    val expected = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
-    new StreamTest("reduce", expected, out)
-  }
+    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).last() )
+    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
+    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
 
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
+  }
+/*
 // -------------- tricky composition of self-generator and binding
   test("MFunc bind scan") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
