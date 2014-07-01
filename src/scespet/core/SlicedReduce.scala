@@ -3,11 +3,7 @@ package scespet.core
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 
 /**
- * Created with IntelliJ IDEA.
- * User: danvan
- * Date: 05/04/2013
- * Time: 21:29
- * To change this template use File | Settings | File Templates.
+ * Hmm, this was an initial version of reducing. It is simpler (and probably more efficient) than the SlicedBucket implementations, as it does not try to do a rendezvous of incoming event streams
  */
 class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S]) extends UpdatingHasVal[Y#OUT] {
   var newSliceNextEvent = false

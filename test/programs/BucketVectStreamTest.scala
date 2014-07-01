@@ -46,6 +46,9 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     type OUT = Seq[X]
     var value = Seq[X]()
     env.addListener(in.trigger, this)
+    if (in.initialised) {
+      env.fireAfterChangingListeners(this)
+    }
     override def calculate(): Boolean = {
       append(in.value)
       true
@@ -148,13 +151,21 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 
 // -------------- Pure old-style function streams
   test("MFunc scan") {
-    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key).input, env)).all() )
-    val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
-    val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
+    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).all() )
+    val expectedDigits = generateAppendScan(data_digit)
+    val expectedAlpha = generateAppendScan(data_chars)
+    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
+    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
+  }
 
+  test("MFunc reduce") {
+    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).last() )
+    val expectedDigits = Seq(generateAppendScan(data_digit).last)
+    val expectedAlpha = Seq(generateAppendScan(data_chars).last)
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
+
 /*
   test("MFunc reduce") {
     val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).last()

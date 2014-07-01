@@ -2,6 +2,7 @@ package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
 import scespet.util.Logged
+import scespet.core.types.MFunc
 
 
 /**
@@ -71,19 +72,25 @@ class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCe
       env.addListener(trigger, this)
       if (in.initialised) {
         inputBinding.addValueToBucket(nextReduce)
-        // make sure we fire the target bucket for this
+        // make sure we wake up to consume this
         // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
         // relationships, we could fire the nextReduce before that is all complete.
         // it also seems right, we establish all listeners on the new binding before it is fired
         // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
         // or if this is an existing bucket (which should be wakeupThisCycle)
-        env.fireAfterChangingListeners(nextReduce)
+        if (cellIsFunction) {
+          env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+        } else {
+          env.fireAfterChangingListeners(SliceBeforeBucket.this)
+        }
       }
     }
   }
 
+  // We can't 'sliceBefore' nextReduce fires, as we have no idea it is about to fire.
+  private val eventCountInput = if (cellIsFunction) Set(nextReduce.asInstanceOf[EventGraphObject]) else joinValueRendezvous.inputBindings.keySet
+  var sliceEvents :types.EventGraphObject = ev.buildTrigger(sliceSpec, eventCountInput, env)
   // wire up slice listening:
-  val sliceEvents = ev.buildTrigger(sliceSpec, Set(this), env)
   if (sliceEvents != null) {
     env.addListener(sliceEvents, joinValueRendezvous)
   }
@@ -98,6 +105,9 @@ class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCe
 
 
   private def closeCurrentBucket() {
+    if (cellIsFunction && env.hasChanged(nextReduce)) {
+      throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
+    }
     cellLifecycle.closeCell(nextReduce)
     completedReduce = nextReduce.value  // Intellij thinks this a a compile error - it isn't
   }
@@ -108,11 +118,18 @@ class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCe
   }
 
   private val nextReduce : Y = cellLifecycle.newCell()
-  // join values trigger the bucket
-  env.addListener(joinValueRendezvous, nextReduce)
-  // listen to it so that we propagate value updates to the bucket
-  env.addListener(nextReduce, this)
+  private val cellIsFunction :Boolean = if (nextReduce.isInstanceOf[MFunc]) {
+    // join values trigger the bucket
+    env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+    // listen to it so that we propagate value updates to the bucket
+    env.addListener(nextReduce, this)
 
+//    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
+//    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+    true
+  } else {
+    false
+  }
 
   private var completedReduce : Y#OUT = _
 
