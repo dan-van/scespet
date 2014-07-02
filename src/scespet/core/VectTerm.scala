@@ -428,12 +428,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   // THINK: this could be special cased to be faster
   def scan[Y <: Agg[X]](newBFunc: K => Y) = group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)
 
-  def bindTo[B <: Bucket](newBFunc: => B)(adder: B => X => Unit) :PartialBuiltSlicedVectBucket[K, B] = {
-    val cellLifeCycle:SliceCellLifecycle[B] = new BucketCellLifecycle[B] {
-      override def newCell(): B = newBFunc
-    }
+  def bindTo[B <: Bucket](newBFunc: => B)(adder: B => X => Unit) :PartialBuiltSlicedVectBucket[K, B] = bindTo[B]((k:K) => newBFunc)(adder)
+
+  def bindTo[B <: Bucket](newBFunc: K => B)(adder: B => X => Unit) :PartialBuiltSlicedVectBucket[K, B] = {
     val keyToCellLifecycle = new KeyToSliceCellLifecycle[K, B] {
-      override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = cellLifeCycle
+      override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = new BucketCellLifecycleImpl[B](newBFunc(k))
     }
     new PartialBuiltSlicedVectBucket[K, B](this, keyToCellLifecycle, env).bind(this)(adder)
   }

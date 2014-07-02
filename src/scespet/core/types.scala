@@ -276,6 +276,10 @@ abstract class BucketCellLifecycle[C <: Bucket] extends SliceCellLifecycle[C] {
   override def closeCell(c: C): Unit = c.complete()
 }
 
+class BucketCellLifecycleImpl[C <: Bucket](newBucket: => C) extends BucketCellLifecycle[C] {
+  override def newCell(): C = newBucket
+}
+
 trait SliceCellLifecycle[C] {
   def newCell():C
   def reset(c:C)

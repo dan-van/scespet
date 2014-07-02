@@ -190,11 +190,8 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
 
-    val out = stream.keyToStream( key =>  impl.streamOf2( new OldStyleFuncAppend[Char]( stream(key), env)).bind( stream(key).filter(_.isLetter).filter( alternate ).map( _.toUpper ))(_.append).all() )
-
-// NODEPLOY - this would be nicer
-//    val alternateUppers = stream.filter(_.isLetter).filter( alternate ).map( _.toUpper )
-//    alternateUppers.bindTo(key => new OldStyleFuncAppend[Char]( stream(key), env))(_.append).all()
+    val alternateUppers = stream.filter(_.isLetter).filter( alternate ).map( _.toUpper )
+    val out = alternateUppers.bindTo(key => new OldStyleFuncAppend[Char]( stream(key), env))(_.append).all()
 
     val expectedDigits = generateAppendScan(data_digit)
     val expectedAlpha = List(
