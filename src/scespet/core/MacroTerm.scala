@@ -100,7 +100,9 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   def filter(accept: (X) => Boolean):MacroTerm[X] = {
     class FilteredValue extends UpdatingHasVal[X] {
       var value = null.asInstanceOf[X]
-
+      if (input.initialised) {
+        env.fireAfterChangingListeners(this)
+      }
       def calculate() = {
         if (accept(input.value)) {
           value = input.value

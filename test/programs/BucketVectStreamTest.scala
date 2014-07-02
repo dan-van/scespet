@@ -183,16 +183,21 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
-/*
 // -------------- tricky composition of self-generator and binding
   test("MFunc bind scan") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
-    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).all()
-    val expected = List(
+
+    val out = stream.keyToStream( key =>  impl.streamOf2( new OldStyleFuncAppend[Char]( stream(key), env)).bind( stream(key).filter(_.isLetter).filter( alternate ).map( _.toUpper ))(_.append).all() )
+
+// NODEPLOY - this would be nicer
+//    val alternateUppers = stream.filter(_.isLetter).filter( alternate ).map( _.toUpper )
+//    alternateUppers.bindTo(key => new OldStyleFuncAppend[Char]( stream(key), env))(_.append).all()
+
+    val expectedDigits = generateAppendScan(data_digit)
+    val expectedAlpha = List(
       "Aa",
       "Aab",
       "AabCc",
@@ -206,59 +211,61 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
       "AabCcdEefGghIijKk"
     ).map(_.toCharArray.toSeq)
 
-    new StreamTest("scan", expected, out)
+    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
+    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  test("MFunc bind reduce") {
-    val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
-      var accept = false
-      override def apply(v1: Char): Boolean = { accept = !accept; accept }
+  /*
+    test("MFunc bind reduce") {
+      val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
+        var accept = false
+        override def apply(v1: Char): Boolean = { accept = !accept; accept }
+      }
+      val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
+      val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).last()
+      val expected = List("AabCcdEefGghIijKk".toCharArray.toSeq)
+      new StreamTest("scan", expected, out)
     }
-    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).last()
-    val expected = List("AabCcdEefGghIijKk".toCharArray.toSeq)
-    new StreamTest("scan", expected, out)
-  }
 
-  test("MFunc bind grouped scan") {
-    val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
-      var accept = false
-      override def apply(v1: Char): Boolean = { accept = !accept; accept }
+    test("MFunc bind grouped scan") {
+      val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
+        var accept = false
+        override def apply(v1: Char): Boolean = { accept = !accept; accept }
+      }
+      val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
+      val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).reset(3.events).all()
+      val expected = List(
+        "Aa",
+        "Aab",
+        "AabCc",
+             "d",
+             "dEe",
+             "dEef",
+                 "Gg",
+                 "Ggh",
+                 "GghIi",
+                      "j",
+                      "jKk"
+      ).map(_.toCharArray.toSeq)
+
+      new StreamTest("scan", expected, out)
     }
-    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).reset(3.events).all()
-    val expected = List(
-      "Aa",
-      "Aab",
-      "AabCc",
-           "d",
-           "dEe",
-           "dEef",
-               "Gg",
-               "Ggh",
-               "GghIi",
-                    "j",
-                    "jKk"
-    ).map(_.toCharArray.toSeq)
 
-    new StreamTest("scan", expected, out)
-  }
+    test("MFunc bind grouped reduce") {
+      val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
+        var accept = false
+        override def apply(v1: Char): Boolean = { accept = !accept; accept }
+      }
+      val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
+      val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).reset(3.events).last()
+      val expected = List(
+        "AabCc",
+             "dEef",
+                 "GghIi",
+                      "jKk"
+      ).map(_.toCharArray.toSeq)
 
-  test("MFunc bind grouped reduce") {
-    val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
-      var accept = false
-      override def apply(v1: Char): Boolean = { accept = !accept; accept }
+      new StreamTest("scan", expected, out)
     }
-    val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).reset(3.events).last()
-    val expected = List(
-      "AabCc",
-           "dEef",
-               "GghIi",
-                    "jKk"
-    ).map(_.toCharArray.toSeq)
-
-    new StreamTest("scan", expected, out)
-  }
-  */
+    */
 }
