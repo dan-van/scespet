@@ -18,6 +18,8 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   var impl:EnvTermBuilder = _
   var data: Array[Char] = _
   var stream: MacroTerm[Char] = _
+  var windowStates :Seq[Boolean] = _
+  val inWindow = (0 to 2) ++ (6 to 8)
 
   override protected def beforeEach() {
     super.beforeEach()
@@ -25,7 +27,13 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     impl = EnvTermBuilder(env)
     data = "abcdefghijk".toCharArray
     stream = impl.asStream(IteratorEvents(data)((char, i) => i))
+    windowStates = (0 until data.length).map(x => inWindow.contains(x))
   }
+
+  def buildWindowStream = {
+    stream.map(s => {val t = env.getEventTime.toInt; inWindow.contains(t)})
+  }
+
   override protected def afterEach() {
     env.run()
     super.afterEach()
@@ -97,6 +105,16 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   test("grouped reduce") {
     val out = stream.group(3.events).reduce(new Append[Char])
     val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
+    new StreamTest("scan", expected, out)
+  }
+
+  test("windowed reduce") {
+    val windowStream = buildWindowStream
+    new StreamTest("window", windowStates, windowStream)
+
+    val out = stream.window(windowStream).reduce(new Append[Char])
+    var expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
+    expected = Seq(expected(0), expected(2))
     new StreamTest("scan", expected, out)
   }
 
