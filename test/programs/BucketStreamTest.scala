@@ -17,9 +17,11 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
   var data: Array[Char] = _
+  var windowedData: Seq[Seq[Char]] = _
   var stream: MacroTerm[Char] = _
   var windowStates :Seq[Boolean] = _
-  val inWindow = (0 to 2) ++ (6 to 8)
+  var inWindow :IndexedSeq[Int] = _
+  var windowIndicies :Seq[Seq[Int]] = _
 
   override protected def beforeEach() {
     super.beforeEach()
@@ -27,6 +29,11 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     impl = EnvTermBuilder(env)
     data = "abcdefghijk".toCharArray
     stream = impl.asStream(IteratorEvents(data)((char, i) => i))
+    windowIndicies = Seq((0 to 2), (5 to 8))
+    inWindow = windowIndicies.flatten.toIndexedSeq
+    // get the elements that have indicies in the inWindow definition
+    windowedData = windowIndicies.map(idxs => idxs.map(i => data(i)))
+
     windowStates = (0 until data.length).map(x => inWindow.contains(x))
   }
 
@@ -80,6 +87,11 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     override def open(): Unit = value = Nil
   }
 
+  /**
+   * given "abc", we return ("a","ab","abc")
+   * @param dat
+   * @return
+   */
   def generateAppendScan(dat:Seq[Char]):Seq[Seq[Char]] = {
     dat.scanLeft(Seq[Char]())(_ :+ _).tail
   }
@@ -108,13 +120,22 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     new StreamTest("scan", expected, out)
   }
 
-  test("windowed reduce") {
+  test("windowDefinition"){
     val windowStream = buildWindowStream
     new StreamTest("window", windowStates, windowStream)
+  }
 
-    val out = stream.window(windowStream).reduce(new Append[Char])
-    var expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
-    expected = Seq(expected(0), expected(2))
+  test("window scan") {
+    val out = stream.window( buildWindowStream ).scan(new Append[Char])
+    var expected = windowedData.map( generateAppendScan(_) ).flatten
+    new StreamTest("scan", expected, out)
+  }
+
+  test("windowed reduce") {
+    // NODEPLOY - need to further define and test semantics of windows not closing before termination.
+    // current test has the second window close before end.
+    val out = stream.window( buildWindowStream ).reduce(new Append[Char])
+    var expected = windowedData.toSeq
     new StreamTest("scan", expected, out)
   }
 
@@ -144,7 +165,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     new StreamTest("scan", expected, out)
   }
 
-// -------------- Pure old-style function streams
+  // -------------- Pure old-style function streams
   test("MFunc scan") {
     val out = impl.streamOf2(new OldStyleFuncAppend[Char](stream.input, env)).all()
     val expected = generateAppendScan(data)
