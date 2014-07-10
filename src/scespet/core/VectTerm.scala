@@ -441,8 +441,36 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     val uncollapsed = new UncollapsedVectGroupWithTrigger[S, K, X](input, sliceSpec, triggerAlign, env, ev)
     new GroupedVectTerm[K, X](this, uncollapsed, env)
   }
-  def window[W](windowSpec:W):GroupedVectTerm[K, X] = {
-    ???
+
+  // THINK: may want to go with TypeClasses here?
+  def window(windowStream:HasVal[Boolean]):GroupedVectTerm[K, X] = window(_ => windowStream)
+  def window(windowVect:VectTerm[K, Boolean]):GroupedVectTerm[K, X] = window((k:K) => windowVect(k))
+  def window(keyToWindow:K => HasVal[Boolean]):GroupedVectTerm[K, X] = {
+    val uncollapsed = new UncollapsedVectGroup[K, X] {
+      override def applyB[B <: Bucket](keyedLifecycle: KeyToSliceCellLifecycle[K, B], reduceType: ReduceType): (Int, K) => UpdatingHasVal[B#OUT] = {
+        (i:Int, k:K) => {
+          val sourceCell = input.getValueHolder(i)
+          val lifecycle = keyedLifecycle.lifeCycleForKey(k)
+          val windowStream = keyToWindow(k)
+          val outputCell:UpdatingHasVal[B#OUT] = reduceType match {
+            case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](windowStream, lifecycle, env)
+            case ReduceType.LAST => new WindowedBucket_LastValue[B](windowStream, lifecycle, env)
+          }
+          outputCell
+        }
+      }
+
+      override def applyAgg[A <: Agg[X]](keyedLifecycle: KeyToSliceCellLifecycle[K, A], reduceType: ReduceType): (Int, K) => UpdatingHasVal[A#OUT] = {
+        (i:Int, k:K) => {
+          val sourceCell = input.getValueHolder(i)
+          val lifecycle = keyedLifecycle.lifeCycleForKey(k)
+          val windowStream = keyToWindow(k)
+          val outputCell:UpdatingHasVal[A#OUT] = new WindowedReduce[X, A](sourceCell, windowStream, lifecycle, reduceType, env)
+          outputCell
+        }
+      }
+    }
+    new GroupedVectTerm[K, X](this, uncollapsed, env)
   }
 }
 

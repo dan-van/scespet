@@ -22,6 +22,12 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   var singleStream: MacroTerm[Char] = _
   var stream: VectTerm[String, Char] = _
 
+//  var windowStates :Seq[Boolean] = _
+  var inWindow :IndexedSeq[Int] = _
+  var windowIndicies :Seq[Seq[Int]] = _
+  var windowedData_chars: Seq[Seq[Char]] = _
+
+
   override protected def beforeEach() {
     super.beforeEach()
     env = new SimpleEnv
@@ -29,6 +35,11 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     data = "a0b1c2d3e4f5g6h7i8j9k".toCharArray
     data_chars = "abcdefghijk".toCharArray
     data_digit = "0123456789".toCharArray
+
+    windowIndicies = Seq((0 to 5), (10 to 15))
+    inWindow = windowIndicies.flatten.toIndexedSeq
+    windowedData_chars = windowIndicies.map(idxs => idxs.map(i => data(i)).filter(_.isLetter))
+
     singleStream = impl.asStream(IteratorEvents(data)((char, i) => i))
     stream = singleStream.by(_.isDigit).mapKeys(b => Some(if (b) "Digit" else "Alpha") )
   }
@@ -36,6 +47,11 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     env.run()
     super.afterEach()
   }
+
+  def buildWindowStream = {
+    stream.map(s => {val t = env.getEventTime.toInt; inWindow.contains(t)})
+  }
+
 
   class Append[X] extends Reducer[X, Seq[X]] {
     var value: Seq[X] = Seq[X]()
@@ -111,6 +127,30 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
+  }
+
+
+  test("windowDefinition"){
+    val windowStream = buildWindowStream
+    val inWindowIndexSet = windowIndicies.flatten.toSet
+    val windowState_chars = data.toList.zipWithIndex.filter(e => e._1.isLetter).map(e => inWindowIndexSet.contains(e._2))
+    val windowState_digits = data.toList.zipWithIndex.filter(e => e._1.isDigit).map(e => inWindowIndexSet.contains(e._2))
+    new StreamTest("windowState: Alpha", windowState_chars, windowStream("Alpha"))
+    new StreamTest("windowState: Digit", windowState_digits, windowStream("Digit"))
+  }
+
+  test("window scan") {
+    val out = stream.window( buildWindowStream ).scan(new Append[Char])
+    val expectedAlpha = windowedData_chars.map( generateAppendScan(_) ).flatten
+    new StreamTest("window scan :Alpha", expectedAlpha, out("Alpha"))
+  }
+
+  test("windowed reduce") {
+    // NODEPLOY - need to further define and test semantics of windows not closing before termination.
+    // current test has the second window close before end.
+    val out = stream.window( buildWindowStream ).reduce(new Append[Char])
+    val expectedAlpha = windowedData_chars.toSeq
+    new StreamTest("window scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
   // -------- the same tests with a HasVal with binds instead of A Reducer
