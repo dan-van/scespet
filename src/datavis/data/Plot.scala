@@ -17,6 +17,7 @@ import gsa.esg.mekon.core.{Environment, EventGraphObject}
 import scala.collection.JavaConverters._
 import java.awt.geom.Rectangle2D
 import org.jfree.chart.entity.EntityCollection
+import javax.swing.JLabel
 
 /**
  * @version $Id$
@@ -40,6 +41,7 @@ object Plot {
         Plot.wait()
       }
       println("Finished waiting for plot close")
+      _chartState = null
     }
   }
 
@@ -180,6 +182,11 @@ object Plot {
       seriesList.foreach( applySeriesOptions )
       this
     }
+  }
+
+  def clear() {
+    _chartState = null
+    top.contents = Component.wrap(new JLabel("Empty"))
   }
 
   def chartstate :ChartState = {

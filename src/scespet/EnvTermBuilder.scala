@@ -86,6 +86,6 @@ object EnvTermBuilder {
     builder.init(env)
     builder
   }
-  
+  // this implicit should be somewhere else. I want it generally available to enable mapping from standard Mekon streams into Scesspet streams
   implicit def eventObjectToHasVal[X <: types.EventGraphObject](evtObj:X) :HasVal[X] = new IsVal(evtObj)
 }

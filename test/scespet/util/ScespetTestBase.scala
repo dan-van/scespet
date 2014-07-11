@@ -2,13 +2,13 @@ package scespet.util
 
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
 import scespet.core.Term
-import org.scalatest.{BeforeAndAfterEach, FunSuite}
+import org.scalatest.{Matchers, BeforeAndAfterEach, FunSuite}
 
 /**
  * Created by danvan on 21/05/2014.
  */
 // it's a class as Scalatest author says they're much faster to compile than traits and I don't think I'll need to multiply mix this in
-class ScespetTestBase extends FunSuite with AssertionsForJUnit with ShouldMatchersForJUnit with BeforeAndAfterEach {
+class ScespetTestBase extends FunSuite with Matchers with AssertionsForJUnit with ShouldMatchersForJUnit with BeforeAndAfterEach {
 
   def addPostCheck(name:String)(check: => Unit) {
     postRunChecks.append(() => { println("Running postcheck: "+name); check })

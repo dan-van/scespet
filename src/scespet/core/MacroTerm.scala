@@ -12,8 +12,6 @@ import scespet.util.SliceAlign
 import scespet.core.SliceTriggerSpec.MacroIsTriggerSpec
 import scespet.core.types.{MFunc, Events}
 import scespet.core.types.Events
-import scespet.core.types.Events
-import scespet.core.types.Events
 
 
 /**

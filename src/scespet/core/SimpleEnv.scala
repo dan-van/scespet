@@ -129,6 +129,8 @@ class SimpleEnv() extends Environment {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
   }
 
+  def hasChanged(trigger: EventGraphObject) = graph.hasChanged(trigger)
+
   def getTriggers(function: scala.Any): Iterable[EventGraphObject] = {
     graph.getTriggers(function.asInstanceOf[EventGraphObject])
   }
@@ -163,8 +165,6 @@ class SimpleEnv() extends Environment {
   def getService[T <: Service](serviceClass: Class[T]) = ???
 
   def getSharedObject[T](clazz: Class[T], constructorSig: Array[Class[_]], args: AnyRef*) = ???
-
-  def registerBeanMaintainer(beanMaintainer: BeanMaintainer[_]) {}
 
   def getClockTime = ???
 

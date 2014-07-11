@@ -1,8 +1,9 @@
 package scespet.core
 
-import scespet.core.types.{Events, EventGraphObject}
-import scala.concurrent.duration.Duration
+import scespet.core.types._
+import scala.concurrent.duration.{FiniteDuration, Duration}
 import scespet.util.Timer
+import scespet.core.types.Events
 
 /**
  * Created by danvan on 10/07/2014.
@@ -23,6 +24,12 @@ object SliceTriggerSpec {
       null
     }
   }
+
+//  implicit object FiniteDurationIsTriggerSpec extends SliceTriggerSpec[FiniteDuration] {
+//    def buildTrigger(duration:FiniteDuration, src: Set[EventGraphObject], env: types.Env) = {
+//      new Timer(duration)
+//    }
+//  }
 
   implicit object DurationIsTriggerSpec extends SliceTriggerSpec[Duration] {
     def buildTrigger(duration:Duration, src: Set[EventGraphObject], env: types.Env) = {

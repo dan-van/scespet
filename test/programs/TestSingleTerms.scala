@@ -4,7 +4,6 @@ import collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
 import org.junit.Test
-import org.scalatest.matchers.Matchers
 import scespet.core.types.MFunc
 import scespet.EnvTermBuilder
 import scala.concurrent.duration._
@@ -23,7 +22,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
 @RunWith(classOf[JUnitRunner])
-class TestSingleTerms extends ScespetTestBase with FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
+class TestSingleTerms extends ScespetTestBase with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
   case class Trade(name:String, price:Double, qty:Int)
   var tradeList = new ArrayBuffer[Trade]()
   tradeList += new Trade("VOD.L", 1.12, 1)

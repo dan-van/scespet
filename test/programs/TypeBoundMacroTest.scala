@@ -10,17 +10,17 @@ package programs
  */
 
 object TypeBoundMacroTest extends App {
-  import macros.TypeBoundMacro.{_}
-  class MyResult() extends ResultBase[String] {
-    def doStuff = ???
-    def doThing(t:String) = println(this+" got a t="+t)
-    def otherStuff = "goodbye instance " + this
-  }
-
-  var start = new ClassFoo[String]("START")
-  var builder = start.generateIntermediate2(new MyResult).doCollapse()
-  var result: MyResult = builder
-  println(result)
+//  import macros.TypeBoundMacro.{_}
+//  class MyResult() extends ResultBase[String] {
+//    def doStuff = ???
+//    def doThing(t:String) = println(this+" got a t="+t)
+//    def otherStuff = "goodbye instance " + this
+//  }
+//
+//  var start = new ClassFoo[String]("START")
+//  var builder = start.generateIntermediate2(new MyResult).doCollapse()
+//  var result: MyResult = builder
+//  println(result)
 
 //  builde(new ResultBase[MyResult] {
 //    def doStuff = ???

@@ -1,6 +1,6 @@
 package programs
 
-import macros.{MacroApply, Builder, Wrapper, SimpleMacro}
+//import macros.{MacroApply, Builder, Wrapper, SimpleMacro}
 import scespet.core.BucketBuilder
 
 /**
@@ -11,8 +11,8 @@ import scespet.core.BucketBuilder
  * To change this template use File | Settings | File Templates.
  */
 object MacroCompileError extends App {
-  val m: MacroApply[Int] = new MacroApply[Int](123)
-  println(m.doMacro("foo").doMacro(1.23))
+//  val m: MacroApply[Int] = new MacroApply[Int](123)
+//  println(m.doMacro("foo").doMacro(1.23))
 //  class Foo[T](var myX:String) extends Builder {
 //
 //   import language.experimental.macros

@@ -1,6 +1,6 @@
 package programs
 
-import macrotest.MacroTest.{ClassFoo, ResultBase}
+//import macrotest.MacroTest.{ClassFoo, ResultBase}
 
 /**
  * Created with IntelliJ IDEA.
@@ -11,16 +11,16 @@ import macrotest.MacroTest.{ClassFoo, ResultBase}
  */
 
 object MacroTest extends App {
-  class MyResult() extends ResultBase[String] {
-    def doStuff = ???
-    def doThing(t:String) = println(this+" got a t="+t)
-    def otherStuff = "goodbye instance " + this
-  }
-
-  var start = new ClassFoo[String]("START")
-  var builder = start.generateIntermediate2(new MyResult).doCollapse()
-  var result: MyResult = builder
-  println(result)
+//  class MyResult() extends ResultBase[String] {
+//    def doStuff = ???
+//    def doThing(t:String) = println(this+" got a t="+t)
+//    def otherStuff = "goodbye instance " + this
+//  }
+//
+//  var start = new ClassFoo[String]("START")
+//  var builder = start.generateIntermediate2(new MyResult).doCollapse()
+//  var result: MyResult = builder
+//  println(result)
 
 //  builde(new ResultBase[MyResult] {
 //    def doStuff = ???

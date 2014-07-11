@@ -112,7 +112,7 @@ object TestPlots extends RealTradeTests {
   val sizes = trades.map(_.quantity)
   val big = sizes.filter(_ > 25000)
   import scala.concurrent.duration._
-  val s = sizes.red(new Sum[Long]).every(10.minutes)//(SliceTriggerSpec.toTriggerSpec( big ) )
+  val s = sizes.group(10.minutes).reduce(new Sum[Long])
 //  Plot.plot(sizes).seriesNames(_ + "Size")
   Plot.plot(s).seriesNames(_ + "buckets")
   env.run(100000)

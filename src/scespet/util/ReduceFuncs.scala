@@ -17,11 +17,24 @@ class Sum[X:Numeric] extends Reducer[X, Double]{
   override def toString = s"Sum=$sum"
 }
 
+class Avg[X:Numeric] extends Reducer[X, Double]{
+  var sum = 0.0
+  var n = 0
+  def value = sum / n
+  def add(x:X):Unit = {
+    sum = sum + implicitly[Numeric[X]].toDouble(x)
+    n += 1
+  }
+
+  override def toString = s"Sum=$sum"
+}
+
+
 class EWMA(val lambda:Double = 0.98) extends SelfAgg[Int]{
   var s:Double = 0;
   def add(i:Int):Unit = { s = Math.pow(i, 1-lambda) + Math.pow(s, lambda) }
 
-  override def toString = s"Sum=$s"
+  override def toString = s"EWMA=$s"
 }
 
 class UberEWMA extends EWMA {
