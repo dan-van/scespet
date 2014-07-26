@@ -5,7 +5,8 @@ package scespet.core
  * User: danvan
  * Date: 05/04/2013
  * Time: 21:29
- * To change this template use File | Settings | File Templates.
+ *
+ * NODEPLOY - I don't think this one is properly tested
  */
 class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
     env.addListener(dataEvents.getTrigger, this)

@@ -22,45 +22,50 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
 @RunWith(classOf[JUnitRunner])
-class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
+class TestMultiTerms extends ScespetTestBase {
 
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
+  var data: Array[Char] = _
+  var data_chars: Array[Char] = _
+  var data_digit: Array[Char] = _
+  var singleStream: MacroTerm[Char] = _
+  var stream: VectTerm[String, Char] = _
 
-  val postRunChecks = collection.mutable.Buffer[() => Unit]()
+  var eventsA :IteratorEvents[Int] = _
+  var eventsB :IteratorEvents[Int] = _
+  var eventsC :IteratorEvents[Int] = _
+
+  //  var windowStates :Seq[Boolean] = _
+  var inWindow :IndexedSeq[Int] = _
+  var windowIndicies :Seq[Seq[Int]] = _
+  var windowedData_chars: Seq[Seq[Char]] = _
+
+
   override protected def beforeEach() {
+    super.beforeEach()
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
+    data = "a0b1c2d3e4f5g6h7i8j9k".toCharArray
+    data_chars = "abcdefghijk".toCharArray
+    data_digit = "0123456789".toCharArray
+
+//    singleStream = impl.asStream(IteratorEvents(data)((char, i) => i))
+//    stream = singleStream.by(_.isDigit).mapKeys(b => Some(if (b) "Digit" else "Alpha") )
+
+    eventsA = IteratorEvents(  0 to 5 ) ( (x,i) => (10 * i) + 1)
+    eventsB = IteratorEvents( 10 to 15 )( (x,i) => (10 * i) + 2)
+    eventsC = IteratorEvents( 20 to 25 )( (x,i) => (10 * i) + 3)
+
   }
 
-  def addPostCheck(name:String)(check: => Unit) {
-    postRunChecks.append(() => { check })
-  }
-
-  val eventsA = IteratorEvents(  0 to 5 ) ( (x,i) => (10 * i) + 1)
-  val eventsB = IteratorEvents( 10 to 15 )( (x,i) => (10 * i) + 2)
-  val eventsC = IteratorEvents( 20 to 25 )( (x,i) => (10 * i) + 3)
 
   override protected def afterEach() {
     env.run()
-    for (r <- postRunChecks) {
-      r()
-    }
+    super.afterEach()
     if (Plot.active) {
       Plot.waitForClose()
     }
-  }
-
-  class StreamTest[X](name:String, expected:Iterable[X], stream:Term[X]) {
-    var eventI = 0
-    val expectIter = expected.iterator
-    stream.map(next => {
-      if (!expectIter.hasNext) throw new AssertionError(s"$name had more events (>=${eventI+1}) than expected")
-      val expect = expectIter.next()
-      expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
-      println(s"Observed event: $name-$eventI \t $next as expected")
-      eventI += 1
-    })
   }
 
   protected def createTestMultiStream() = {
@@ -156,20 +161,20 @@ class TestMultiTerms extends FunSuite with BeforeAndAfterEach with OneInstancePe
     val expanded = byFirst.toValueSet(x => List(x+".1", x+".2"))
     out("byFirst "){expanded}
     env.run(1)
-    expectResult(List("FOO.1", "FOO.2"))(expanded.keys)
-    expectResult(expanded.keys)(expanded.values)
+    assertResult(List("FOO.1", "FOO.2"))(expanded.keys)
+    assertResult(expanded.keys)(expanded.values)
 
     env.run(1)
-    expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2"))(expanded.keys)
-    expectResult(expanded.keys)(expanded.values)
+    assertResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2"))(expanded.keys)
+    assertResult(expanded.keys)(expanded.values)
 
     env.run(1)
-    expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2"))(expanded.keys)
-    expectResult(expanded.keys)(expanded.values)
+    assertResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2"))(expanded.keys)
+    assertResult(expanded.keys)(expanded.values)
 
     env.run(1)
-    expectResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2", "FOOBAR.1", "FOOBAR.2"))(expanded.keys)
-    expectResult(expanded.keys)(expanded.values)
+    assertResult(List("FOO.1", "FOO.2", "BAR.1", "BAR.2", "BAZ.1", "BAZ.2", "FOOBAR.1", "FOOBAR.2"))(expanded.keys)
+    assertResult(expanded.keys)(expanded.values)
   }
 
   {

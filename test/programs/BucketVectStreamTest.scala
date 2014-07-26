@@ -48,8 +48,12 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     super.afterEach()
   }
 
-  def buildWindowStream = {
+  def buildVectorWindowStream: VectTerm[String, Boolean] = {
     stream.map(s => {val t = env.getEventTime.toInt; inWindow.contains(t)})
+  }
+
+  def buildSingleWindowStream: MacroTerm[Boolean] = {
+    singleStream.map(s => {val t = env.getEventTime.toInt; inWindow.contains(t)})
   }
 
 
@@ -129,9 +133,21 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
+  ignore("vect grouped reduce") {
+    val groups = stream.filter(c => Set('b', '5', 'd').contains(c))
+    val out = stream.group( groups ).reduce(new Append[Char])
+    val expectedDigits = Seq("012345".toList, "6789".toList)
+    val expectedAlpha = Seq("ab".toList, "cd".toList, "efghijk".toList)
+//
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
+//    new StreamTest("reduce :Alpha", "bd".toList, groups("Alpha"))
+//    new StreamTest("reduce :Alpha", "5".toList, groups("Digit"))
+  }
+
 
   test("windowDefinition"){
-    val windowStream = buildWindowStream
+    val windowStream = buildVectorWindowStream
     val inWindowIndexSet = windowIndicies.flatten.toSet
     val windowState_chars = data.toList.zipWithIndex.filter(e => e._1.isLetter).map(e => inWindowIndexSet.contains(e._2))
     val windowState_digits = data.toList.zipWithIndex.filter(e => e._1.isDigit).map(e => inWindowIndexSet.contains(e._2))
@@ -139,16 +155,30 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("windowState: Digit", windowState_digits, windowStream("Digit"))
   }
 
-  test("window scan") {
-    val out = stream.window( buildWindowStream ).scan(new Append[Char])
+  test("vect window scan") {
+    val out = stream.window( buildVectorWindowStream ).scan(new Append[Char])
     val expectedAlpha = windowedData_chars.map( generateAppendScan(_) ).flatten
+    new StreamTest("window scan :Alpha", expectedAlpha, out("Alpha"))
+  }
+
+  test("window scan") {
+    val out = stream.window( buildSingleWindowStream ).scan(new Append[Char])
+    val expectedAlpha = windowedData_chars.map( generateAppendScan(_) ).flatten
+    new StreamTest("window scan :Alpha", expectedAlpha, out("Alpha"))
+  }
+
+  test("vect windowed reduce") {
+    // NODEPLOY - need to further define and test semantics of windows not closing before termination.
+    // current test has the second window close before end.
+    val out = stream.window( buildVectorWindowStream ).reduce(new Append[Char])
+    val expectedAlpha = windowedData_chars.toSeq
     new StreamTest("window scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
   test("windowed reduce") {
     // NODEPLOY - need to further define and test semantics of windows not closing before termination.
     // current test has the second window close before end.
-    val out = stream.window( buildWindowStream ).reduce(new Append[Char])
+    val out = stream.window( buildSingleWindowStream ).reduce(new Append[Char])
     val expectedAlpha = windowedData_chars.toSeq
     new StreamTest("window scan :Alpha", expectedAlpha, out("Alpha"))
   }

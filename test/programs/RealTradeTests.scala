@@ -110,9 +110,11 @@ object TestPlots extends RealTradeTests {
 //  Plot.plot(quotes.map(_.bid), "Bid")
 //  Plot.plot(quotes.map(_.ask), "Ask")
   val sizes = trades.map(_.quantity)
-  val big = sizes.filter(_ > 25000)
+  val big = sizes.filter(_ > 20000)
   import scala.concurrent.duration._
-  val s = sizes.group(10.minutes).reduce(new Sum[Long])
+//  val s = sizes.group(10.minutes).reduce(new Sum[Long])
+  val s = sizes.group(big).reduce(new Sum[Long])
+//  val s = sizes.group(3.minutes).reduce(new Sum[Long])
 //  Plot.plot(sizes).seriesNames(_ + "Size")
   Plot.plot(s).seriesNames(_ + "buckets")
   env.run(100000)
