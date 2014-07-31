@@ -161,8 +161,8 @@ class TestSingleTerms extends ScespetTestBase with BeforeAndAfterEach with OneIn
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.group( sliceTrigger, BEFORE).scan(new Sum[Int])
-    val reduce = stream.group( sliceTrigger, BEFORE).reduce(new Sum[Int])
+    val scan = stream.group( sliceTrigger, SliceAlign.BEFORE).scan(new Sum[Int])
+    val reduce = stream.group( sliceTrigger, SliceAlign.BEFORE).reduce(new Sum[Int])
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -174,8 +174,8 @@ class TestSingleTerms extends ScespetTestBase with BeforeAndAfterEach with OneIn
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.group( sliceTrigger, AFTER).scan(new Sum[Int])
-    val reduce = stream.group( sliceTrigger, AFTER).reduce(new Sum[Int])
+    val scan = stream.group( sliceTrigger, SliceAlign.AFTER).scan(new Sum[Int])
+    val reduce = stream.group( sliceTrigger, SliceAlign.AFTER).reduce(new Sum[Int])
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }

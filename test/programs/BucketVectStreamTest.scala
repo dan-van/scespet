@@ -5,7 +5,7 @@ import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit, JUnitRun
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
 import scespet.core._
 import scespet.core.types.IntToEvents
-import scespet.util.ScespetTestBase
+import scespet.util.{SliceAlign, ScespetTestBase}
 import scespet.EnvTermBuilder
 
 /**
@@ -133,7 +133,8 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  ignore("vect grouped reduce") {
+  test("vect grouped reduce") {
+    // define group boundaries (inclusive)
     val groups = stream.filter(c => Set('b', '5', 'd').contains(c))
     val out = stream.group( groups ).reduce(new Append[Char])
     val expectedDigits = Seq("012345".toList, "6789".toList)
@@ -141,8 +142,17 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 //
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
-//    new StreamTest("reduce :Alpha", "bd".toList, groups("Alpha"))
-//    new StreamTest("reduce :Alpha", "5".toList, groups("Digit"))
+  }
+
+  test("vect grouped reduce - exclusive") {
+    // define group boundaries (exclusive)
+    val groups = stream.filter(c => Set('b', '5', 'd').contains(c))
+    val out = stream.group( groups, SliceAlign.AFTER ).reduce(new Append[Char])
+    val expectedDigits = Seq("012345".toList, "6789".toList)
+    val expectedAlpha = Seq("ab".toList, "cd".toList, "efghijk".toList)
+//
+    new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
+    new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
 

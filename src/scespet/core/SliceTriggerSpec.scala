@@ -18,6 +18,8 @@ trait SliceTriggerSpec[-X] {
       def toTriggerSpec[K](k: K, x: X): SliceTriggerSpec[X] = {
         SliceTriggerSpec.this
       }
+
+      override def newCellPrerequisites(x: X): Set[EventGraphObject] = Set()
     }
   }
 }
@@ -70,6 +72,7 @@ object SliceTriggerSpec {
 
 trait VectSliceTriggerSpec[-X] {
   def toTriggerSpec[K](k: K, x: X): SliceTriggerSpec[X]
+  def newCellPrerequisites(x:X) :Set[EventGraphObject]
 }
 
 object VectSliceTriggerSpec {
@@ -92,12 +95,21 @@ object VectSliceTriggerSpec {
         }
       }
     }
+
+    override def newCellPrerequisites(x: VectTerm[_, _]): Set[EventGraphObject] = {
+      // we want to ensure that the the state of the slice-trigger vector is precomputed before a new cell needs it
+      Set(x.input.getNewColumnTrigger)
+    }
   }
+
+  // NODEPLOY - either this one of the SliceTriggerSpec.toVectSliceTrigger is redundant. Which is it?
   implicit def sliceSpecToVectSliceSpec[X](implicit ev:SliceTriggerSpec[X]):VectSliceTriggerSpec[X] = {
     new VectSliceTriggerSpec[X] {
       def toTriggerSpec[K](k: K, x: X): SliceTriggerSpec[X] = {
         ev
       }
+
+      override def newCellPrerequisites(x: X): Set[EventGraphObject] = Set()
     }
   }
 }

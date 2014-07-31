@@ -6,6 +6,7 @@ import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
 import scespet.util._
+import scespet.util.SliceAlign._
 
 
 
@@ -296,6 +297,12 @@ class AggSliceCellLifecycle[X, A <: Agg[X]](newCellF: => A) extends SliceCellLif
 // NODEPLOY - union with above?
 trait KeyToSliceCellLifecycle[K, C] {
   def lifeCycleForKey(k:K):SliceCellLifecycle[C]
+
+  /**
+   * if the new cell will be self-generating events in addition to having values 'added' then we need to know to wire things up differently
+   * @return
+   */
+  def isCellListenable:Boolean
 }
 
 

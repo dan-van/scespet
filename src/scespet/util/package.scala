@@ -14,13 +14,17 @@ package object util {
 //    def events = new Events(i)
 //  }
 
-  val BEFORE = new SliceAlign("BEFORE")
-  val AFTER = new SliceAlign("AFTER")
+//  val BEFORE = new SliceAlign("BEFORE")
+//  val AFTER = new SliceAlign("AFTER")
 
 }
 
 package util {
   sealed class SliceAlign(val name:String)
+  object SliceAlign {
+    val BEFORE = new SliceAlign("BEFORE")
+    val AFTER = new SliceAlign("AFTER")
+  }
 
   class TermPrint(val prefix:String) {
     // todo: think about whether Term should get a 'time' field, or TermPrint should have an env?

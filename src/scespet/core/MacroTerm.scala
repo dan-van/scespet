@@ -2,6 +2,7 @@ package scespet.core
 
 import scespet.core._
 import scespet.util._
+import scespet.util.SliceAlign._
 
 import reflect.macros.Context
 import scala.reflect.ClassTag
