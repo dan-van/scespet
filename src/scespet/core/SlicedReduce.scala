@@ -18,9 +18,9 @@ class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec
   }
 
   var nextReduce : Y = cellLifecycle.newCell()
-  var completedReduce : Y = cellLifecycle.newCell()
+  var completedReduceValue : Y#OUT = _ // or should this be instantiated?
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
+  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduceValue
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
@@ -38,8 +38,8 @@ class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec
       fire = true
     }
     if (newSliceNextEvent) {
-      completedReduce = nextReduce
-      cellLifecycle.closeCell(completedReduce)
+      cellLifecycle.closeCell(nextReduce)
+      completedReduceValue = nextReduce.value
       nextReduce = cellLifecycle.newCell()
       newSliceNextEvent = false
       // just sliced, don't slice again!
@@ -52,8 +52,8 @@ class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec
     if (!sliceBefore && sliceTrigger) {
       newSliceNextEvent = true
       if (emitType == ReduceType.LAST) {
-        completedReduce = nextReduce
-        cellLifecycle.closeCell(completedReduce)
+        cellLifecycle.closeCell(nextReduce)
+        completedReduceValue = nextReduce.value
         fire = true
       }
     }

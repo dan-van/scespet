@@ -58,6 +58,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 
 
   class Append[X] extends Reducer[X, Seq[X]] {
+    println("new appender created")
     var value: Seq[X] = Seq[X]()
     override def add(x: X): Unit = value :+= x
   }
@@ -147,9 +148,9 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   test("vect grouped reduce - exclusive") {
     // define group boundaries (exclusive)
     val groups = stream.filter(c => Set('b', '5', 'd').contains(c))
-    val out = stream.group( groups, SliceAlign.AFTER ).reduce(new Append[Char])
-    val expectedDigits = Seq("012345".toList, "6789".toList)
-    val expectedAlpha = Seq("ab".toList, "cd".toList, "efghijk".toList)
+    val out = stream.group( groups, SliceAlign.BEFORE ).reduce(new Append[Char])
+    val expectedDigits = Seq("01234".toList, "56789".toList)
+    val expectedAlpha = Seq("a".toList, "bc".toList, "defghijk".toList)
 //
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
