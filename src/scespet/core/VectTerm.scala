@@ -410,17 +410,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, X](env)(output)
   }
 
-  /**
-   * build a vector of Reduce instances that are driven with values from this vector.
-   * the Reduce instances expose their state changes.
-   * e.g. if 'Sum' then we are exposing the current cumulative sum as time goes by (e.g. accumulated trade volume)
-   * @see #reduce
-   * @param newBFunc
-   * @tparam Y
-   * @return
-   */
-  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT] = ???
-  //new BucketBuilderVectImpl[K, X,Y](newBFunc, VectTerm.this, ReduceType.CUMULATIVE, env)
 
   // THINK: this could be special cased to be faster
 //  def reduce[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K, Y#OUT] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)

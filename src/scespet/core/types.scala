@@ -145,81 +145,7 @@ object ReduceType {
   val LAST = new ReduceType("Fold")
 }
 
-trait BucketBuilder[X,T] {
-  def each(n:Int):Term[T]
 
-  /**
-   * define buckets by transitions from true->false in a boolean stream.
-   * i.e. while 'windowStream' value is true, add to bucket.
-   * Close the bucket on true -> false transition.
-   * Open a new bucket on false ->  true transition
-   *
-   * this is useful for effectively constructing 'while' aggregations.
-   * e.g. tradeSize.reduce(new Sum).window( continuousTrading )
-   * @param windowStream
-   * @return
-   */
-  def window(windowStream: Term[Boolean]) :Term[T]
-
-  def all():Term[T]
-//
-//  def window(n:Events):MacroTerm[T]
-//  def window(n:Time):MacroTerm[T]
-//  def window(windowStream:MacroTerm[Boolean]):MacroTerm[T]
-//
-  // todo: think about how to build an implicit conversion from eventGraphObject -> Term
-  // todo: if we have a Builder instance in scope, then it is possible with implicits
-  def slice_pre(trigger:EventGraphObject):MacroTerm[T]
-  def slice_post(trigger:EventGraphObject):MacroTerm[T]
-  def slice_pre(trigger:MacroTerm[_]):MacroTerm[T]
-  def slice_post(trigger:MacroTerm[_]):MacroTerm[T]
-}
-
-trait BucketBuilderVect[K, T] {
-  def each(n:Int):VectTerm[K,T]
-
-  /**
-   * window the whole vector by a single bucket stream (e.g. 9:00-17:00 EU)
-   * @param windowStream
-   * @return
-   */
-  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K, T]
-
-  /**
-   * window each element in the vector with the given window function
-   * @return
-   */
-  def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, T]
-
-  /**
-   * do a takef on the given vector to get hasValue[Boolean] for each key in this vector.
-   * if the other vector does not have the given key, the window will be assumed to be false (i.e. not open)
-   * @return
-   */
-  def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, T]
-
-  /**
-   * collect data into buckets that get 'closed' *before* the given event fires.
-   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
-   * e.g. bucket trades into buckets created whenever the trade direction changes
-   *
-   * @see #slice_post
-   * @param trigger
-   * @return
-   */
-  def slice_pre(trigger: EventGraphObject):VectTerm[K,T]
-
-  /**
-   * collect data into buckets that get 'closed' *after* the given event fires.
-   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
-   * e.g. bucket trades between trade events where the size is < median trade.
-   *
-   * @see reset_pre
-   * @param trigger
-   * @return
-   */
-  def slice_post(trigger: EventGraphObject):VectTerm[K,T]
-}
 
 // todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
 // todo: I think I could split this into a 'Provides' interface
@@ -258,7 +184,8 @@ trait SelfAgg[-X] extends Agg[X] {
   def add(x:X)
 }
 
-// todo - I think I want to merge Reduce and Bucket
+// todo - would be nicer to treat the 'Agg' trait and Bucket trait as compatible features that can be added to Cell
+// todo - certainly the "bindTo" verb could work with a vanilla Cell
 // NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
 trait Bucket extends Cell with MFunc {
   def open():Unit
@@ -450,8 +377,7 @@ trait MultiTerm[K,X] {
 
   def sample(evt:EventGraphObject):VectTerm[K,X]
 
-  //NODEPLOY add this
-//  def group[S](s:S)(implicit ev:SliceTriggerSpec[S]) :GroupedVectorTerm
+  def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:VectSliceTriggerSpec[S]) :GroupedVectTerm[K, X]
 
 //  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
 //  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)

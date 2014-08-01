@@ -1,7 +1,6 @@
 package programs
 
 //import macros.{MacroApply, Builder, Wrapper, SimpleMacro}
-import scespet.core.BucketBuilder
 
 /**
  * Created with IntelliJ IDEA.
