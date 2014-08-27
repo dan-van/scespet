@@ -21,7 +21,6 @@ import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
 import org.junit.runner.RunWith
 import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
-@RunWith(classOf[JUnitRunner])
 class TestMultiTerms extends ScespetTestBase {
 
   var env:SimpleEnv = _
@@ -153,6 +152,14 @@ class TestMultiTerms extends ScespetTestBase {
     out("byFirst"){byFirst}
     new StreamTest("F", List("FOO", "FOOBAR"), byFirst('F'))
     new StreamTest("B", List("BAR", "BAZ"), byFirst('B'))
+  }
+
+  test("toStream") {
+    val input = Array("FOO", "BAR", "BAZ", "FOOBAR")
+    val nameStream = impl.asStream(IteratorEvents(input)( (x,i) => i.toLong + 1 ))
+    val byFirst = nameStream.by(_.charAt(0))
+    val output = byFirst.toStream().map(_._2)
+    new StreamTest("toStream", input, output)
   }
 
   test("toValueSet") {

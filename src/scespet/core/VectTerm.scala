@@ -55,7 +55,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   def apply(k:K):MacroTerm[X] = {
-    val index: Int = input.getKeys.indexOf(k)
+    val index: Int = input.indexOf(k)
     val cell:HasVal[X] = if (index >= 0) {
       var holder: HasValue[X] = input.getValueHolder(index)
       new HasVal[X] {
@@ -226,23 +226,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return newIsomorphicVector(cellBuilder)
   }
 
-  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
-    val cellBuilder = (index:Int, key:K) => new UpdatingHasVal[Y#OUT] {
-      val agg:Y = reduceBuilder(key)
-      def value = agg.asInstanceOf[Y].value
-      // NOTE: The semantics of this field should be consistent with SlicedReduce.initialised
-      initialised = false
-      def calculate():Boolean = {
-        val x: X = input.get(index)
-        agg.add(x)
-        initialised = true
-        return true
-      }
-    }
-    return newIsomorphicVector(cellBuilder)
-  }
-
-//  def reduce_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
+  //  def reduce_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
 //    val cellBuilder = (index:Int, key:K) => new ReduceAllCell[K, X, Y](env, input, index, key, reduceBuilder, ReduceType.LAST)
 //    return newIsomorphicVector(cellBuilder)
 //  }
@@ -375,6 +359,13 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm[K, Y](env)(output)
   }
 
+  /**
+   * a multiplex operation. Opposite of MacroTerm.by(f)
+   */
+  def toStream(): MacroTerm[(K,X)] = {
+    val multiplexed = new VectorToStream[K,X](input, env) 
+    new MacroTerm[(K,X)](env)( multiplexed ) 
+  }
 //  def keyToStream2[Y, SY : ToHasVal[SY, Y]]( cellFromKey:K=>SY ):VectTerm[K,Y] = {
 //    val keyToHasVal = cellFromKey.andThen( implicitly[ToHasVal[SY, Y]].toHasVal )
 //    keyToStream(keyToHasVal)
@@ -493,79 +484,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 //  def reduce() = new SliceBuilder(newBFunc, input, ReduceType.LAST, env)
 //}
 
-class SliceBuilder[K, OUT, B <: Bucket](cellLifecycle:SliceCellLifecycle[B], input:VectorStream[K, _], emitType:ReduceType, env:types.Env) {
-  private var joins = List[BucketJoin[K, _, B]]()
 
-  def join[X](term:VectTerm[K, X])(adder :B=>X=>Unit) :SliceBuilder[K, OUT, B] = {
-    joins :+= new BucketJoin[K, X, B](term.input, adder)
-    this
-  }
-
-  def each(n:Int):VectTerm[K,B] = {
-//    val bucketJoinVector = new MultiVectorJoin[K, OUT, B](input, joins, env) {
-//      def createBucketCell(key:K): SlicedBucket[OUT, B] = {
-//        val newBFuncFromKey = () => newBFunc(key)
-//        val bucketStreamCell = new SliceAfterBucket[OUT, B](slice, cellLifecycle, emitType, env)
-////        return bucketStreamCell
-//        ???
-//      }
-//    }
-//    return new VectTerm[K,B](env)(bucketJoinVector)
-    ???
-  }
-
-  /**
-   * window the whole vector by a single bucket stream (e.g. 9:00-17:00 EU)
-   * A window-open happens-before a new value to be added (i.e. the new value is included in the window)
-   * A window-close happens-before a new value (i.e if the window close event is atomic with a value for the bucket, that value is deemed to be not-in the bucket)
-
-   * @param windowStream
-   * @return
-   */
-  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K, B] = {
-    // all cells use the same single window trigger
-    window(cellkey => windowStream.input)
-  }
-
-  /**
-   * window each element in the vector with the given window function
-   * @return
-   */
-  def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, B] = {
-//    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-//      def createBucketCell(key:K): BucketCell[B] = {
-//        val newBFuncFromKey = () => newBFunc(key)
-//        val cellWindowFunc = windowFunc(key)
-//        emitType match {
-//          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc, newBFuncFromKey, env)
-//          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc, newBFuncFromKey, env)
-//        }
-//      }
-//    }
-//    return new VectTerm[K,B](env)(bucketJoinVector)
-    ???
-  }
-
-  /**
-   * do a takef on the given vector to get hasValue[Boolean] for each key in this vector.
-   * if the other vector does not have the given key, the window will be assumed to be false (i.e. not open)
-   * @return
-   */
-  def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, B] = {
-//    val bucketJoinVector = new MultiVectorJoin[K, B](input, joins, env) {
-//      def createBucketCell(key:K): BucketCell[B] = {
-//        val newBFuncFromKey = () => newBFunc(key)
-//        val cellWindowFunc = windowVect(key)
-//        emitType match {
-//          case ReduceType.LAST => new WindowedBucket_LastValue[B](cellWindowFunc.input, newBFuncFromKey, env)
-//          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](cellWindowFunc.input, newBFuncFromKey, env)
-//        }
-//      }
-//    }
-//    return new VectTerm[K,B](env)(bucketJoinVector)
-    ???
-  }
-}
 
 class VectAggLifecycle[K, X, Y <: Agg[X]](newCellF: K => Y) extends KeyToSliceCellLifecycle[K,Y]{
   override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new AggSliceCellLifecycle[X, Y](newCellF(k))

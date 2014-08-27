@@ -1,6 +1,7 @@
 package scespet.util
 
-import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
+import org.junit.runner.RunWith
+import org.scalatest.junit.{JUnitRunner, ShouldMatchersForJUnit, AssertionsForJUnit}
 import scespet.core.Term
 import org.scalatest.{Matchers, BeforeAndAfterEach, FunSuite}
 

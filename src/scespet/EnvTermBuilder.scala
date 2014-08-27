@@ -3,6 +3,7 @@ package scespet
 import core._
 import core.types
 import gsa.esg.mekon.core.EventSource
+import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
 
 /**
@@ -54,6 +55,38 @@ class EnvTermBuilder() extends DelayedInit {
   def asVector[X](elements:Iterable[X]) :VectTerm[X,X] = {
     import scala.collection.JavaConverters._
     new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
+  }
+
+  /**
+   * A VectTerm that generates new cells on demand according to the given K=>HasVal[X] function
+   * e.g. you could use this to present an existing factory as a Vector, allowing easy joins
+   *
+   * @param gen
+   * @tparam K
+   * @tparam X
+   * @return
+   */
+  def lazyVect[K, X](gen:K => HasVal[X]) :VectTerm[K, X] = {
+    new VectTerm[K,X](env)(new AbstractVectorStream[K, X](env) {
+
+      override def newCell(i: Int, key: K): HasValue[X] = {
+        gen(key)
+      }
+
+      val getNewColumnTrigger = new ReshapeSignal(env)
+
+      val isInitialised: Boolean = true
+
+      override def indexOf(key: K): Int = {
+        val i = super.indexOf(key)
+        if (i < 0) {
+          add(key)
+          getSize - 1
+        } else {
+          i
+        }
+      }
+    })
   }
 
   def streamOf2[Y <: Bucket](newCellFunc: => Y) : PartialBuiltSlicedBucket[Y] = {
