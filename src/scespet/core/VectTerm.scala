@@ -1,6 +1,8 @@
 package scespet.core
 
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
+import scespet.core.CellAdder.AggIsAdder
+import scespet.core.SliceCellLifecycle.{AggSliceCellLifecycle, BucketCellLifecycleImpl}
 import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
@@ -467,7 +469,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
             val sourceCell = input.getValueHolder(i)
             val lifecycle = keyedLifecycle.lifeCycleForKey(k)
             val windowStream = keyToWindow(k)
-            val outputCell:UpdatingHasVal[A#OUT] = new WindowedReduce[X, A](sourceCell, windowStream, lifecycle, reduceType, env)
+            val adder = new AggIsAdder[A, X]()
+            val outputCell:UpdatingHasVal[A#OUT] = new WindowedReduce[X, A](sourceCell, adder, windowStream, lifecycle, reduceType, env)
             outputCell
           }
 
@@ -487,7 +490,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
 
 class VectAggLifecycle[K, X, Y <: Agg[X]](newCellF: K => Y) extends KeyToSliceCellLifecycle[K,Y]{
-  override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new AggSliceCellLifecycle[X, Y](newCellF(k))
+  override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new AggSliceCellLifecycle[X, Y]( () => newCellF(k) )
 
   override def isCellListenable: Boolean = false
 }
@@ -535,7 +538,8 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
         val cellLifecycle = lifecycle.lifeCycleForKey(k)
         val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
         println("New sliced reduce for key: " + k + " from source: " + inputVector)
-        new SlicedReduce[S, IN, A](sourceCell, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv)
+        val valueAdder = new AggIsAdder[A, IN]()
+        new SlicedReduce[S, IN, A](sourceCell, valueAdder, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv)
       }
       // NODEPLOY - if I could ask lifeCycle if its cells
       override def dependsOn: Set[EventGraphObject] = newCellDependencies

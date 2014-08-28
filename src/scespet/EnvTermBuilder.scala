@@ -3,6 +3,7 @@ package scespet
 import core._
 import core.types
 import gsa.esg.mekon.core.EventSource
+import scespet.core.SliceCellLifecycle.BucketCellLifecycle
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
 

@@ -8,6 +8,8 @@ import scespet.core.types.{MFunc, IntToEvents}
 import scespet.util.{ScespetTestBase, Sum}
 import scespet.EnvTermBuilder
 
+import scala.collection.mutable
+
 /**
  * Created by danvan on 17/04/2014.
  */
@@ -100,6 +102,20 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     val out = stream.scan(new Append[Char])
     val expected = generateAppendScan(data)
     new StreamTest("scan", expected, out)
+  }
+
+  ignore("scan non agg") {
+    val testStream = impl.asStream(IteratorEvents("abaabab")((char, i) => i))
+
+    val set = collection.mutable.HashSet[Char]()
+    implicit def setToAdder[T](s:collection.mutable.Set[T]) = {
+      new CellAdder[collection.mutable.Set[T], T] {
+        override def addTo(c: mutable.Set[T], x: T): Unit = c.add(x)
+      }
+    }
+//    val out = testStream.scanI(set)
+//    val expected = generateAppendScan(data)
+//    new StreamTest("scan", expected, out)
   }
 
   test("reduce") {

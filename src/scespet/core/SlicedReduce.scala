@@ -5,7 +5,7 @@ import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 /**
  * Hmm, this was an initial version of reducing. It is simpler (and probably more efficient) than the SlicedBucket implementations, as it does not try to do a rendezvous of incoming event streams
  */
-class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S]) extends UpdatingHasVal[Y#OUT] {
+class SlicedReduce[S, X, Y <: Cell](val dataEvents :HasValue[X], val cellValueAdd:CellAdder[Y, X], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S]) extends UpdatingHasVal[Y#OUT] {
   var newSliceNextEvent = false
   val sliceEvents = sliceBuilder.buildTrigger(sliceSpec, Set(dataEvents.getTrigger), env)
   
@@ -17,7 +17,12 @@ class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec
     env.addListener(termination, this)
   }
 
-  var nextReduce : Y = cellLifecycle.newCell()
+  private var nextReduce : Y = _
+  def readyNextReduceCell() {
+    nextReduce = cellLifecycle.newCell()
+  }
+  readyNextReduceCell()
+
   var completedReduceValue : Y#OUT = _ // or should this be instantiated?
 
   def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduceValue
@@ -40,14 +45,14 @@ class SlicedReduce[S, X, Y <: Agg[X]](val dataEvents :HasValue[X], val sliceSpec
     if (newSliceNextEvent) {
       cellLifecycle.closeCell(nextReduce)
       completedReduceValue = nextReduce.value
-      nextReduce = cellLifecycle.newCell()
+      readyNextReduceCell()
       newSliceNextEvent = false
       // just sliced, don't slice again!
       sliceTrigger = false
     }
     if (env.hasChanged(dataEvents.getTrigger)) {
       val newValue = dataEvents.value
-      nextReduce.add(newValue)
+      cellValueAdd.addTo(nextReduce, newValue)
     }
     if (!sliceBefore && sliceTrigger) {
       newSliceNextEvent = true

@@ -8,7 +8,7 @@ package scespet.core
  *
  * NODEPLOY - I don't think this one is properly tested
  */
-class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
+class WindowedReduce[X, Y <: Cell](val dataEvents :HasValue[X], val cellAdder:CellAdder[Y, X], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
     env.addListener(dataEvents.getTrigger, this)
     env.addListener(windowEvents.getTrigger, this)
 
@@ -39,7 +39,7 @@ class WindowedReduce[X, Y <: Agg[X]](val dataEvents :HasValue[X], val windowEven
       // note, if the window close coincides with this event, we discard the datapoint
       // i.e. window close takes precedence
       if (isNowOpen) {
-        nextReduce.add(dataEvents.value)
+        cellAdder.addTo(nextReduce, dataEvents.value)
         addedValue = true
         if (emitType == ReduceType.CUMULATIVE) fire = true
       }
