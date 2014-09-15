@@ -1,7 +1,6 @@
 package scespet.core
 
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
-import scespet.core.CellAdder.AggIsAdder
 import scespet.core.SliceCellLifecycle.{AggSliceCellLifecycle, BucketCellLifecycleImpl}
 import scespet.core.VectorStream.ReshapeSignal
 import scala.reflect.runtime.universe._
@@ -464,13 +463,15 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       }
 
       override def applyAgg[A <: Agg[X]](keyedLifecycle: KeyToSliceCellLifecycle[K, A], reduceType: ReduceType): DerivedVector[K, A#OUT] = {
+        val adder = implicitly[A => CellAdder[X]]
+        val cellOut = implicitly[CellOut[Cell, Cell#OUT]].asInstanceOf[CellOut[A, A#OUT]]
+
         new DerivedVector[K, A#OUT] {
           override def newCell(i: Int, k: K): UpdatingHasVal[A#OUT] = {
             val sourceCell = input.getValueHolder(i)
             val lifecycle = keyedLifecycle.lifeCycleForKey(k)
             val windowStream = keyToWindow(k)
-            val adder = new AggIsAdder[A, X]()
-            val outputCell:UpdatingHasVal[A#OUT] = new WindowedReduce[X, A](sourceCell, adder, windowStream, lifecycle, reduceType, env)
+            val outputCell:UpdatingHasVal[A#OUT] = new WindowedReduce[X, A, A#OUT](sourceCell, adder, cellOut, windowStream, lifecycle, reduceType, env)
             outputCell
           }
 
@@ -532,14 +533,17 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
   val newCellDependencies = ev.newCellPrerequisites(sliceSpec)
 
   def applyAgg[A <: Agg[IN]](lifecycle: KeyToSliceCellLifecycle[K, A], reduceType:ReduceType): DerivedVector[K, A#OUT] = {
+    val valueAdder = implicitly[A => CellAdder[IN]]
+    //NODEPLOY may need to do something with my covariance tags to clean this up?
+    val cellOut = implicitly[CellOut[Cell, Cell#OUT]].asInstanceOf[CellOut[A, A#OUT]]
+
     new DerivedVector[K, A#OUT] {
       def newCell(i: Int, k: K):UpdatingHasVal[A#OUT] = {
         val sourceCell = inputVector.getValueHolder(i)
         val cellLifecycle = lifecycle.lifeCycleForKey(k)
         val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
         println("New sliced reduce for key: " + k + " from source: " + inputVector)
-        val valueAdder = new AggIsAdder[A, IN]()
-        new SlicedReduce[S, IN, A](sourceCell, valueAdder, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv)
+        new SlicedReduce[S, IN, A, A#OUT](sourceCell, valueAdder, cellOut, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv)
       }
       // NODEPLOY - if I could ask lifeCycle if its cells
       override def dependsOn: Set[EventGraphObject] = newCellDependencies

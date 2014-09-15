@@ -1,6 +1,5 @@
 package scespet.core
 
-import scespet.core.CellAdder.AggIsAdder
 import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecycle, AggSliceCellLifecycle}
 import scespet.core._
 import scespet.util._
@@ -231,7 +230,14 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   // THINK: this could be special cased to be faster
   def scan[Y <: Agg[X]](newBFunc: => Y) = group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)
 
-  def scanI[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) = group[Null](null, AFTER)(SliceTriggerSpec.NULL).scanI(newBFunc)(ev)
+  // NODEPLOY - how do I get implicit chaining to work?
+  def scanI[Y <: Cell](newBFunc: => Y)(implicit adder:Y => CellAdder[X], isCell : Y <:< Cell) :Term[Y#OUT] = {
+    group[Null](null, AFTER)(SliceTriggerSpec.NULL).scanI(newBFunc)(adder, isCell)
+  }
+
+  def scanI[Y](newBFunc: => Y)(implicit adder:Y => CellAdder[X]) = {
+    group[Null](null, AFTER)(SliceTriggerSpec.NULL).scanI(newBFunc)(adder, new CellOut.Ident[Y])
+  }
 
   def window(window:HasValue[Boolean]) : GroupedTerm[X] = {
     val uncollapsed = new UncollapsedGroup[X] {
@@ -242,8 +248,8 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
         }
       }
 
-      def applyAgg[A <: Cell](lifecycle: SliceCellLifecycle[A], adder:CellAdder[A, X], reduceType: ReduceType): HasVal[A#OUT] = {
-        new WindowedReduce[X, A](input, adder, window, lifecycle, reduceType, env)
+      def applyAgg[A, OUT](lifecycle: SliceCellLifecycle[A], adder:A => CellAdder[X], cellOut:CellOut[A,OUT], reduceType: ReduceType): HasVal[OUT] = {
+        new WindowedReduce[X, A, OUT](input, adder, cellOut, window, lifecycle, reduceType, env)
       }
     }
     new GroupedTerm(uncollapsed, env)
@@ -266,12 +272,12 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 //type UncollapsedGroup[C <: Cell] = (C) => C#OUT
 trait UncollapsedGroup[IN] {
   def applyB[B <: Bucket](lifecycle:SliceCellLifecycle[B], reduceType:ReduceType) :HasVal[B#OUT]
-  def applyAgg[A <: Cell](lifecycle:SliceCellLifecycle[A], adder:CellAdder[A,IN], reduceType:ReduceType) :HasVal[A#OUT]
+  def applyAgg[A, OUT](lifecycle:SliceCellLifecycle[A], adder:A => CellAdder[IN], cellOut:CellOut[A,OUT], reduceType:ReduceType) :HasVal[OUT]
 }
 
 class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, triggerAlign:SliceAlign, env:types.Env, ev: SliceTriggerSpec[S]) extends UncollapsedGroup[IN] {
-  def applyAgg[A <: Cell](lifecycle: SliceCellLifecycle[A], adder:CellAdder[A,IN], reduceType:ReduceType): HasVal[A#OUT] = {
-    new SlicedReduce[S, IN, A](input, adder, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, ev)
+  def applyAgg[A, OUT](lifecycle: SliceCellLifecycle[A], adder:A => CellAdder[IN], cellOut:CellOut[A,OUT], reduceType:ReduceType): HasVal[OUT] = {
+    new SlicedReduce[S, IN, A, OUT](input, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, ev)
   }
 
   def applyB[B <: Bucket](lifecycle: SliceCellLifecycle[B], reduceType:ReduceType): HasVal[B#OUT] = {
@@ -288,26 +294,29 @@ class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.En
 //  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
   def reduce[Y <: Agg[X]](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
     val lifecycle = new AggSliceCellLifecycle[X, Y](() => newBFunc)
-    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[Y](lifecycle, lifecycle, ReduceType.LAST)
+    val aggAdder = ev
+    val cellOut = implicitly[CellOut[Cell, Cell#OUT]].asInstanceOf[CellOut[Y, Y#OUT]]
+    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[Y, Y#OUT](lifecycle, aggAdder, cellOut, ReduceType.LAST)
     new MacroTerm[Y#OUT](env)(slicer)
   }
 
   // NODEPLOY bring this up to Cell
   def scan[Y <: Agg[X]](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-    val lifecycle = new AggSliceCellLifecycle[X, Y](() => newBFunc)
-    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg(lifecycle, lifecycle, ReduceType.CUMULATIVE).asInstanceOf[HasVal[Y#OUT]]
+    val lifecycle = new CellSliceCellLifecycle[X, Y](() => newBFunc)
+    val aggAdder = ev
+    val cellOut = implicitly[CellOut[Cell, Cell#OUT]].asInstanceOf[CellOut[Y, Y#OUT]]
+    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg(lifecycle, aggAdder, cellOut, ReduceType.CUMULATIVE).asInstanceOf[HasVal[Y#OUT]]
     new MacroTerm[Y#OUT](env)(slicer)
   }
 
   // NODEPLOY can this one suffice for all?
-  def scanI[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-    type Y2 = Agg[X] with Y
-    val lifecycle = new AggSliceCellLifecycle[X, Y2](() => newBFunc.asInstanceOf[Y2])
-    implicit val ev2: <:<[Y2,Agg[X]] = ev
-    val adder:CellAdder[Y2,X] = CellAdder.aggSliceToAdder[Y2,X](ev2)
+  def scanI[Y, OUT](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :CellOut[Y, OUT]) :Term[OUT] = {
+//    type Y2 = Agg[X] with Y
+    val lifecycle = new CellSliceCellLifecycle[X, Y](() => newBFunc)
+//    val adder:CellAdder[Y2,X] = CellAdder.aggSliceToAdder[Y2,X](ev2)
 //    val adder:CellAdder[Y2,X] = implicitly[CellAdder[Y2, X]]
-    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[Y2](lifecycle, adder, ReduceType.CUMULATIVE).asInstanceOf[HasVal[Y#OUT]]
-    new MacroTerm[Y#OUT](env)(slicer)
+    val slicer :HasVal[OUT] = uncollapsedGroup.applyAgg[Y, OUT](lifecycle, adder, yOut, ReduceType.CUMULATIVE).asInstanceOf[HasVal[OUT]]
+    new MacroTerm[OUT](env)(slicer)
   }
 }
 

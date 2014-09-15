@@ -3,6 +3,7 @@ package programs
 import org.junit.runner.RunWith
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit, JUnitRunner}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
+import scespet.core.CellOut.CellToOut
 import scespet.core._
 import scespet.core.types.{MFunc, IntToEvents}
 import scespet.util.{ScespetTestBase, Sum}
@@ -99,23 +100,23 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   }
 
   test("scan") {
-    val out = stream.scan(new Append[Char])
+    val out = stream.scanI(new Append[Char])
     val expected = generateAppendScan(data)
     new StreamTest("scan", expected, out)
   }
 
-  ignore("scan non agg") {
-    val testStream = impl.asStream(IteratorEvents("abaabab")((char, i) => i))
+  test("scan non agg") {
+    val testStream = impl.asStream(IteratorEvents("abab")((char, i) => i))
 
     val set = collection.mutable.HashSet[Char]()
-    implicit def setToAdder[T](s:collection.mutable.Set[T]) = {
-      new CellAdder[collection.mutable.Set[T], T] {
-        override def addTo(c: mutable.Set[T], x: T): Unit = c.add(x)
-      }
-    }
-//    val out = testStream.scanI(set)
-//    val expected = generateAppendScan(data)
-//    new StreamTest("scan", expected, out)
+    val out = testStream.scanI(set)
+    val expected = List(
+      Set('a'),
+      Set('a','b'),
+      Set('a','b'),
+      Set('a','b')
+    )
+    new StreamTest("scan", expected, out.map(_.toSet))
   }
 
   test("reduce") {

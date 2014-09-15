@@ -8,7 +8,7 @@ package scespet.core
  *
  * NODEPLOY - I don't think this one is properly tested
  */
-class WindowedReduce[X, Y <: Cell](val dataEvents :HasValue[X], val cellAdder:CellAdder[Y, X], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[Y#OUT] {
+class WindowedReduce[X, Y, OUT](val dataEvents :HasValue[X], val cellAdder:Y => CellAdder[X], cellOut:CellOut[Y,OUT], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[OUT] {
     env.addListener(dataEvents.getTrigger, this)
     env.addListener(windowEvents.getTrigger, this)
 
@@ -18,7 +18,7 @@ class WindowedReduce[X, Y <: Cell](val dataEvents :HasValue[X], val cellAdder:Ce
 
   var completedReduce : Y = newReduce.newCell()
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce.value else completedReduce.value
+  def value = cellOut.out( if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce )
 
   def calculate():Boolean = {
     var isNowOpen = inWindow
@@ -39,7 +39,7 @@ class WindowedReduce[X, Y <: Cell](val dataEvents :HasValue[X], val cellAdder:Ce
       // note, if the window close coincides with this event, we discard the datapoint
       // i.e. window close takes precedence
       if (isNowOpen) {
-        cellAdder.addTo(nextReduce, dataEvents.value)
+        cellAdder(nextReduce).add(dataEvents.value)
         addedValue = true
         if (emitType == ReduceType.CUMULATIVE) fire = true
       }

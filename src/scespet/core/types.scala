@@ -149,8 +149,8 @@ object ReduceType {
 
 // todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
 // todo: I think I could split this into a 'Provides' interface
-trait Agg[-X] extends Cell {
-  def add(x:X)
+trait Agg[-X] extends Cell with CellAdder[X] {
+//  def add(x:X)
 }
 
 trait Cell {
