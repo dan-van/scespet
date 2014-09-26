@@ -170,7 +170,7 @@ class CellFromAgg[A <: Agg[_]] extends Cell {
  * @tparam X
  * @tparam V
  */
-trait Reducer[-X, V] extends Agg[X] {
+trait Reducer[-X, V] extends Agg[X] with OutTrait[V] { // NODEPLOY - Agg[X] can be replaced by CellAdder[X]
   type OUT = V
 }
 
@@ -219,7 +219,9 @@ trait Term[X] {
   def map[Y](f: (X) => Y, exposeNull:Boolean = true):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
-  def reduce[Y <: Agg[X]](newBFunc: => Y):Term[Y#OUT]
+  def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O]
+
+  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O]
 
   def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedTerm[X]
   

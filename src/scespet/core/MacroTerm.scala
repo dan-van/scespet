@@ -1,5 +1,6 @@
 package scespet.core
 
+import scespet.core.CellOut.OutTraitToCellOut
 import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecycle, AggSliceCellLifecycle}
 import scespet.core._
 import scespet.util._
@@ -224,19 +225,14 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
     return new MacroTerm[X](env)(listener)
   }
 
-  // THINK: this could be special cased to be faster
-  def reduce[Y <: Agg[X]](newBFunc: => Y):Term[Y#OUT] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)
-
-  // THINK: this could be special cased to be faster
-  def scan[Y <: Agg[X]](newBFunc: => Y) = group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)
-
-  // NODEPLOY - how do I get implicit chaining to work?
-  def scanI[Y <: Cell](newBFunc: => Y)(implicit adder:Y => CellAdder[X], isCell : Y <:< Cell) :Term[Y#OUT] = {
-    group[Null](null, AFTER)(SliceTriggerSpec.NULL).scanI(newBFunc)(adder, isCell)
+  def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O] = {
+    // THINK: this could be special cased to provide a more performant impl of scanning a stream without grouping
+    group[Null](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)(adder, yOut).asInstanceOf[Term[O]]
   }
 
-  def scanI[Y](newBFunc: => Y)(implicit adder:Y => CellAdder[X]) = {
-    group[Null](null, AFTER)(SliceTriggerSpec.NULL).scanI(newBFunc)(adder, new CellOut.Ident[Y])
+  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O] = {
+    // THINK: this could be special cased to provide a more performant impl of scanning a stream without grouping
+    group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)(adder, yOut).asInstanceOf[Term[O]]
   }
 
   def window(window:HasValue[Boolean]) : GroupedTerm[X] = {
@@ -292,30 +288,21 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, trigge
 class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.Env) {
 //  def reduce[Y <: Cell](newBFunc: => Y) :Term[Y#OUT] = ???
 //  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-  def reduce[Y <: Agg[X]](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-    val lifecycle = new AggSliceCellLifecycle[X, Y](() => newBFunc)
-    val aggAdder = ev
-    val cellOut = implicitly[CellOut[Cell, Cell#OUT]].asInstanceOf[CellOut[Y, Y#OUT]]
-    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg[Y, Y#OUT](lifecycle, aggAdder, cellOut, ReduceType.LAST)
-    new MacroTerm[Y#OUT](env)(slicer)
+  def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O] = {
+    collapse(newBFunc, adder, yOut, ReduceType.LAST)
   }
 
-  // NODEPLOY bring this up to Cell
-  def scan[Y <: Agg[X]](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
-    val lifecycle = new CellSliceCellLifecycle[X, Y](() => newBFunc)
-    val aggAdder = ev
-    val cellOut = implicitly[CellOut[Cell, Cell#OUT]].asInstanceOf[CellOut[Y, Y#OUT]]
-    val slicer :HasVal[Y#OUT] = uncollapsedGroup.applyAgg(lifecycle, aggAdder, cellOut, ReduceType.CUMULATIVE).asInstanceOf[HasVal[Y#OUT]]
-    new MacroTerm[Y#OUT](env)(slicer)
+  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O] = {
+    collapse(newBFunc, adder, yOut, ReduceType.CUMULATIVE)
   }
 
-  // NODEPLOY can this one suffice for all?
-  def scanI[Y, OUT](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :CellOut[Y, OUT]) :Term[OUT] = {
-//    type Y2 = Agg[X] with Y
+  private def collapse[Y, O](newBFunc: => Y, adder:Y => CellAdder[X], yOut :AggOut[Y, O], reduceType:ReduceType) :Term[O] = {
+    type OUT = O
     val lifecycle = new CellSliceCellLifecycle[X, Y](() => newBFunc)
-//    val adder:CellAdder[Y2,X] = CellAdder.aggSliceToAdder[Y2,X](ev2)
-//    val adder:CellAdder[Y2,X] = implicitly[CellAdder[Y2, X]]
-    val slicer :HasVal[OUT] = uncollapsedGroup.applyAgg[Y, OUT](lifecycle, adder, yOut, ReduceType.CUMULATIVE).asInstanceOf[HasVal[OUT]]
+    val cellOut = new CellOut[Y, OUT] {
+      override def out(c: Y): OUT = yOut.out(c)
+    }
+    val slicer :HasVal[OUT] = uncollapsedGroup.applyAgg[Y, OUT](lifecycle, adder, cellOut, reduceType).asInstanceOf[HasVal[OUT]]
     new MacroTerm[OUT](env)(slicer)
   }
 }

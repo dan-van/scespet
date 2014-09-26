@@ -4,12 +4,16 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit, JUnitRunner}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
 import scespet.core.CellOut.CellToOut
+import scespet.core.CellOut2.Ident2
 import scespet.core._
 import scespet.core.types.{MFunc, IntToEvents}
 import scespet.util.{ScespetTestBase, Sum}
 import scespet.EnvTermBuilder
 
+import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
+import scala.reflect.ClassTag
 
 /**
  * Created by danvan on 17/04/2014.
@@ -54,8 +58,15 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     override def add(x: X): Unit = value :+= x
   }
 
-  class SelfAppend[X] extends Agg[X] {
-    override type OUT = Seq[X]
+  class SumX[X:Numeric] extends Reducer[X, Double]{
+    var sum = 0.0
+    def value = sum
+    def add(n:X):Unit = {sum = sum + implicitly[Numeric[X]].toDouble(n)}
+
+    override def toString = s"Sum=$sum"
+  }
+
+  class AppendWithOutTrait[X] extends CellAdder[X] with OutTrait[Seq[X]] {
     var value: Seq[X] = Seq[X]()
     override def add(x: X): Unit = value :+= x
   }
@@ -100,7 +111,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   }
 
   test("scan") {
-    val out = stream.scanI(new Append[Char])
+    val out = stream.scan(new Append[Char])
     val expected = generateAppendScan(data)
     new StreamTest("scan", expected, out)
   }
@@ -108,15 +119,20 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   test("scan non agg") {
     val testStream = impl.asStream(IteratorEvents("abab")((char, i) => i))
 
-    val set = collection.mutable.HashSet[Char]()
-    val out = testStream.scanI(set)
+    implicit val adder = (set:mutable.HashSet[Char]) => new CellAdder[Char] {
+      override def add(x: Char): Unit = set.add(x)
+    }
+    implicit val view = new AggOut[mutable.HashSet[Char], Set[Char]] {
+      override def out(a: mutable.HashSet[Char]): Set[Char] = a.toSet
+    }
+    val out = testStream.scan(new collection.mutable.HashSet[Char])
     val expected = List(
       Set('a'),
       Set('a','b'),
       Set('a','b'),
       Set('a','b')
     )
-    new StreamTest("scan", expected, out.map(_.toSet))
+    new StreamTest("scan", expected, out)
   }
 
   test("reduce") {
@@ -129,6 +145,33 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     val out = stream.group(3.events).scan(new Append[Char])
     val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     new StreamTest("scan", expected, out)
+  }
+
+  test("grouped scanI2") {
+    val out = stream.group(3.events).scan(new AppendWithOutTrait[Char])
+    val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+    new StreamTest("scan", expected, out)
+  }
+
+  test("grouped scanI3 a") {
+    class MyAdder extends CellAdder[Char] {
+      var myOut:Char = _
+      override def add(x: Char): Unit = myOut = x
+    }
+
+    implicit def anyToIdent[A] = new AggOut[A,A] {
+      override def out(a: A): A = a
+    }
+
+    val out = stream.group(3.events).scan(new MyAdder)
+    val expected = data.toSeq
+    new StreamTest("scan", expected, out.map(_.myOut))
+  }
+
+  test("grouped scanI3 b") {
+//    val out = stream.group(3.events).scanI3(new AppendWithOutTrait[Char])
+//    val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
+//    new StreamTest("scan", expected, out)
   }
 
   test("grouped reduce") {
