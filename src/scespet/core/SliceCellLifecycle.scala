@@ -9,6 +9,7 @@ import scala.reflect.ClassTag
  * Created by danvan on 27/08/2014.
  */
 
+//NODEPLOY this is the same as AggOut
 trait CellOut[C,OUT] {
 //  type O
   def out(c:C):OUT

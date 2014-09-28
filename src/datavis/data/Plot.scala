@@ -122,7 +122,7 @@ object Plot {
 
   def plot[K, X:Numeric](stream: VectTerm[K, X]) :Options[K,X] = {
     val options = new Options[K, X](chartstate)
-    class DatasetAdder(key:K, options:Options[K, X]) extends SelfAgg[X] {
+    class DatasetAdder(key:K, options:Options[K, X]) extends CellAdder[X] {
       val dataset = chartstate.dataset  // I'll clean this later
       val currentCount = dataset.getSeriesCount
 
@@ -137,7 +137,7 @@ object Plot {
         dataset.add(seriesId, x, y)
       }
     }
-    stream.reduce(new DatasetAdder(_, options))
+    stream.reduce((k:K) => new DatasetAdder(k, options))
     options
   }
 
