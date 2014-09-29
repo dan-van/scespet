@@ -187,7 +187,7 @@ trait SelfAgg[-X] extends Agg[X] {
 // todo - would be nicer to treat the 'Agg' trait and Bucket trait as compatible features that can be added to Cell
 // todo - certainly the "bindTo" verb could work with a vanilla Cell
 // NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
-trait Bucket extends Cell with MFunc {
+trait Bucket extends MFunc {
   def open():Unit
   /**
    * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
@@ -261,11 +261,11 @@ trait Term[X] {
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
-class PartialGroupedBucketStream[S, Y <: Bucket](triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
-  private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y] = {
+class PartialGroupedBucketStream[S, Y <: Bucket, OUT](cellOut:CellOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
+  private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y, OUT] = {
     val slicedBucket = triggerAlign match {
-      case BEFORE => new SliceBeforeBucket[S, Y](sliceSpec, lifecycle, reduceType, env, ev)
-      case AFTER => new SliceAfterBucket[S, Y](sliceSpec, lifecycle, reduceType, env, ev)
+      case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
+      case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
     }
     bindings.foreach(pair => {
       val (hasVal, adder) = pair
@@ -275,12 +275,12 @@ class PartialGroupedBucketStream[S, Y <: Bucket](triggerAlign:SliceAlign, lifecy
     slicedBucket
   }
 
-  def all():MacroTerm[Y#OUT] = {
+  def all():MacroTerm[OUT] = {
     val hasVal = buildSliced(ReduceType.CUMULATIVE)
     new MacroTerm(env)(hasVal)
   }
 
-  def last():MacroTerm[Y#OUT] = {
+  def last():MacroTerm[OUT] = {
     val hasVal = buildSliced(ReduceType.LAST)
     new MacroTerm(env)(hasVal)
   }

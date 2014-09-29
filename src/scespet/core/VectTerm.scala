@@ -414,16 +414,16 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   // THINK: this could be special cased to be faster
   def scan[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :VectTerm[K,O] = group[Null](null, AFTER)(SliceTriggerSpec.NULL.asVectSliceSpec).scan(newBFunc)(adder,yOut)
 
-  def bindTo[B <: Bucket](newBFunc: => B)(adder: B => X => Unit) :PartialBuiltSlicedVectBucket[K, B] = bindTo[B]((k:K) => newBFunc)(adder)
+  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT]) :PartialBuiltSlicedVectBucket[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut)
 
   // TODO: how about bindTo(vect[K,B]) ?
-  def bindTo[B <: Bucket](newBFunc: K => B)(adder: B => X => Unit) :PartialBuiltSlicedVectBucket[K, B] = {
+  def bindTo[B <: Bucket, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT]) :PartialBuiltSlicedVectBucket[K, B, OUT] = {
     val keyToCellLifecycle = new KeyToSliceCellLifecycle[K, B] {
       override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = new BucketCellLifecycleImpl[B](newBFunc(k))
 
       override def isCellListenable: Boolean = true
     }
-    new PartialBuiltSlicedVectBucket[K, B](this, keyToCellLifecycle, env).bind(this)(adder)
+    new PartialBuiltSlicedVectBucket[K, B, OUT](this, aggOut, keyToCellLifecycle, env).bind(this)(adder)
   }
 
   def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:VectSliceTriggerSpec[S]) :GroupedVectTerm[K, X] = {
@@ -460,15 +460,15 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
           }
         }
 
-        override def applyB[B <: Bucket](keyedLifecycle: KeyToSliceCellLifecycle[K, B], reduceType: ReduceType): DerivedVector[K, B#OUT] = {
-        new DerivedVector[K, B#OUT] {
-          override def newCell(i: Int, k: K): UpdatingHasVal[B#OUT] = {
+        override def applyB[B <: Bucket, OUT](keyedLifecycle: KeyToSliceCellLifecycle[K, B], cellOut: CellOut[B, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
+        new DerivedVector[K, OUT] {
+          override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
             val sourceCell = input.getValueHolder(i)
             val lifecycle = keyedLifecycle.lifeCycleForKey(k)
             val windowStream = keyToWindow(k)
-            val outputCell:UpdatingHasVal[B#OUT] = reduceType match {
-              case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](windowStream, lifecycle, env)
-              case ReduceType.LAST => new WindowedBucket_LastValue[B](windowStream, lifecycle, env)
+            val outputCell:UpdatingHasVal[OUT] = reduceType match {
+              case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, windowStream, lifecycle, env)
+              case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, windowStream, lifecycle, env)
             }
             outputCell
           }
@@ -550,7 +550,7 @@ class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: Uncol
 }
 
 trait UncollapsedVectGroup[K, IN] {
-  def applyB[B <: Bucket](lifecycle:KeyToSliceCellLifecycle[K, B], reduceType:ReduceType) :DerivedVector[K, B#OUT]
+  def applyB[B <: Bucket, OUT](lifecycle:KeyToSliceCellLifecycle[K, B], cellOut: CellOut[B, OUT], reduceType:ReduceType) :DerivedVector[K, OUT]
   def applyAgg[A <: Agg[IN]](lifecycle:KeyToSliceCellLifecycle[K, A], reduceType:ReduceType) :DerivedVector[K, A#OUT]
   def applyNew[A, OUT](lifecycle: KeyToSliceCellLifecycle[K, A], adder:A => CellAdder[IN], cellOut:CellOut[A,OUT], reduceType:ReduceType): DerivedVector[K, OUT]
 }
@@ -595,18 +595,19 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
     }
   }
 
-  def applyB[B <: Bucket](lifecycle: KeyToSliceCellLifecycle[K, B], reduceType: ReduceType): DerivedVector[K, B#OUT] = {
-    new DerivedVector[K, B#OUT] {
-      override def newCell(i: Int, k: K): UpdatingHasVal[B#OUT] = {
+
+  def applyB[B <: Bucket, OUT](lifecycle: KeyToSliceCellLifecycle[K, B], cellOut: CellOut[B, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
+    new DerivedVector[K, OUT] {
+      override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
         val sourceCell = inputVector.getValueHolder(i)
         val cellLifecycle = lifecycle.lifeCycleForKey(k)
         val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
         triggerAlign match {
           case BEFORE => {
-              new SliceBeforeBucket[S, B](sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv)
+              new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv)
           }
           case AFTER => {
-              new SliceAfterBucket[S, B](sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv)
+              new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv)
           }
           case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
         }
@@ -618,10 +619,10 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
 }
 
 // NODEPLOY this should be a Term that also supports partitioning operations
-class PartialBuiltSlicedVectBucket[K, Y <: Bucket](input:VectTerm[K, _], val keyCellLifecycle: KeyToSliceCellLifecycle[K, Y], val env:Environment) {
+class PartialBuiltSlicedVectBucket[K, Y <: Bucket, OUT](input:VectTerm[K, _], yOut :AggOut[Y, OUT], val keyCellLifecycle: KeyToSliceCellLifecycle[K, Y], val env:Environment) {
   var bindings = List[(VectTerm[K, _], (_ => _ => Unit))]()
 
-  private lazy val scanAllTerm: VectTerm[K, Y#OUT] = {
+  private lazy val scanAllTerm: VectTerm[K, OUT] = {
     reset[Null](null)(SliceTriggerSpec.NULL).all()
 //    val cellBuilder = (i:Int, k:K) => {
 //      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
@@ -639,7 +640,7 @@ class PartialBuiltSlicedVectBucket[K, Y <: Bucket](input:VectTerm[K, _], val key
   }
 
 
-  def last(): VectTerm[K, Y#OUT] = {
+  def last(): VectTerm[K, OUT] = {
     reset[Null](null)(SliceTriggerSpec.NULL).last()
 //    val cellBuilder = (i:Int, k:K) => {
 //      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
@@ -656,9 +657,9 @@ class PartialBuiltSlicedVectBucket[K, Y <: Bucket](input:VectTerm[K, _], val key
   }
 
   // NODEPLOY - delegate remaining Term interface calls here using lazyVal approach
-  def all(): VectTerm[K, Y#OUT] = scanAllTerm
+  def all(): VectTerm[K, OUT] = scanAllTerm
 
-  def bind[S](stream: VectTerm[K, S])(adder: Y => S => Unit): PartialBuiltSlicedVectBucket[K, Y] = {
+  def bind[S](stream: VectTerm[K, S])(adder: Y => S => Unit): PartialBuiltSlicedVectBucket[K, Y, OUT] = {
     bindings :+=(stream, adder)
     this
   }
@@ -667,22 +668,23 @@ class PartialBuiltSlicedVectBucket[K, Y <: Bucket](input:VectTerm[K, _], val key
   //NODEPLOY - think:
   // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
   // this avoids needing a new slice trigger definition each slice.
-  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedVectBucketStream[K, S, Y] = {
-    new PartialGroupedVectBucketStream[K, S, Y](input, triggerAlign, keyCellLifecycle, bindings, sliceSpec, ev, env)
+  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedVectBucketStream[K, S, Y, OUT] = {
+    new PartialGroupedVectBucketStream[K, S, Y, OUT](input, triggerAlign, keyCellLifecycle, yOut, bindings, sliceSpec, ev, env)
   }
 }
 
-class PartialGroupedVectBucketStream[K, S, Y <: Bucket](input:VectTerm[K,_],
+class PartialGroupedVectBucketStream[K, S, Y <: Bucket, OUT](input:VectTerm[K,_],
                                                         triggerAlign:SliceAlign,
                                                         keyCellLifecycle:KeyToSliceCellLifecycle[K, Y],
+                                                        cellOut: CellOut[Y, OUT],
                                                         bindings :List[(VectTerm[K, _], (_ => _ => Unit))],
                                                         sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
-  private def buildSliced(reduceType:ReduceType) :VectTerm[K, Y#OUT] = {
+  private def buildSliced(reduceType:ReduceType) :VectTerm[K, OUT] = {
     val cellBuilder = (i:Int, k:K) => {
       val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
       val slicer = triggerAlign match {
-        case BEFORE => new SliceBeforeBucket[S, Y](sliceSpec, cellLifecycle, reduceType, env, ev)
-        case AFTER => new SliceAfterBucket[S, Y](sliceSpec, cellLifecycle, reduceType, env, ev)
+        case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev)
+        case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev)
       }
       // add the captured bindings
       bindings.foreach(pair => {
@@ -696,6 +698,6 @@ class PartialGroupedVectBucketStream[K, S, Y <: Bucket](input:VectTerm[K,_],
     input.newIsomorphicVector(cellBuilder)
   }
 
-  def all():VectTerm[K, Y#OUT] = buildSliced(ReduceType.CUMULATIVE)
-  def last():VectTerm[K, Y#OUT] = buildSliced(ReduceType.LAST)
+  def all():VectTerm[K, OUT] = buildSliced(ReduceType.CUMULATIVE)
+  def last():VectTerm[K, OUT] = buildSliced(ReduceType.LAST)
 }

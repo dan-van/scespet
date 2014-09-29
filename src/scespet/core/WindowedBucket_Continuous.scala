@@ -16,14 +16,14 @@ import gsa.esg.mekon.core.EventGraphObject
  * todo: seems so similar in concept that it feels odd to have two different classes.
  * todo: will think more on this.
  */
-class WindowedBucket_Continuous[Y <: Bucket](val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], env :types.Env) extends SlicedBucket[Y] {
+class WindowedBucket_Continuous[Y <: Bucket, OUT](cellOut:CellOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], env :types.Env) extends SlicedBucket[Y, OUT] {
   private var inWindow = if (windowEvents == null) true else windowEvents.value
 
   private var nextReduce : Y = _
   private var completedReduce : Y = _
 
   var valueSrc:Y = _ // this has to toggle between nextReduce, and completedReduce
-  def value : Y#OUT = valueSrc.value
+  def value : OUT = cellOut.out(valueSrc)
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
@@ -140,7 +140,7 @@ class WindowedBucket_Continuous[Y <: Bucket](val windowEvents :HasValue[Boolean]
       // this is a close event
       return true
     }
-    if (env.hasChanged(value)) {
+    if (env.hasChanged(valueSrc)) {
       // fire value changes
       return true
     }

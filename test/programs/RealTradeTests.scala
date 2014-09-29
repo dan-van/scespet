@@ -121,9 +121,6 @@ object TestPlots extends RealTradeTests {
 }
 
 class TradeQuoteStats(key:String) extends Bucket {
-  type OUT=TradeQuoteStats
-  def value: TradeQuoteStats = this
-
   var t:Trade = _
   var q:Quote = _
   var events:Int = 0
@@ -181,8 +178,7 @@ object TestBucket extends RealTradeTests {
   val trades = universe.keyToStream(u => getTradeEvents(u))
   val quotes = universe.keyToStream(u => getQuoteEvents(u))
 
-  class Red(key:String) extends Bucket {
-    type OUT=Int
+  class Red(key:String) extends Bucket with OutTrait[Int]{
     var t:Trade = _
     var q:Quote = _
     var events:Int = 0
@@ -264,9 +260,6 @@ object SimpleSpreadStats extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O"))
 
   class SpreadStats(key:String) extends Bucket {
-    type OUT=SpreadStats
-    val value = this
-
     val quotes = getQuoteEvents(key)
     env.addListener(quotes.getTrigger, this)
 

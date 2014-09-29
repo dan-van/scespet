@@ -19,7 +19,7 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceAfterBucket[S, Y <: Cell](val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y] {
+class SliceAfterBucket[S, Y, OUT](cellOut:CellOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y, OUT] {
   var awaitingNextEventAfterReset = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
 
   private val joinValueRendezvous = new types.MFunc {
@@ -66,7 +66,7 @@ class SliceAfterBucket[S, Y <: Cell](val sliceSpec :S, cellLifecycle :SliceCellL
   private def resetCurrentReduce() {
     if (nextReduce != null) {
       cellLifecycle.closeCell(nextReduce)
-      completedReduceValue = nextReduce.value  // Intellij thinks this a a compile error - it isn't
+      completedReduceValue = cellOut.out(nextReduce)  // Intellij thinks this a a compile error - it isn't
       cellLifecycle.reset(nextReduce)
     }
     awaitingNextEventAfterReset = true
@@ -86,10 +86,10 @@ class SliceAfterBucket[S, Y <: Cell](val sliceSpec :S, cellLifecycle :SliceCellL
     false
   }
 
-  private var completedReduceValue : Y#OUT = _
+  private var completedReduceValue : OUT = _
 
   // if awaitingNextEventAfterReset then the nextReduce has been reset, and we should be exposing the last snap (even if we're in CUMULATIVE mode)
-  def value = if (emitType == ReduceType.LAST || awaitingNextEventAfterReset) completedReduceValue else nextReduce.value
+  def value :OUT = if (emitType == ReduceType.LAST || awaitingNextEventAfterReset) completedReduceValue else cellOut.out(nextReduce)
 //  initialised = value != null
   initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket

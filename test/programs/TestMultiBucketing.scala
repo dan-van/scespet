@@ -66,8 +66,6 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
   class XYCollector() extends Bucket {
-    type OUT=XYCollector
-    def value = this
     var firstX:Int = -1
     var lastX:Int = -1
     var xChanged ,yChanged = 0

@@ -63,8 +63,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     override def add(x: X): Unit = value :+= x
   }
 
-  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
-    type OUT = Seq[X]
+  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket with OutTrait[Seq[X]]{
     var value = Seq[X]()
     env.addListener(in.trigger, this)
     if (in.initialised) {
@@ -82,8 +81,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     override def open(): Unit = value = Nil
   }
 
-  class BindableAppendFunc[X] extends Bucket {
-    type OUT = Seq[X]
+  class BindableAppendFunc[X] extends Bucket with OutTrait[Seq[X]]{
     var value = Seq[X]()
 
     def add(x:X) {

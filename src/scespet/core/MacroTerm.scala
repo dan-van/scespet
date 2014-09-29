@@ -237,10 +237,10 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 
   def window(window:HasValue[Boolean]) : GroupedTerm[X] = {
     val uncollapsed = new UncollapsedGroup[X] {
-      def applyB[B <: Bucket](lifecycle: SliceCellLifecycle[B], reduceType: ReduceType): HasVal[B#OUT] = {
+      def applyB[B <: Bucket, OUT](lifecycle: SliceCellLifecycle[B], reduceType: ReduceType, cellOut:CellOut[B,OUT]): HasVal[OUT] = {
         reduceType match {
-          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B](window, lifecycle, env)
-          case ReduceType.LAST => new WindowedBucket_LastValue[B](window, lifecycle, env)
+          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, window, lifecycle, env)
+          case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, window, lifecycle, env)
         }
       }
 
@@ -257,17 +257,17 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
     new GroupedTerm[X](uncollapsed, env)
   }
 
-  def bindTo[B <: Bucket](newBFunc: => B)(adder: B => X => Unit) :PartialBuiltSlicedBucket[B] = {
+  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit yOut :AggOut[B, OUT]) :PartialBuiltSlicedBucket[B,OUT] = {
     val cellLifeCycle:SliceCellLifecycle[B] = new BucketCellLifecycle[B] {
       override def newCell(): B = newBFunc
     }
-    return new PartialBuiltSlicedBucket[B](cellLifeCycle, env).bind(this)(adder)
+    return new PartialBuiltSlicedBucket[B, OUT](yOut, cellLifeCycle, env).bind(this)(adder)
   }
 }
 
 //type UncollapsedGroup[C <: Cell] = (C) => C#OUT
 trait UncollapsedGroup[IN] {
-  def applyB[B <: Bucket](lifecycle:SliceCellLifecycle[B], reduceType:ReduceType) :HasVal[B#OUT]
+  def applyB[B <: Bucket, OUT](lifecycle:SliceCellLifecycle[B], reduceType:ReduceType, cellOut:CellOut[B,OUT]) :HasVal[OUT]
   def applyAgg[A, OUT](lifecycle:SliceCellLifecycle[A], adder:A => CellAdder[IN], cellOut:CellOut[A,OUT], reduceType:ReduceType) :HasVal[OUT]
 }
 
@@ -276,10 +276,10 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, trigge
     new SlicedReduce[S, IN, A, OUT](input, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, ev)
   }
 
-  def applyB[B <: Bucket](lifecycle: SliceCellLifecycle[B], reduceType:ReduceType): HasVal[B#OUT] = {
+  def applyB[B <: Bucket, OUT](lifecycle: SliceCellLifecycle[B], reduceType:ReduceType, cellOut:CellOut[B,OUT]): HasVal[OUT] = {
     triggerAlign match {
-      case BEFORE => new SliceBeforeBucket[S, B](sliceSpec, lifecycle, reduceType, env, ev)
-      case AFTER => new SliceAfterBucket[S, B](sliceSpec, lifecycle, reduceType, env, ev)
+      case BEFORE => new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
+      case AFTER => new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
       case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
     }
   }
@@ -308,36 +308,36 @@ class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.En
 }
 
 // NODEPLOY this should be a Term that also supports partitioning operations
-class PartialBuiltSlicedBucket[Y <: Bucket](val cellLifecycle: SliceCellLifecycle[Y], val env:Environment) {
+class PartialBuiltSlicedBucket[Y <: Bucket, OUT](cellOut:CellOut[Y,OUT], val cellLifecycle: SliceCellLifecycle[Y], val env:Environment) {
   var bindings = List[(HasVal[_], (_ => _ => Unit))]()
 
-  private lazy val scanAllTerm: MacroTerm[Y#OUT] = {
-    val slicer = new SliceAfterBucket[Null, Y](null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL)
+  private lazy val scanAllTerm: MacroTerm[OUT] = {
+    val slicer = new SliceAfterBucket[Null, Y, OUT](cellOut, null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL)
     // add the captured bindings
     bindings.foreach(pair => {
       val (hasVal, adder) = pair
       type IN = Any
       slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
     })
-    new MacroTerm[Y#OUT](env)(slicer)
+    new MacroTerm[OUT](env)(slicer)
   }
 
 
-  def last(): MacroTerm[Y#OUT] = {
-    val slicer = new SliceBeforeBucket[Any, Y](null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION)
+  def last(): MacroTerm[OUT] = {
+    val slicer = new SliceBeforeBucket[Any, Y, OUT](cellOut:CellOut[Y,OUT], null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION)
     // add the captured bindings
     bindings.foreach(pair => {
       val (hasVal, adder) = pair
       type IN = Any
       slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
     })
-    new MacroTerm[Y#OUT](env)(slicer)
+    new MacroTerm[OUT](env)(slicer)
   }
 
   // NODEPLOY - delegate remaining Term interface calls here using lazyVal approach
-  def all(): MacroTerm[Y#OUT] = scanAllTerm
+  def all(): MacroTerm[OUT] = scanAllTerm
 
-  def bind[S](stream: HasVal[S])(adder: Y => S => Unit): PartialBuiltSlicedBucket[Y] = {
+  def bind[S](stream: HasVal[S])(adder: Y => S => Unit): PartialBuiltSlicedBucket[Y, OUT] = {
     bindings :+=(stream, adder)
     this
   }
@@ -346,8 +346,8 @@ class PartialBuiltSlicedBucket[Y <: Bucket](val cellLifecycle: SliceCellLifecycl
   //NODEPLOY - think:
   // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
   // this avoids needing a new slice trigger definition each slice.
-  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y] = {
-    new PartialGroupedBucketStream[S, Y](triggerAlign, cellLifecycle, bindings, sliceSpec, ev, env)
+  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y, OUT] = {
+    new PartialGroupedBucketStream[S, Y, OUT](cellOut, triggerAlign, cellLifecycle, bindings, sliceSpec, ev, env)
   }
 }
 

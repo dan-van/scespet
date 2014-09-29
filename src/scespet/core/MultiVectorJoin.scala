@@ -17,10 +17,10 @@ import scespet.core.VectorStream.ReshapeSignal
  */
 class BucketJoin[K,V,B](val source:VectorStream[K,V], val joinFunc:B=>V=>Unit)
 
-abstract class MultiVectorJoin[K, X, B <: Bucket](
+abstract class MultiVectorJoin[K, X, B <: Bucket, OUT](
                       sourceShape:VectorStream[K,_],
                       sourceJoins:List[BucketJoin[K, _, B]],
-                      env:types.Env) extends AbstractVectorStream[K, B#OUT](env) with types.MFunc {
+                      env:types.Env) extends AbstractVectorStream[K, OUT](env) with types.MFunc {
   def isInitialised: Boolean = sourceShape.isInitialised
 
   /*
@@ -36,7 +36,7 @@ abstract class MultiVectorJoin[K, X, B <: Bucket](
         val myIndex = indexOf(k)
         if (myIndex >= 0) {
           type IN = Any
-          val bucketCell :SlicedBucket[B] = getValueHolder(myIndex).asInstanceOf[SlicedBucket[B]]
+          val bucketCell :SlicedBucket[B, OUT] = getValueHolder(myIndex).asInstanceOf[SlicedBucket[B, OUT]]
           val joinInputHasVal = inVector.getValueHolder(i).asInstanceOf[HasVal[IN]]
           val bucketJoinDefinition = joinDef.asInstanceOf[BucketJoin[K, IN, B]]
           val adder = bucketJoinDefinition.joinFunc
@@ -75,7 +75,7 @@ abstract class MultiVectorJoin[K, X, B <: Bucket](
     updated
   }
 
-  override def getValueHolder(i: Int): SlicedBucket[B] = super.getValueHolder(i).asInstanceOf[SlicedBucket[B]]
+  override def getValueHolder(i: Int): SlicedBucket[B, OUT] = super.getValueHolder(i).asInstanceOf[SlicedBucket[B, OUT]]
 
   val getNewColumnTrigger :VectorStream.ReshapeSignal = new ReshapeSignal(env) {
     var x_seenKeys = 0  // rename to thisSeenKeys
@@ -96,7 +96,7 @@ abstract class MultiVectorJoin[K, X, B <: Bucket](
     }
   }
 
-  def newCell(i: Int, key: K):SlicedBucket[B] = {
+  def newCell(i: Int, key: K):SlicedBucket[B, OUT] = {
     val bucketCell = createBucketCell(key)
     // bind the cell up to listen to all its input bindings.
     for (joinDef <- sourceJoins) {
@@ -113,7 +113,7 @@ abstract class MultiVectorJoin[K, X, B <: Bucket](
     bucketCell
   }
 
-  def createBucketCell(key:K) :SlicedBucket[B]
+  def createBucketCell(key:K) :SlicedBucket[B, OUT]
 }
 
 object MultiVectorJoin {

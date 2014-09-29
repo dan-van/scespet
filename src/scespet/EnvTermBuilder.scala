@@ -90,14 +90,14 @@ class EnvTermBuilder() extends DelayedInit {
     })
   }
 
-  def streamOf2[Y <: Bucket](newCellFunc: => Y) : PartialBuiltSlicedBucket[Y] = {
+  def streamOf2[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT]) : PartialBuiltSlicedBucket[Y, OUT] = {
     //    if (data.isInstanceOf[EventSource]) {
     //      env.registerEventSource(data.asInstanceOf[EventSource])
     //    }
     val cellLifeCycle:SliceCellLifecycle[Y] = new BucketCellLifecycle[Y] {
       override def newCell(): Y = newCellFunc
     }
-    return new PartialBuiltSlicedBucket[Y](cellLifeCycle, env)
+    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
   }
 
 

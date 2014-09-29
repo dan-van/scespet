@@ -49,7 +49,7 @@ trait OutTrait[O] {
   def value():O
 }
 
-trait AggOut[A, O] {
+trait AggOut[A, O] extends CellOut[A,O]{
   def out(a:A):O
 }
 

@@ -28,7 +28,7 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y] {
+class SliceBeforeBucket[S, Y <: Bucket, OUT](cellOut:CellOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y, OUT] {
   if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
@@ -109,7 +109,7 @@ class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCe
       throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
     }
     cellLifecycle.closeCell(nextReduce)
-    completedReduce = nextReduce.value  // Intellij thinks this a a compile error - it isn't
+    completedReduce = cellOut.out(nextReduce)
   }
 
   // NOTE: closeCurrentBucket should always be called before this!
@@ -131,11 +131,11 @@ class SliceBeforeBucket[S, Y <: Bucket](val sliceSpec :S, cellLifecycle :SliceCe
     false
   }
 
-  private var completedReduce : Y#OUT = _
+  private var completedReduce : OUT = _
 
-  def value:Y#OUT = {
+  def value:OUT = {
     if (emitType == ReduceType.CUMULATIVE)
-      nextReduce.value // Intellij thinks this a a compile error - it isn't
+      cellOut.out(nextReduce)
     else
       completedReduce
   }

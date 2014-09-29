@@ -19,7 +19,7 @@ import scespet.util.Logged
  *
  */
  
-abstract class SlicedBucket[C <: Cell] extends UpdatingHasVal[C#OUT] with Logged {
+abstract class SlicedBucket[C, OUT] extends UpdatingHasVal[OUT] with Logged {
   def addInputBinding[IN](in:HasVal[IN], adder:C=>IN=>Unit)
 }
 
