@@ -283,4 +283,3 @@ object SimpleSpreadStats extends RealTradeTests {
   out("ModeSpread")(modeSpread)
   env.run()
 }
-

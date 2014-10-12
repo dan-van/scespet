@@ -3,7 +3,6 @@ package programs
 import org.junit.runner.RunWith
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit, JUnitRunner}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
-import scespet.core.CellOut.CellToOut
 import scespet.core.CellOut2.Ident2
 import scespet.core._
 import scespet.core.types.{MFunc, IntToEvents}

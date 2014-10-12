@@ -249,7 +249,7 @@ trait Term[X] {
    */
   def sample(evt:EventGraphObject):MacroTerm[X]
 
-  def filterType[T:ClassTag]():Term[T] = {
+  def filterType[T:ClassTag]:Term[T] = {
     filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
   }
 
@@ -261,7 +261,7 @@ trait Term[X] {
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
-class PartialGroupedBucketStream[S, Y <: Bucket, OUT](cellOut:CellOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
+class PartialGroupedBucketStream[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
   private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y, OUT] = {
     val slicedBucket = triggerAlign match {
       case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
@@ -286,8 +286,13 @@ class PartialGroupedBucketStream[S, Y <: Bucket, OUT](cellOut:CellOut[Y,OUT], tr
   }
 }
 
+object MultiTerm {
+  implicit def identTraversable[X] : X => TraversableOnce[X] = (x:X) => Traversable(x)
+}
+
 trait MultiTerm[K,X] {
   implicit def eventObjectToHasVal[E <: types.EventGraphObject](evtObj:E) :HasVal[E] = new IsVal(evtObj)
+
 
   /**
    * for symmetry with MacroTerm.value

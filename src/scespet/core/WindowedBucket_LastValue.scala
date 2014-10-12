@@ -26,7 +26,7 @@ import scespet.core._
  * todo: seems so similar in concept that it feels odd to have two different classes.
  * todo: will think more on this.
  */
-class WindowedBucket_LastValue[Y <: Bucket, OUT](cellOut:CellOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], env :types.Env) extends SlicedBucket[Y, OUT] {
+class WindowedBucket_LastValue[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], env :types.Env) extends SlicedBucket[Y, OUT] {
   private var inWindow = if (windowEvents == null) true else windowEvents.value
 
   private var nextReduce : Y = _

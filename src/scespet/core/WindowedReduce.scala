@@ -8,7 +8,7 @@ package scespet.core
  *
  * NODEPLOY - I don't think this one is properly tested
  */
-class WindowedReduce[X, Y, OUT](val dataEvents :HasValue[X], val cellAdder:Y => CellAdder[X], cellOut:CellOut[Y,OUT], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[OUT] {
+class WindowedReduce[X, Y, OUT](val dataEvents :HasValue[X], val cellAdder:Y => CellAdder[X], cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], newReduce :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env) extends UpdatingHasVal[OUT] {
     env.addListener(dataEvents.getTrigger, this)
     env.addListener(windowEvents.getTrigger, this)
 

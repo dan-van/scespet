@@ -5,7 +5,7 @@ import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 /**
  * Hmm, this was an initial version of reducing. It is simpler (and probably more efficient) than the SlicedBucket implementations, as it does not try to do a rendezvous of incoming event streams
  */
-class SlicedReduce[S, X, Y, OUT](val dataEvents :HasValue[X], val cellValueAdd:Y => CellAdder[X], cellOut:CellOut[Y,OUT], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S]) extends UpdatingHasVal[OUT] {
+class SlicedReduce[S, X, Y, OUT](val dataEvents :HasValue[X], val cellValueAdd:Y => CellAdder[X], cellOut:AggOut[Y,OUT], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S]) extends UpdatingHasVal[OUT] {
   var newSliceNextEvent = false
   val sliceEvents = sliceBuilder.buildTrigger(sliceSpec, Set(dataEvents.getTrigger), env)
   

@@ -9,47 +9,11 @@ import scala.reflect.ClassTag
  * Created by danvan on 27/08/2014.
  */
 
-//NODEPLOY this is the same as AggOut
-trait CellOut[C,OUT] {
-//  type O
-  def out(c:C):OUT
-}
-
-object CellOut {
-  class OutTraitToCellOut[T <: OutTrait[O],O]() extends CellOut[T,O] {
-    override def out(c: T): O = c.value().asInstanceOf[O]
-  }
-  class Ident[X] extends CellOut[X,X] {
-//    type O = X
-    override def out(c: X): X = c
-  }
-
-  // NODEPLOY delete me
-  implicit object CellToOut extends CellOut[Cell, Cell#OUT] {
-    override def out(c: Cell): Cell#OUT = c.value
-  }
-  implicit object SetToOut extends CellOut[Set[_], Set[_]] {
-    override def out(c: Set[_]): Set[_] = c
-  }
-  implicit def extendsToOut[Y <: Cell](ev :Y <:< Cell) :CellOut[Y,Y#OUT] = {
-    new CellOut[Y, Y#OUT]{
-      override def out(c: Y): Y#OUT = c.value
-    }
-  }
-
-  implicit def extendsSToOut[Y <: Set[_]](ev :Y <:< Set[_]) :CellOut[Y,Y] = {
-    new CellOut[Y, Y]{
-      override def out(c: Y): Y = c
-    }
-  }
-  implicit def setToOut[X](set:collection.mutable.Set[X]) = new Ident[collection.mutable.Set[X]]
-}
-
 trait OutTrait[O] {
   def value():O
 }
 
-trait AggOut[A, O] extends CellOut[A,O]{
+trait AggOut[A, O] {
   def out(a:A):O
 }
 
