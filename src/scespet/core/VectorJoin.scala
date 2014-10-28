@@ -46,6 +46,11 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
       }
     }
 
+    var value:(X,Y) = null
+
+    // since calculate doesn't depend on hasChanged, we can use it for initialisation too:
+    initialised = calculate()
+
     def calculate() = {
       var fire = false
       val xVal = if (xIndex >= 0 && xCell.initialised() ) {
@@ -66,8 +71,6 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
         true
       } else false
     }
-
-    var value:(X,Y) = null
   }
 
 
@@ -121,7 +124,9 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
       val fired = cell.calculate()
       // this cell is now initialised
       if (fired && !cell.initialised) {
-        throw new AssertionError("Cell should have been initialised by calculate: "+cell+" for key "+key)
+        throw new AssertionError("Cell should have been initialised by calculate:\n" +
+          "Cell="+cell+"\n" +
+          "for key "+key)
       }
     }
     cell

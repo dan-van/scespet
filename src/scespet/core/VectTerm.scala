@@ -1,5 +1,7 @@
 package scespet.core
 
+import java.util.logging.Logger
+
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
 import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, AggSliceCellLifecycle, BucketCellLifecycleImpl}
 import scespet.core.VectorStream.ReshapeSignal
@@ -19,6 +21,7 @@ import scala.Some
  * To change this template use File | Settings | File Templates.
  */
 class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends MultiTerm[K,X] {
+  val logger = Logger.getLogger(classOf[VectTerm[_,_]].getName)
   import scala.collection.JavaConverters._
   import scala.collection.JavaConversions._
 
@@ -155,6 +158,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
 
       var value:Y = _
+
+      // calculate doesn't depend on hasChanged, so we can use the same logic for initilisation
+      initialised = calculate()
+
       def calculate() = {
         val inputValue = input.get(index)
         if (inputValue == null) {
@@ -172,11 +179,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       }
     }
     val cellBuilder = (index:Int, key:K) => new MapCell(index)
-//    val cellBuilder = (index:Int, key:K) => {
-//      val cellUpdateFunc = () => { f(input.get(index)) }
-//      val initial = cellUpdateFunc()
-//      new Generator[Y](initial, cellUpdateFunc)
-//    }
     return newIsomorphicVector(cellBuilder)
   }
 
@@ -223,7 +225,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         }
       }
     }
-    val cellBuilder = (index:Int, key:K) => new MapCell(index)
+    val cellBuilder = (index:Int, key:K) => {
+      val newCell = new MapCell(index)
+      if (input.getValueHolder(index).initialised()) {
+        // initialise it if the input is already initialised
+        newCell.calculate()
+      }
+      newCell
+    }
     return newIsomorphicVector(cellBuilder)
   }
 
@@ -266,15 +275,23 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         val hasInputValue = sourceCell.initialised()
         val hasChanged = env.hasChanged(sourceTrigger)
         if (hasChanged && !hasInputValue) {
-          println("WARN: didn't expect this")
+          println("NODEPLOY - didn't expect hasChanged=true, but initialised=false for "+sourceCell)
         }
         val oldIsInitialised = hasInputValue || hasChanged
         if (oldIsInitialised && !cellFunc.initialised) {
-          val hasInitialOutput = cellFunc.calculate()
-
-          if (hasInitialOutput && ! cellFunc.initialised) {
-            throw new AssertionError("Cell should have been initialised by calculate: "+cellFunc+" for key "+key)
-          }
+//          warn instead? Is it jus the decision of cellFunc?
+//          throw new UnsupportedOperationException("newCell construction needs to yield an initialised value, given that the input cell is initialised:\n" +
+          logger.warning("newCell constructed non-initialised, but input is initialised. We may not want to do this:\n" +
+            "Input = "+sourceCell+"\n" +
+            "newCell = "+cellFunc+" from\n" +
+            "cellBuilder="+cellBuilder+" on key="+key)
+//          env.wakeupThisCycle(cellFunc)
+          // NODEPLOY - this is not good. we don't know if cellFunc will guard itself with hasChanged
+//          val hasInitialOutput = cellFunc.calculate()
+//
+//          if (hasInitialOutput && ! cellFunc.initialised) {
+//            throw new AssertionError("Cell should have been initialised by calculate: "+cellFunc+" for key "+key)
+//          }
         }
         return cellFunc
       }
@@ -318,9 +335,15 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
       private def bindNewCells() {
         for (i <- maxTriggerIdx to input.getSize - 1) {
-          val x = input.get(i)
-          // expand x and add elements
-          this.addAll( expand(x).toIterable.asJava)
+          val inputCell = input.getValueHolder(i)
+          if (inputCell.initialised()) {
+            // expand x and add elements
+            val x = inputCell.value()
+            this.addAll(expand(x).toIterable.asJava)
+          } else {
+            // NODEPLOY - check this, test it somehow
+            println("cell not initialised yet: "+inputCell)
+          }
           // install a listener to keep doing this
           val cellTrigger = input.getTrigger(i)
           env.addListener(cellTrigger, new types.MFunc() {
@@ -508,7 +531,10 @@ class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: Uncol
 //  private [core] def newCellsDependOn(prerequisite :EventGraphObject) = {
 //    orderDepends :+= term
 //  }
-  def last :VectTerm[K,X] = ???
+  def last :VectTerm[K,X] = {
+    val ident :K=>MutableValue[X] = (k:K) => {val idx = input.input.indexOf(k); new MutableValue(input.input.get(idx))}
+    reduce(ident)
+  }
 
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :VectTerm[K,O] = {
     collapse((k:K) => newBFunc, adder, yOut, ReduceType.LAST)
@@ -551,7 +577,7 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
         val cellLifecycle = lifecycle.lifeCycleForKey(k)
         val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
         println("New sliced reduce for key: " + k + " from source: " + inputVector)
-        new SlicedReduce[S, IN, A, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv)
+        new SlicedReduce[S, IN, A, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
       }
       // NODEPLOY - if I could ask lifeCycle if its cells
       override def dependsOn: Set[EventGraphObject] = newCellDependencies

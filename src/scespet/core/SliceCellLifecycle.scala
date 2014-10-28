@@ -82,6 +82,7 @@ object CellOut2 {
 trait CellAdder[-X] {
   def add(x:X)
 }
+
 object CellAdder {
   implicit def aggToAdder[X](agg:CellAdder[X]) :CellAdder[X] = agg
   implicit def setToAdder[X](set:collection.mutable.Set[X]) :CellAdder[X] = new CellAdder[X] {
@@ -102,6 +103,14 @@ object CellAdder {
 //  implicit class AggSliceToAdder[A, X](ev:A <:< Agg[X]) extends CellAdder[A, X] {
 //    override def addTo(c: A, x: X): Unit = ev.apply(c).add(x)
 //  }
+}
+
+// this is very like HasVal[X], should they be related?
+class MutableValue[X](x:X) extends CellAdder[X] with OutTrait[X] {
+  private var _x:X = x
+  override def add(x: X): Unit = _x = x
+
+  override def value(): X = _x
 }
 
 trait SliceCellLifecycle[C] {

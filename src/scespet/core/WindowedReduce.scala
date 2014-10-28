@@ -1,5 +1,7 @@
 package scespet.core
 
+import scespet.core.ReduceType
+
 /**
  * Created with IntelliJ IDEA.
  * User: danvan
@@ -19,6 +21,16 @@ class WindowedReduce[X, Y, OUT](val dataEvents :HasValue[X], val cellAdder:Y => 
   var completedReduce : Y = newReduce.newCell()
 
   def value = cellOut.out( if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce )
+
+  // do Init
+  {
+    if (inWindow) {
+      if (dataEvents.initialised()) {
+        cellAdder(nextReduce).add(dataEvents.value)
+        initialised = emitType == ReduceType.CUMULATIVE
+      }
+    }
+  }
 
   def calculate():Boolean = {
     var isNowOpen = inWindow

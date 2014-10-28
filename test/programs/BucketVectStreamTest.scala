@@ -263,7 +263,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 // -------------- tricky composition of self-generator and binding
-  test("MFunc bind scan") {
+  ignore("MFunc bind scan") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
@@ -291,7 +291,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  test("MFunc bind reduce") {
+  ignore("MFunc bind reduce") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
@@ -306,7 +306,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  test("MFunc bind grouped scan") {
+  ignore("MFunc bind grouped scan") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
@@ -333,7 +333,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  test("MFunc bind grouped reduce") {
+  ignore("MFunc bind grouped reduce") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false
       override def apply(v1: Char): Boolean = { accept = !accept; accept }

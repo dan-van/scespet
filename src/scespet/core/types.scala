@@ -158,13 +158,6 @@ trait Cell {
   def value :OUT
 }
 
-class CellFromAgg[A <: Agg[_]] extends Cell {
-  type OUT = A#OUT
-  var agg:A = _
-  // argh - why the asInstanceOf?
-  override def value = agg.value.asInstanceOf[OUT]
-}
-
 /**
  * More traditional parameterised type version of Agg (rather than using dependent object types)
  * @tparam X

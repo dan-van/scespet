@@ -272,7 +272,11 @@ trait UncollapsedGroup[IN] {
 
 class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, triggerAlign:SliceAlign, env:types.Env, ev: SliceTriggerSpec[S]) extends UncollapsedGroup[IN] {
   def applyAgg[A, OUT](lifecycle: SliceCellLifecycle[A], adder:A => CellAdder[IN], cellOut:AggOut[A,OUT], reduceType:ReduceType): HasVal[OUT] = {
-    new SlicedReduce[S, IN, A, OUT](input, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, ev)
+    // note: exposeInitialValue = false because for a single stream, I don't want any downstream map operations to be applied
+    // until first event arrives.
+    // I'm a little unsure about this, perhaps it is an aspect of the query expression itself whether downstream
+    // map oprerations should be a applied to an empty input value?
+    new SlicedReduce[S, IN, A, OUT](input, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, ev, exposeInitialValue = false)
   }
 
   def applyB[B <: Bucket, OUT](lifecycle: SliceCellLifecycle[B], reduceType:ReduceType, cellOut:AggOut[B,OUT]): HasVal[OUT] = {
