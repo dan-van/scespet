@@ -28,7 +28,7 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceBeforeBucket[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S]) extends SlicedBucket[Y, OUT] {
+class SliceBeforeBucket[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
   if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
@@ -139,9 +139,20 @@ class SliceBeforeBucket[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val sliceSpe
     else
       completedReduce
   }
-//  initialised = value != null
-  initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
-                      // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
+
+  if (emitType == ReduceType.LAST) {
+    initialised = false
+  } else {
+    // hmm, interesting implications here.
+    // a CUMULATIVE reduce will be pushing out state changes for each new datapoint.
+    // the question is, is the state valid for downstream map/filter/join before that first datapoint has arrived?
+    // i.e. are we happy exposing the emptystate of nextReduce?
+    // maybe this answer is up to the implementation of Y?
+
+    // NODEPLOY think about this further, but I'm going with nextReduce is in valid state now.
+    // todo: maybe we could tweak this if Y instanceof something with initialisation state?
+    initialised = exposeInitialValue
+  }
 
   def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
     joinValueRendezvous.addInputBinding(in, adder)

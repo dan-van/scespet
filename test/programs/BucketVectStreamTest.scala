@@ -67,7 +67,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     var value = Seq[X]()
     env.addListener(in.trigger, this)
     if (in.initialised) {
-      env.fireAfterChangingListeners(this)
+      env.fireAfterChangingListeners(this) // do my initialisation
     }
     override def calculate(): Boolean = {
       append(in.value)
@@ -263,7 +263,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 // -------------- tricky composition of self-generator and binding
-  ignore("MFunc bind scan") {
+  test("MFunc bind scan") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false
       override def apply(v1: Char): Boolean = { accept = !accept; accept }

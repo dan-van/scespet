@@ -3,7 +3,11 @@ package scespet.core;
 import gsa.esg.mekon.core.EventGraphObject;
 import gsa.esg.mekon.core.Function;
 
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -21,6 +25,8 @@ import java.util.logging.Logger;
  */
 public class SlowGraphWalk {
     private static final Logger logger = Logger.getLogger(SlowGraphWalk.class.getName());
+
+    EventTrace eventLogger = new EventTrace(this);
 
     public class Node {
         private int lastFired = -1;
@@ -143,6 +149,7 @@ public class SlowGraphWalk {
             targetNode.addIn(sourceNode);
             propagationSweep++;
             propagateOrder(targetNode, sourceNode.order);
+            eventLogger.addListener(sourceNode, targetNode);
         }
     }
 
@@ -156,6 +163,7 @@ public class SlowGraphWalk {
         } else {
             Node sourceNode = getNode(source);
             Node targetNode = getNode(target);
+            eventLogger.removeListener(sourceNode, targetNode);
             sourceNode.removeOut(targetNode);
             targetNode.removeIn(sourceNode);
         }
@@ -183,17 +191,17 @@ public class SlowGraphWalk {
     }
 
     private void propagateOrder(Node targetNode, int greaterThan) {
-        if (targetNode.lastPropagationSweep < propagationSweep) {
-            if (targetNode.order <= greaterThan) {
+        if (targetNode.order <= greaterThan) {
+            if (targetNode.lastPropagationSweep < propagationSweep) {
                 targetNode.lastPropagationSweep = propagationSweep;
                 int newGreater = greaterThan + 1;
                 targetNode.order = newGreater;
                 for (Node child : targetNode.out) {
                     propagateOrder(child, newGreater);
                 }
+            } else {
+                logger.info("Cyclic graph - I'm hoping my dumb implementation doesn't have to support this (though there are plenty of legitimate reasons to support this)");
             }
-        } else {
-            logger.info("Cyclic graph - I'm hoping my dumb implementation doesn't have to support this (though there are plenty of legitimate reasons to support this)");
         }
     }
 
@@ -217,6 +225,8 @@ public class SlowGraphWalk {
         isFiring = true;
         cycleCount++;
         Node node = getNode(graphObject);
+        eventLogger.beginWalk(node);
+
         joinNodes.add(node);
         while (!joinNodes.isEmpty()) {
             Node next = joinNodes.remove();
@@ -227,14 +237,19 @@ public class SlowGraphWalk {
 
     public void applyChanges() {
         if (!isChanging) {
-            isChanging = true;
             while (!deferredChanges.isEmpty() || !deferredFires.isEmpty()) {
+                if (!isChanging) {
+                    eventLogger.beginApplyingChanges();
+                    isChanging = true;
+                }
+
                 // each time round this loop is effectively a new cycle
                 cycleCount += 1;
                 for (Runnable deferredChange : deferredChanges) {
                     deferredChange.run();
                 }
                 deferredChanges.clear();
+                eventLogger.firingPostBuildEvents(deferredFires);
                 for (EventGraphObject deferredFire : deferredFires) {
                     Node node = getNode(deferredFire);
                     // this is in absence of using a set for deferred fires
@@ -244,7 +259,10 @@ public class SlowGraphWalk {
                 }
                 deferredFires.clear();
             }
-            isChanging = false;
+            if (isChanging) {
+                isChanging = false;
+                eventLogger.endApplyingChanges();
+            }
         } else {
             throw new UnsupportedOperationException("Don't think I need to apply changes in nested fire");
         }
@@ -261,5 +279,62 @@ public class SlowGraphWalk {
         if (graphObject == null)
             throw new IllegalArgumentException("Can't fire a null object");
         deferredFires.add(graphObject);
+    }
+
+    public static class EventTrace {
+        private Logger logger = Logger.getLogger("EventTrace");
+        private SlowGraphWalk graph;
+        private PrintStream out;
+
+        public EventTrace(SlowGraphWalk graph) {
+            this.graph = graph;
+            try {
+                Path outFile = Files.createTempFile("struct", "gdl");
+                out = new PrintStream(outFile.toFile());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public void beginWalk(Node entry) {
+            logger.info("firing from: "+entry.getGraphObject());
+        }
+
+        public void addListener(Node source, Node target) {
+            logger.info("addListener: "+source.getGraphObject()+" -> "+target.getGraphObject());
+        }
+
+        public void removeListener(Node source, Node target) {
+            logger.info("removeListener: "+source.getGraphObject()+" -> "+target.getGraphObject());
+        }
+
+        public void restructured() {
+            logger.info("Structure:");
+            List<Node> all = new ArrayList<>(graph.getAllNodes());
+            Collections.sort(all, new Comparator<Node>() {
+                @Override
+                public int compare(Node o1, Node o2) {
+                    return o1.order - o2.order;
+                }
+            });
+            for (Node node : all) {
+                for (Function listener : node.getListeners()) {
+                    logger.info("\t" + node.getGraphObject() + " -> " + listener);
+                }
+            }
+        }
+
+        public void beginApplyingChanges() {
+            logger.info("Begin structure changes");
+        }
+
+        public void firingPostBuildEvents(List<EventGraphObject> deferredFires) {
+            logger.info("Firing " + deferredFires.size() + " post-build events");
+        }
+
+        public void endApplyingChanges() {
+            logger.info("End change block. New structure:");
+            restructured();
+        }
     }
 }

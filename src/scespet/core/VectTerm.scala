@@ -71,6 +71,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       // construct an empty slot and bind it when the key appears
       val valueHolder = new ChainedCell[X]
       var newColumns: ReshapeSignal = input.getNewColumnTrigger
+      // attach a function that waits for the key to be present in the source vector, and then wires and
+      // initialises the next cell.
       env.addListener(newColumns, new types.MFunc {
         var searchedUpTo = input.getSize
         def calculate():Boolean = {
@@ -79,8 +81,18 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
               val inputCell = input.getValueHolder(i)
               valueHolder.bindTo(inputCell)
               if (inputCell.initialised()) {
-                valueHolder.calculate() // this is possibly overkill - I'll write the tests then remove this line, but I like the idea of it being ready as soon as we respond to the new column
-                env.wakeupThisCycle(valueHolder)  // damn - this is firing before fireAfterChangingListeners catches the underlying cell
+                // NODEPLOY - I think this will be caught by my new initialisation semantics?
+                logger.info("Encountered real cell for speculatively build chained cell on key: "+k+" the input is initialised")
+//                valueHolder.calculate() // this is possibly overkill - I'll write the tests then remove this line, but I like the idea of it being ready as soon as we respond to the new column
+//
+//                env.wakeupThisCycle(valueHolder)  // damn - this is firing before fireAfterChangingListeners catches the underlying cell
+                // we have just connected an existing listener chain to a new input, that is already initialised.
+                // We want to propagate this new value down the listener chain
+                // however, I'm unsure whether this should be wakeupThisCycle, or fireAfterChangingListeners?
+                // wakeup this cycle makes more sense, except for the fact that I don't currently apply structure modifications immediately
+                // therefore we're stuck with fireAfterChangingListeners, but then that means the event is in a different
+                // event cycle to the current firing context
+                env.fireAfterChangingListeners(valueHolder)
               }
               env.removeListener(newColumns, this)
               searchedUpTo = i
@@ -117,6 +129,13 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     def bindTo(newSource: HasValue[C]) {
       this.source = newSource
       env.addListener(newSource.getTrigger, this)
+      if (newSource.initialised()) {
+        calculate() // propagate initialisation
+      }
+    }
+
+    override def toString: String = {
+      "ChainedCell{"+source+"}"
     }
   }
 
@@ -159,10 +178,16 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
       var value:Y = _
 
-      // calculate doesn't depend on hasChanged, so we can use the same logic for initilisation
-      initialised = calculate()
+      if (input.getValueHolder(index).initialised()) {
+        // calculate doesn't depend on hasChanged, so we can use the same logic for initilisation
+        initialised = calculate()
+      } else {
+        // NODEPLOY
+        println(s"vect.map inputcell is not initialised")
+      }
 
       def calculate() = {
+        // note: we're relying on not using env.hasChanged here, because we use this method as initialisation in the constructor
         val inputValue = input.get(index)
         if (inputValue == null) {
           var isInitialised = input.getValueHolder(index).initialised()
@@ -592,10 +617,10 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
         val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
         triggerAlign match {
           case BEFORE => {
-              new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv)
+              new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
           }
           case AFTER => {
-              new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv)
+              new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
           }
           case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
         }
@@ -671,8 +696,8 @@ class PartialGroupedVectBucketStream[K, S, Y <: Bucket, OUT](input:VectTerm[K,_]
     val cellBuilder = (i:Int, k:K) => {
       val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
       val slicer = triggerAlign match {
-        case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev)
-        case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev)
+        case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev, exposeInitialValue = true)
+        case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev, exposeInitialValue = true)
       }
       // add the captured bindings
       bindings.foreach(pair => {

@@ -281,8 +281,8 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, trigge
 
   def applyB[B <: Bucket, OUT](lifecycle: SliceCellLifecycle[B], reduceType:ReduceType, cellOut:AggOut[B,OUT]): HasVal[OUT] = {
     triggerAlign match {
-      case BEFORE => new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
-      case AFTER => new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
+      case BEFORE => new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
+      case AFTER => new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
       case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
     }
   }
@@ -312,7 +312,7 @@ class PartialBuiltSlicedBucket[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val cell
   var bindings = List[(HasVal[_], (_ => _ => Unit))]()
 
   private lazy val scanAllTerm: MacroTerm[OUT] = {
-    val slicer = new SliceAfterBucket[Null, Y, OUT](cellOut, null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL)
+    val slicer = new SliceAfterBucket[Null, Y, OUT](cellOut, null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL, exposeInitialValue = false)
     // add the captured bindings
     bindings.foreach(pair => {
       val (hasVal, adder) = pair
@@ -324,7 +324,7 @@ class PartialBuiltSlicedBucket[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val cell
 
 
   def last(): MacroTerm[OUT] = {
-    val slicer = new SliceBeforeBucket[Any, Y, OUT](cellOut:AggOut[Y,OUT], null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION)
+    val slicer = new SliceBeforeBucket[Any, Y, OUT](cellOut:AggOut[Y,OUT], null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION, exposeInitialValue = false)
     // add the captured bindings
     bindings.foreach(pair => {
       val (hasVal, adder) = pair

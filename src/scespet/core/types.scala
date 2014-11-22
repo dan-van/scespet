@@ -257,8 +257,8 @@ trait Term[X] {
 class PartialGroupedBucketStream[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
   private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y, OUT] = {
     val slicedBucket = triggerAlign match {
-      case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
-      case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev)
+      case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
+      case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
     }
     bindings.foreach(pair => {
       val (hasVal, adder) = pair
