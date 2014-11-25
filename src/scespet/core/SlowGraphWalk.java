@@ -106,6 +106,7 @@ public class SlowGraphWalk {
         }
     });
     private IdentityHashMap<EventGraphObject, Node> nodes = new IdentityHashMap<EventGraphObject, Node>();
+    private List<Node> newNodesThisCycle = new ArrayList<>();
     private int cycleCount = -1;
     private int propagationSweep = 0; // to avoid recursion in cyclic graphs
     private boolean isFiring = false;
@@ -175,7 +176,7 @@ public class SlowGraphWalk {
     }
 
     private boolean hasChanged(Node node) {
-        return node.lastFired == cycleCount && cycleCount >= 0;
+        return node.lastFired >= cycleCount && cycleCount >= 0;
     }
 
     public Iterable<EventGraphObject> getTriggers(EventGraphObject obj) {
@@ -210,6 +211,7 @@ public class SlowGraphWalk {
         if (sourceNode == null) {
             sourceNode = new Node(source);
             nodes.put(source, sourceNode);
+            newNodesThisCycle.add(sourceNode);
         }
         return sourceNode;
     }
@@ -249,8 +251,39 @@ public class SlowGraphWalk {
                     deferredChange.run();
                 }
                 deferredChanges.clear();
+                Collections.sort(newNodesThisCycle, new Comparator<Node>() {
+                    @Override
+                    public int compare(Node o1, Node o2) {
+                        return o1.order - o2.order;
+                    }
+                });
+                int currentCycle = cycleCount;
+                cycleCount = 0; // this effectively makes all nodes that have ever fired be hasChanged==true
+                for (Node node : newNodesThisCycle) {
+                    EventGraphObject graphObject = node.getGraphObject();
+                    List<EventGraphObject> initialisedInputs = new ArrayList<>(node.in.size());
+                    for (Node inputNode : node.in) {
+                        if (hasChanged(inputNode)) {
+                            initialisedInputs.add(inputNode.getGraphObject());
+                        }
+                    }
+                    if (!initialisedInputs.isEmpty()) {
+                        boolean inited = false;
+                        if (graphObject instanceof EventGraphObject.Lifecycle) {
+                            inited = ((EventGraphObject.Lifecycle) graphObject).init(initialisedInputs);
+                        } else if (graphObject instanceof Function) {
+                            inited = ((Function) graphObject).calculate();
+                        }
+                        if (inited) {
+                            node.lastFired = currentCycle;
+                        }
+                    }
+                }
+                // restore it
+                cycleCount = currentCycle;
                 eventLogger.firingPostBuildEvents(deferredFires);
                 for (EventGraphObject deferredFire : deferredFires) {
+                    // NODEPLOY - I think this may now be unecessary!
                     Node node = getNode(deferredFire);
                     // this is in absence of using a set for deferred fires
                     if (node.lastFired < cycleCount) {
