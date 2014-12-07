@@ -1,11 +1,14 @@
 package scespet.core
 
+import java.util
+
+import gsa.esg.mekon.core.EventGraphObject
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 
 /**
  * Hmm, this was an initial version of reducing. It is simpler (and probably more efficient) than the SlicedBucket implementations, as it does not try to do a rendezvous of incoming event streams
  */
-class SlicedReduce[S, X, Y, OUT](val dataEvents :HasValue[X], val cellValueAdd:Y => CellAdder[X], cellOut:AggOut[Y,OUT], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends UpdatingHasVal[OUT] {
+class SlicedReduce[S, X, Y, OUT](val dataEvents :HasValue[X], val cellValueAdd:Y => CellAdder[X], cellOut:AggOut[Y,OUT], val sliceSpec :S, val sliceBefore:Boolean, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, sliceBuilder: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends UpdatingHasVal[OUT] with EventGraphObject.Lifecycle {
   var newSliceNextEvent = false
   val sliceEvents = sliceBuilder.buildTrigger(sliceSpec, Set(dataEvents.getTrigger), env)
   
@@ -27,9 +30,17 @@ class SlicedReduce[S, X, Y, OUT](val dataEvents :HasValue[X], val cellValueAdd:Y
 
   def value = if (emitType == ReduceType.CUMULATIVE) cellOut.out(nextReduce) else completedReduceValue
 
-  if (dataEvents.initialised()) {
-    val newValue = dataEvents.value
-    cellValueAdd(nextReduce).add(newValue)
+
+  override def init(initialisedInputs: util.Collection[EventGraphObject]): Boolean = {
+//    if (dataEvents.initialised()) {
+//      initialised = true
+//      val newValue = dataEvents.value
+//      cellValueAdd(nextReduce).add(newValue)
+//      true
+//    } else {
+//      false
+//    }
+    true
   }
 
   if (emitType == ReduceType.LAST) {
@@ -43,8 +54,10 @@ class SlicedReduce[S, X, Y, OUT](val dataEvents :HasValue[X], val cellValueAdd:Y
 
     // NODEPLOY think about this further, but I'm going with nextReduce is in valid state now.
     // todo: maybe we could tweak this if Y instanceof something with initialisation state?
-    initialised = exposeInitialValue
+    initialised = false
   }
+
+  override def destroy(): Unit = {}
 
   def calculate():Boolean = {
     var fire = emitType == ReduceType.CUMULATIVE // every cumulative event is exposed

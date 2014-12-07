@@ -92,7 +92,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
                 // wakeup this cycle makes more sense, except for the fact that I don't currently apply structure modifications immediately
                 // therefore we're stuck with fireAfterChangingListeners, but then that means the event is in a different
                 // event cycle to the current firing context
-                env.fireAfterChangingListeners(valueHolder)
+//                env.fireAfterChangingListeners(valueHolder)
               }
               env.removeListener(newColumns, this)
               searchedUpTo = i
@@ -130,7 +130,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       this.source = newSource
       env.addListener(newSource.getTrigger, this)
       if (newSource.initialised()) {
-        calculate() // propagate initialisation
+        // propagate initialisation
+        env.wakeupThisCycle(this)
       }
     }
 

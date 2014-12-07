@@ -43,7 +43,7 @@ public interface VectorStream<K, V> {
      */
     ReshapeSignal getNewColumnTrigger();
 
-    public static class ReshapeSignal implements Function {
+    public static class ReshapeSignal implements Function, EventGraphObject.Lifecycle {
         private Environment env;
 
         public ReshapeSignal(Environment env) {
@@ -58,6 +58,16 @@ public interface VectorStream<K, V> {
             newColumnHasValue = newColumnHasValue_pending;
             newColumnHasValue_pending = new TreeMap();
             return ! newColumnHasValue.isEmpty();
+        }
+
+        @Override
+        public boolean init(Collection<EventGraphObject> initialisedInputs) {
+            return true;
+        }
+
+        @Override
+        public void destroy() {
+
         }
 
         public void newColumnAdded(int i) {

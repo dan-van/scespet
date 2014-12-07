@@ -7,7 +7,6 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -27,11 +26,15 @@ public class SlowGraphWalk {
     private static final Logger logger = Logger.getLogger(SlowGraphWalk.class.getName());
 
     EventTrace eventLogger = new EventTrace(this);
+    private Node currentFiringNode = null;
 
     public class Node {
         private int lastFired = -1;
+        private int lastCalculated = -1;
         private Set<Node> in = new HashSet<Node>(2);
         private Set<Node> out = new HashSet<Node>(2);
+        private Set<Node> in_orderingOnly = new HashSet<Node>(2); // used for non-triggering dependencies - as I've said this implementation is for testing rather than a nicely tuned efficient impl.
+        private Set<Node> out_orderingOnly = new HashSet<Node>(2); // used for non-triggering dependencies - as I've said this implementation is for testing rather than a nicely tuned efficient impl.
         private EventGraphObject graphObject;
         private int order = -1;
         private int lastPropagationSweep = -1;
@@ -65,12 +68,22 @@ public class SlowGraphWalk {
             out.add(targetNode);
         }
 
+        public void addOut_Ordering(Node afterNode) {
+            out_orderingOnly.add(afterNode);
+        }
+        public void addIn_Ordering(Node afterNode) {
+            in_orderingOnly.add(afterNode);
+        }
+
         public void removeOut(Node targetNode) {
             out.remove(targetNode);
         }
 
         public void trigger() {
-            if (in.size() > 1) {
+            if (hasChanged(this)) {
+                logger.severe("NODEPLOY already fired!");
+            }
+            if (in.size() + in_orderingOnly.size() > 1) {
                 // it is a rendezvous, punt it
                 if (!joinNodes.contains(this)) {
                     joinNodes.add(this);
@@ -82,8 +95,10 @@ public class SlowGraphWalk {
         }
 
         private void execute() {
+            currentFiringNode = this;
             boolean propagate = true;
             if (graphObject instanceof Function) {
+                lastCalculated = cycleCount;
                 propagate = ((Function) graphObject).calculate();
             }
             if (propagate) {
@@ -123,6 +138,7 @@ public class SlowGraphWalk {
         return allNodes;
     }
 
+    // used to collect all connected incoming and outgoing nodes that connect to this one.
     private void addToNodeSet(Set<Node> allNodes, Node node) {
         if (allNodes.add(node)) {
             for (Node inNode : node.in) {
@@ -137,24 +153,30 @@ public class SlowGraphWalk {
     public void addTrigger(final EventGraphObject source, final Function target) {
         if (source == null) throw new IllegalArgumentException("Null source function firing "+target);
         if (target == null) throw new IllegalArgumentException("Null target function listening to "+source);
-        if (isFiring) {
-            deferredChanges.add(new Runnable() {
-                public void run() {
-                    addTrigger(source, target);
-                }
-            });
-        } else {
-            Node sourceNode = getNode(source);
-            Node targetNode = getNode(target);
-            sourceNode.addOut(targetNode);
-            targetNode.addIn(sourceNode);
-            propagationSweep++;
-            propagateOrder(targetNode, sourceNode.order);
-            eventLogger.addListener(sourceNode, targetNode);
+        Node sourceNode = getNode(source);
+        Node targetNode = getNode(target);
+        sourceNode.addOut(targetNode);
+        targetNode.addIn(sourceNode);
+
+        // NODEPLOY - this should be hasUpdated - i.e. if calc was called, not just if it returned true
+        if (hasCalculated(sourceNode) && !hasCalculated(targetNode)) {
+            // Oh no, violation, target has already fired, source missed it!
+            logger.warning("Target node now listens to something already fired. Need to work out how to get the user to make this safe: " + sourceNode + " -> " + targetNode);
+            wakeup(target);
         }
+
+        propagationSweep++;
+        propagateOrder(targetNode, sourceNode.order);
+        eventLogger.addListener(sourceNode, targetNode);
     }
 
     public void removeTrigger(final EventGraphObject source, final Function target) {
+        Node sourceNode = getNode(source);
+        Node targetNode = getNode(target);
+        if (hasCalculated(sourceNode) && targetNode != currentFiringNode) {
+            throw new UnsupportedOperationException("NODEPLOY - I don't think I want to support this");
+        }
+        // I think we should always apply remove after fire propagation. to dodge tricky questions of removing a link that has already fired (or maybe not fired)
         if (isFiring) {
             deferredChanges.add(new Runnable() {
                 public void run() {
@@ -162,12 +184,20 @@ public class SlowGraphWalk {
                 }
             });
         } else {
-            Node sourceNode = getNode(source);
-            Node targetNode = getNode(target);
             eventLogger.removeListener(sourceNode, targetNode);
             sourceNode.removeOut(targetNode);
             targetNode.removeIn(sourceNode);
         }
+    }
+
+    public void addWakeupDependency(final EventGraphObject source, final Function target) {
+        Node sourceNode = getNode(source);
+        Node targetNode = getNode(target);
+        sourceNode.addOut_Ordering(targetNode);
+        targetNode.addIn_Ordering(sourceNode);
+        propagationSweep++;
+        propagateOrder(targetNode, sourceNode.order);
+
     }
 
     public boolean hasChanged(EventGraphObject obj) {
@@ -177,6 +207,24 @@ public class SlowGraphWalk {
 
     private boolean hasChanged(Node node) {
         return node.lastFired >= cycleCount && cycleCount >= 0;
+    }
+
+    private boolean hasCalculated(Node node) {
+        return node.lastCalculated >= cycleCount && cycleCount >= 0;
+    }
+
+    /**
+     * true iff the object has ever had calculate or init called
+     * @param obj
+     * @return
+     */
+    public boolean isInitialised(EventGraphObject obj) {
+        Node node = getNode(obj);
+        return isInitialised(node);
+    }
+
+    private boolean isInitialised(Node node) {
+        return node.lastFired >= 0;
     }
 
     public Iterable<EventGraphObject> getTriggers(EventGraphObject obj) {
@@ -198,6 +246,9 @@ public class SlowGraphWalk {
                 int newGreater = greaterThan + 1;
                 targetNode.order = newGreater;
                 for (Node child : targetNode.out) {
+                    propagateOrder(child, newGreater);
+                }
+                for (Node child : targetNode.out_orderingOnly) {
                     propagateOrder(child, newGreater);
                 }
             } else {
@@ -232,7 +283,11 @@ public class SlowGraphWalk {
         joinNodes.add(node);
         while (!joinNodes.isEmpty()) {
             Node next = joinNodes.remove();
-            next.execute();
+            if (!hasCalculated(next)) {
+                next.execute();
+            } else { // a wakeup could have put this in here whilst a dependency could also want to fire it if we've been lazy and not registered all wakeup edges
+                logger.info("Looks like a non-registered wakeup?");
+            }
         }
         isFiring = false;
     }
@@ -257,30 +312,38 @@ public class SlowGraphWalk {
                         return o1.order - o2.order;
                     }
                 });
+                //NODEPLOY - no longer think that 'init' is necessary. Now that a 'wakeup this cycle' can be called from a constructor
+                //NODEPLOY - and now that we can call 'isInitialised' for our sources, we should be able to do all the init we need without this.
                 int currentCycle = cycleCount;
                 cycleCount = 0; // this effectively makes all nodes that have ever fired be hasChanged==true
                 for (Node node : newNodesThisCycle) {
-                    EventGraphObject graphObject = node.getGraphObject();
-                    List<EventGraphObject> initialisedInputs = new ArrayList<>(node.in.size());
-                    for (Node inputNode : node.in) {
-                        if (hasChanged(inputNode)) {
-                            initialisedInputs.add(inputNode.getGraphObject());
+                    if (isInitialised(node)) {
+                        logger.info("How is this node already initialised?: "+node);
+                    } else {
+                        EventGraphObject graphObject = node.getGraphObject();
+                        List<EventGraphObject> initialisedInputs = new ArrayList<>(node.in.size());
+                        for (Node inputNode : node.in) {
+                            if (isInitialised(inputNode)) {
+                                initialisedInputs.add(inputNode.getGraphObject());
+                            }
                         }
-                    }
-                    if (!initialisedInputs.isEmpty()) {
-                        boolean inited = false;
-                        if (graphObject instanceof EventGraphObject.Lifecycle) {
-                            inited = ((EventGraphObject.Lifecycle) graphObject).init(initialisedInputs);
-                        } else if (graphObject instanceof Function) {
-                            inited = ((Function) graphObject).calculate();
-                        }
-                        if (inited) {
-                            node.lastFired = currentCycle;
+                        if (!initialisedInputs.isEmpty()) {
+                            boolean inited = false;
+                            if (graphObject instanceof EventGraphObject.Lifecycle) {
+                                inited = ((EventGraphObject.Lifecycle) graphObject).init(initialisedInputs);
+//                            } else if (graphObject instanceof Function) {
+//                                inited = ((Function) graphObject).calculate();
+                            }
+                            if (inited) {
+                                node.lastFired = currentCycle;
+                            }
                         }
                     }
                 }
                 // restore it
                 cycleCount = currentCycle;
+                newNodesThisCycle.clear();
+
                 eventLogger.firingPostBuildEvents(deferredFires);
                 for (EventGraphObject deferredFire : deferredFires) {
                     // NODEPLOY - I think this may now be unecessary!
@@ -303,6 +366,9 @@ public class SlowGraphWalk {
 
     public void wakeup(EventGraphObject graphObject) {
         Node node = getNode(graphObject);
+        if (hasCalculated(node)) {
+            System.out.println("NODEPLOY - had your chance, muffed it: "+node);
+        }
         if (!joinNodes.contains(node)) {
             joinNodes.add(node);
         }

@@ -44,8 +44,14 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       val trigger = in.getTrigger
       inputBindings += trigger -> inputBinding
       env.addListener(trigger, this)
+      if (env.hasChanged(trigger)) {
+        // we missed the event
+        // NODEPLOY - what is the best way to respond? We want to take the new value, and propagate on
+        env.wakeupThisCycle(this)
+      }
+      // NODEPLOY - in.initialised should now be redundant
       if (in.initialised) {
-        inputBinding.addValueToBucket(nextReduce)
+//        inputBinding.addValueToBucket(nextReduce)
         // make sure we wake up to consume this
         // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
         // relationships, we could fire the nextReduce before that is all complete.
@@ -56,7 +62,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
 //        if (cellIsFunction) {
 //          env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
 //        } else {
-          env.fireAfterChangingListeners(SliceAfterBucket.this)
+//          env.fireAfterChangingListeners(SliceAfterBucket.this)
 //        }
       }
     }

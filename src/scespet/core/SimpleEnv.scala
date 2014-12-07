@@ -125,11 +125,17 @@ class SimpleEnv() extends Environment {
     graph.removeTrigger(source.asInstanceOf[types.EventGraphObject], sink.asInstanceOf[types.MFunc])
   }
 
+  def addWakeupOrdering[T](source: scala.Any, wakeupTarget: types.EventGraphObject): Unit = {
+    graph.addWakeupDependency(source.asInstanceOf[types.EventGraphObject], wakeupTarget.asInstanceOf[types.MFunc])
+  }
+
   def hasChanged(trigger: Any):Boolean = {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
   }
 
   def hasChanged(trigger: EventGraphObject) = graph.hasChanged(trigger)
+
+  def isInitialised(trigger: EventGraphObject) = graph.isInitialised(trigger)
 
   def getTriggers(function: scala.Any): Iterable[EventGraphObject] = {
     graph.getTriggers(function.asInstanceOf[EventGraphObject])
