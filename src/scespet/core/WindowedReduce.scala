@@ -24,12 +24,12 @@ class WindowedReduce[X, Y, OUT](val dataEvents :HasValue[X], val cellAdder:Y => 
 
   // do Init
   {
-    if (inWindow) {
-      if (dataEvents.initialised()) {
-        cellAdder(nextReduce).add(dataEvents.value)
-        initialised = emitType == ReduceType.CUMULATIVE
-      }
-    }
+//    if (inWindow) {
+//      if (dataEvents.initialised()) {
+//        cellAdder(nextReduce).add(dataEvents.value)
+//        initialised = emitType == ReduceType.CUMULATIVE
+//      }
+//    }
   }
 
   def calculate():Boolean = {

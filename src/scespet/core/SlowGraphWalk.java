@@ -365,6 +365,8 @@ public class SlowGraphWalk {
     }
 
     public void wakeup(EventGraphObject graphObject) {
+        if (currentFiringNode.graphObject == graphObject) return;   // redundant, and not bad. Already doing it.
+
         Node node = getNode(graphObject);
         if (hasCalculated(node)) {
             System.out.println("NODEPLOY - had your chance, muffed it: "+node);

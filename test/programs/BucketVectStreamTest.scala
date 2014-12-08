@@ -66,9 +66,9 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket with OutTrait[Seq[X]]{
     var value = Seq[X]()
     env.addListener(in.trigger, this)
-    if (in.initialised) {
-      env.fireAfterChangingListeners(this) // do my initialisation
-    }
+//    if (in.initialised) {
+//      env.fireAfterChangingListeners(this) // do my initialisation
+//    }
     override def calculate(): Boolean = {
       append(in.value)
       true
@@ -269,8 +269,15 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
 
-    val alternateUppers = stream.filter(_.isLetter).filter( alternate ).map( _.toUpper )
-    val out = alternateUppers.bindTo(key => new OldStyleFuncAppend[Char]( stream(key), env))(_.append).all()
+    val lettersOnly = stream.filter(_.isLetter)
+    scespet.util.out("letters") {lettersOnly}
+    val alternateLet = lettersOnly.filter(alternate)
+    scespet.util.out("alternate") {alternateLet}
+
+    val alternateUppers = alternateLet.map( _.toUpper )
+    scespet.util.out("stream") {alternateUppers}
+
+    val output = alternateUppers.bindTo(key => new OldStyleFuncAppend[Char]( stream(key), env))(_.append).all()
 
     val expectedDigits = generateAppendScan(data_digit)
     val expectedAlpha = List(
@@ -287,8 +294,10 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
       "AabCcdEefGghIijKk"
     ).map(_.toCharArray.toSeq)
 
-    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
-    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
+//    scespet.util.out("Digit") {output("Digit")}
+//    scespet.util.out("Alpha") {output("Alpha")  }
+//    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
+//    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
   ignore("MFunc bind reduce") {
