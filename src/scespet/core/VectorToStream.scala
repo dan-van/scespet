@@ -9,47 +9,37 @@ class VectorToStream[K,V](in:VectorStream[K,V], env:types.Env) extends HasVal[(K
   private var _value :(K,V) = _
   var initialised: Boolean = false
   var valueWaiting = false
-  private var lastCellAdded = -1
+  private var cellListeners = List[Cell] ()
 
-  private class Cell(k:K, inCell:HasValue[V]) extends MFunc {
-    env.addListener(inCell.getTrigger, this)
-    if (inCell.initialised()) {
-      // force this value into our stream
-      enqueueCellValue()
+  private val cellAdder = new MFunc {
+    private var lastCellAdded = -1
+
+    val sourceCols = in.getNewColumnTrigger
+    env.addListener(sourceCols, this)
+
+    for (i <- 0 until in.getSize) {
+      listenToCell(i)
     }
 
     override def calculate(): Boolean = {
-      enqueueCellValue()
-      true
+      if (env.hasChanged(sourceCols)) {
+        for (i <- lastCellAdded + 1 until in.getSize) {
+          listenToCell(i)
+        }
+        true
+      } else false
     }
 
-    def enqueueCellValue() {
-      if (valueWaiting) throw new UnsupportedOperationException("Two concurrent cell fires not supported from " + in)
-      _value = (k, inCell.value())
-      valueWaiting = true
+    private def listenToCell(i:Int): Unit = {
+      val c = new Cell(in.getKey(i), in.getValueHolder(i))
+      cellListeners :+= c
+      lastCellAdded = i
     }
   }
+  env.addWakeupOrdering(cellAdder, this)
 
-  private def listenToCell(i:Int): Unit = {
-    val c = new Cell(in.getKey(i), in.getValueHolder(i))
-    env.addListener(c, this)
-    lastCellAdded = i
-  }
-  for (i <- 0 until in.getSize) {
-    listenToCell(i)
-  }
-  
-  val sourceCols = in.getNewColumnTrigger
-  env.addListener(sourceCols, this)
-  
   override def value: (K, V) = _value
-
   override def calculate(): Boolean = {
-    if (env.hasChanged(sourceCols)) {
-      for (i <- lastCellAdded + 1 until in.getSize) {
-        listenToCell(i)
-      }
-    }
     if (valueWaiting) {
       initialised = true
       valueWaiting = false
@@ -63,4 +53,24 @@ class VectorToStream[K,V](in:VectorStream[K,V], env:types.Env) extends HasVal[(K
    * @return the object to listen to in order to receive notifications of <code>value</code> changing
    */
   override def trigger: EventGraphObject = this
+
+
+  private class Cell(k:K, inCell:HasValue[V]) extends MFunc {
+    env.addListener(inCell.getTrigger, this)
+    env.addListener(this, VectorToStream.this)
+    if (inCell.initialised()) {
+      env.wakeupThisCycle(this)
+    }
+
+    override def calculate(): Boolean = {
+      enqueueCellValue()
+      true
+    }
+
+    def enqueueCellValue() {
+      if (valueWaiting) throw new UnsupportedOperationException("Two concurrent cell fires not supported from " + in)
+      _value = (k, inCell.value())
+      valueWaiting = true
+    }
+  }
 }

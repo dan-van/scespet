@@ -158,16 +158,14 @@ public class SlowGraphWalk {
         sourceNode.addOut(targetNode);
         targetNode.addIn(sourceNode);
 
-        // NODEPLOY - this should be hasUpdated - i.e. if calc was called, not just if it returned true
-        if (hasCalculated(sourceNode) && !hasCalculated(targetNode)) {
-            // Oh no, violation, target has already fired, source missed it!
-            logger.warning("Target node now listens to something already fired. Need to work out how to get the user to make this safe: " + sourceNode + " -> " + targetNode);
-            wakeup(target);
-        }
-
         propagationSweep++;
         propagateOrder(targetNode, sourceNode.order);
         eventLogger.addListener(sourceNode, targetNode);
+
+        if (hasCalculated(sourceNode) && !hasCalculated(targetNode)) {
+            // Oops, this new link would not be activated, it missed the source firing. Catch up
+            wakeup(target);
+        }
     }
 
     public void removeTrigger(final EventGraphObject source, final Function target) {
@@ -365,7 +363,7 @@ public class SlowGraphWalk {
     }
 
     public void wakeup(EventGraphObject graphObject) {
-        if (currentFiringNode.graphObject == graphObject) return;   // redundant, and not bad. Already doing it.
+        if (currentFiringNode != null && currentFiringNode.graphObject == graphObject) return;   // redundant, and not bad. Already doing it.
 
         Node node = getNode(graphObject);
         if (hasCalculated(node)) {

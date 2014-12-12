@@ -296,8 +296,8 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 
 //    scespet.util.out("Digit") {output("Digit")}
 //    scespet.util.out("Alpha") {output("Alpha")  }
-//    new StreamTest("scan :Digits", expectedDigits, out("Digit"))
-//    new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
+    new StreamTest("scan :Digits", expectedDigits, output("Digit"))
+    new StreamTest("scan :Alpha", expectedAlpha, output("Alpha"))
   }
 
   ignore("MFunc bind reduce") {

@@ -181,10 +181,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
       if (input.getValueHolder(index).initialised()) {
         // calculate doesn't depend on hasChanged, so we can use the same logic for initilisation
-        initialised = calculate()
+//        initialised = calculate()
+        println(s"vect.map inputcell is initialised, expecting wakeup")
       } else {
         // NODEPLOY
         println(s"vect.map inputcell is not initialised")
+      }
+      if (env.isInitialised(input.getTrigger(index))) {
+        env.wakeupThisCycle(this)
       }
 
       def calculate() = {
@@ -253,10 +257,11 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     }
     val cellBuilder = (index:Int, key:K) => {
       val newCell = new MapCell(index)
-      if (input.getValueHolder(index).initialised()) {
-        // initialise it if the input is already initialised
-        newCell.calculate()
-      }
+//      if (env.isInitialised(input.getValueHolder(index).getTrigger)) {
+//        // initialise it if the input is already initialised
+//        env.wakeupThisCycle(this)
+//      }
+
       newCell
     }
     return newIsomorphicVector(cellBuilder)
@@ -297,9 +302,20 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         val sourceCell = input.getValueHolder(i)
         val sourceTrigger: EventGraphObject = sourceCell.getTrigger()
         env.addListener(sourceTrigger, cellFunc)
+
+
+        val sourceEverCalculated = env.isInitialised(sourceTrigger)
+        if (sourceEverCalculated) {
+          env.wakeupThisCycle(cellFunc)
+        }
+
+        // NODEPLOY - TODO: I think this approach to initialisation can now be evaporated
         // initialise the cell
         val hasInputValue = sourceCell.initialised()
         val hasChanged = env.hasChanged(sourceTrigger)
+        if (sourceEverCalculated && !hasInputValue) {
+          println("NODEPLOY - contradiction between new initialisation and old initialisation definitions")
+        }
         if (hasChanged && !hasInputValue) {
           println("NODEPLOY - didn't expect hasChanged=true, but initialised=false for "+sourceCell)
         }
