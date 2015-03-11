@@ -260,26 +260,29 @@ object SimpleSpreadStats extends RealTradeTests {
   val universe = impl.asVector(List("MSFT.O"))
 
   class SpreadStats(key:String) extends Bucket {
+    val spreadCounts = mutable.HashMap[Double, Int]()
+    var n = 0
     val quotes = getQuoteEvents(key)
     env.addListener(quotes.getTrigger, this)
 
-    val spreadCounts = mutable.HashMap[Double, Int]()
     override def calculate(): Boolean = {
       val spread = quotes.value.ask - quotes.value.bid
       val now = spreadCounts.getOrElse(spread, 0)
       spreadCounts.put(spread, now + 1)
+      n+=1
       true
     }
 
-    def mode() = {
+    def mode():Double = {
+      if (spreadCounts.isEmpty) return Double.NaN
       spreadCounts.maxBy(e => e._2)._1
     }
     override def open(): Unit = ???
 
+    override def toString: String = s"Spread:n=$n, mode=$mode"
   }
   import scespet.core.types._
-  val spreadCounters = universe.keyToStream(k => impl.streamOf2(new SpreadStats(k)).reset(10000.events).last()) //all()
-  val modeSpread = spreadCounters.map(_.mode)
-  out("ModeSpread")(modeSpread)
+  val spreadCounters = universe.keyToStream(k => impl.streamOf2(new SpreadStats(k)).reset(100.events).all) //all()
+  out("ModeSpread")(spreadCounters)
   env.run()
 }

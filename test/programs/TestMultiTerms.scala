@@ -93,6 +93,12 @@ class TestMultiTerms extends ScespetTestBase {
     new StreamTest("C", (20 to 25).toList, multiStream("C"))
   }
 
+  test("keyToStream") {
+    val set = impl.asVector(List("A", "B", "C"))
+    val mapped = set.map(_.toLowerCase)
+    addPostCheck("map state:"){mapped.entries shouldBe(List("A"->"a", "B"->"b","C"->"c"))}
+  }
+
   test("subset") {
     val multiStream = createTestMultiStream()
     val subset = multiStream.subset(_ == "C")

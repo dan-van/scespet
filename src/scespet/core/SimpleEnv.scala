@@ -74,6 +74,7 @@ class SimpleEnv() extends Environment {
         initialised.add( e )
       }
     }
+    graph.applyChanges()
 
     val stopAt = eventI + n
     while (! eventSourceQueue.isEmpty && eventI < stopAt) {

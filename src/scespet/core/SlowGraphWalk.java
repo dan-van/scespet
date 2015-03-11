@@ -360,6 +360,12 @@ public class SlowGraphWalk {
         } else {
             throw new UnsupportedOperationException("Don't think I need to apply changes in nested fire");
         }
+        // got deferred work to do, drain it:
+        if (!joinNodes.isEmpty()) {
+            Node node = joinNodes.poll();
+            // this will drain the rest of the join nodes:
+            fire(node.getGraphObject());
+        }
     }
 
     public void wakeup(EventGraphObject graphObject) {

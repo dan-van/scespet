@@ -114,7 +114,12 @@ class MutableValue[X](x:X) extends CellAdder[X] with OutTrait[X] {
 }
 
 trait SliceCellLifecycle[C] {
+  /**
+   * create a new cell.
+   * @return
+   */
   def newCell():C
+  // NODEPLOY - I think reset should now be deleted
   def reset(c:C)
   def closeCell(c:C)
   // NODEPLOY - I think we should have a callback on every 'row' e.g. updated
@@ -138,7 +143,7 @@ object SliceCellLifecycle {
   abstract class BucketCellLifecycle[C <: Bucket] extends SliceCellLifecycle[C] {
     def newCell(): C
 
-    override def reset(c: C): Unit = c.open()
+    override def reset(c: C): Unit = {}
 
     override def closeCell(c: C): Unit = c.complete()
   }
