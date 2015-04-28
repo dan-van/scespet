@@ -146,9 +146,13 @@ object ReduceType {
 }
 
 
-
-// todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
-// todo: I think I could split this into a 'Provides' interface
+/**
+ * Agg is an aggregation function.
+ * it is mutable state (Cell), that is updated with calls to add (from CellAdder)
+ *
+ * todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
+ * todo: I think I could split this into a 'Provides' interface
+ */
 trait Agg[-X] extends Cell with CellAdder[X] {
 //  def add(x:X)
 }
@@ -159,7 +163,8 @@ trait Cell {
 }
 
 /**
- * More traditional parameterised type version of Agg (rather than using dependent object types)
+ * TODO: work out if this is necessary
+ * This is the same as Agg, but with the output type parameter (V) explicit in the signature.
  * @tparam X
  * @tparam V
  */
@@ -168,7 +173,7 @@ trait Reducer[-X, V] extends Agg[X] with OutTrait[V] { // NODEPLOY - Agg[X] can 
 }
 
 /**
- * defines an aggregation that uses itself as the exposed aggregated value
+ * trait to add to a class to enable itself to the state that is exposed as a result of aggregating
  * @tparam X
  */
 trait SelfAgg[-X] extends Agg[X] {
@@ -177,9 +182,14 @@ trait SelfAgg[-X] extends Agg[X] {
   def add(x:X)
 }
 
+/**
+ * The history of this is for integration with another codebase, where I have lots of MFunc-like classes
+ * and I wanted to use them in a similar syntax to working with Agg aggregations.
+ *
 // todo - would be nicer to treat the 'Agg' trait and Bucket trait as compatible features that can be added to Cell
 // todo - certainly the "bindTo" verb could work with a vanilla Cell
 // NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
+  */
 trait Bucket extends MFunc {
   def open():Unit
   /**
@@ -254,7 +264,7 @@ trait Term[X] {
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
-class PartialGroupedBucketStream[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
+class PartialGroupedBucketStream[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
   private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y, OUT] = {
     val slicedBucket = triggerAlign match {
       case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)

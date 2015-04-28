@@ -28,7 +28,7 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceBeforeBucket[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
+class SliceBeforeBucket[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
   if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
@@ -118,6 +118,7 @@ class SliceBeforeBucket[S, Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val sliceSpe
   }
 
   private val nextReduce : Y = cellLifecycle.newCell()
+  // NODEPLOY - should I avoid using this class if we are not a function?
   private val cellIsFunction :Boolean = if (nextReduce.isInstanceOf[MFunc]) {
     // join values trigger the bucket
     env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])

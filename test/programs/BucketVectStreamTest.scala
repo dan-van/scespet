@@ -210,7 +210,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("bind grouped scan") {
-    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).all()
+    val out = stream.group(3.events).collapseWith(new BindableAppendFunc[Char])(_.add).all()
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
 
@@ -219,7 +219,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("bind grouped reduce") {
-    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).last()
+    val out = stream.group(3.events).collapseWith(new BindableAppendFunc[Char])(_.add).last()
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
 
@@ -315,14 +315,17 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  ignore("MFunc bind grouped scan") {
+  test("MFunc bind grouped scan") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
     val alternateUppers = stream.filter(_.isLetter).filter( alternate ).map( _.toUpper )
 
-    val out = alternateUppers.bindTo(key => new OldStyleFuncAppend[Char]( stream(key), env))(_.append).reset(3.events).all()
+    // build OldStyleFuncAppend, with one stream of events coming from and old-style stream: alternateUppers(key),
+    // and other events coming from calls to .append
+    val out = stream.group(3.events).collapseWith((key:String) => new OldStyleFuncAppend[Char](alternateUppers(key), env))(_.append).all()
+
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     val expectedAlpha = List(
       "Aa",
@@ -349,7 +352,9 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     }
     val alternateUppers = stream.filter(_.isLetter).filter( alternate ).map( _.toUpper )
 
-    val out = alternateUppers.bindTo(key => new OldStyleFuncAppend[Char]( stream(key), env))(_.append).reset(3.events).last()
+    // build OldStyleFuncAppend, with one stream of events coming from and old-style stream: alternateUppers(key),
+    // and other events coming from calls to .append
+    val out = stream.group(3.events).collapseWithK(key => new OldStyleFuncAppend[Char](alternateUppers(key), env))(_.append).last()
 
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
     val expectedAlpha = List(

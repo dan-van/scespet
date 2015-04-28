@@ -114,6 +114,7 @@ class MutableValue[X](x:X) extends CellAdder[X] with OutTrait[X] {
 }
 
 trait SliceCellLifecycle[C] {
+  def C_type :ClassTag[C]
   /**
    * create a new cell.
    * @return
@@ -127,7 +128,9 @@ trait SliceCellLifecycle[C] {
 
 
 object SliceCellLifecycle {
+  // NODEPLOY delete X
   class CellSliceCellLifecycle[X, A](newCellF: () => A) extends SliceCellLifecycle[A]{
+    override def C_type:ClassTag[A] = ???
     override def newCell(): A = newCellF()
     override def closeCell(c: A): Unit = {}
     override def reset(c: A): Unit = {}
@@ -135,12 +138,15 @@ object SliceCellLifecycle {
 
 
   implicit class AggSliceCellLifecycle[X, A <: Agg[X]](newCellF: () => A) extends SliceCellLifecycle[A] {
+    override def C_type:ClassTag[A] = ???
     override def newCell(): A = newCellF()
     override def closeCell(c: A): Unit = {}
     override def reset(c: A): Unit = {}
   }
 
   abstract class BucketCellLifecycle[C <: Bucket] extends SliceCellLifecycle[C] {
+    override def C_type:ClassTag[C] = ???
+
     def newCell(): C
 
     override def reset(c: C): Unit = {}

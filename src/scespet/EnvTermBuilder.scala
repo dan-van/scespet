@@ -3,7 +3,7 @@ package scespet
 import core._
 import core.types
 import gsa.esg.mekon.core.EventSource
-import scespet.core.SliceCellLifecycle.BucketCellLifecycle
+import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecycle}
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
 
@@ -88,6 +88,14 @@ class EnvTermBuilder() extends DelayedInit {
         }
       }
     })
+  }
+
+  def streamOf3[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT]) : PartialBuiltSlicedBucket[Y, OUT] = {
+    //    if (data.isInstanceOf[EventSource]) {
+    //      env.registerEventSource(data.asInstanceOf[EventSource])
+    //    }
+    val cellLifeCycle:SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Int, Y](() => newCellFunc)
+    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
   }
 
   def streamOf2[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT]) : PartialBuiltSlicedBucket[Y, OUT] = {

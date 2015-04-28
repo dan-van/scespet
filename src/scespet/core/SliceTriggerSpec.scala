@@ -30,6 +30,9 @@ object SliceTriggerSpec {
       env.getTerminationEvent
     }
   }
+
+  // NODEPLOY is this really necessary? doesn't it just make for confusion with TERMINATION. Can't we just use TERMINATION?
+  /** Never fire a slice */
   val NULL = new SliceTriggerSpec[Null] {
     def buildTrigger(x:Null, src: Set[EventGraphObject], env: types.Env) = {
       null

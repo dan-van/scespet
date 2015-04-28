@@ -65,12 +65,16 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   }
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
-  class XYCollector() extends Bucket {
+//  class XYCollector() extends Bucket with OutTrait[XYCollector] with CellAdder[Int] {
+  class XYCollector() extends Bucket with Reducer[Int, XYCollector] {
     var firstX:Int = -1
     var lastX:Int = -1
     var xChanged ,yChanged = 0
     var countX, countY, countBoth = 0
     var done = false
+
+    // NODEPLOY can we make this implicit? If something has no OutTrait, then it *is* an OutTrait of itself?
+    override def value(): XYCollector = this
 
     override def complete() {
       if (done) throw new AssertionError("double call to done: "+this)
@@ -84,6 +88,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
       xChanged = 0; yChanged = 0
       true
     }
+    def add(x:Int) = addX(x)
     def addX(x:Int) = {xChanged += 1; lastX = x; if (firstX == -1) firstX = x}
     def addY(x:Int) = yChanged += 1
     override def open(): Unit = ???
@@ -245,8 +250,11 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     val counter = impl.asStream(IteratorEvents(0 to n)((x,i)=>i.toLong))
     val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
     val div5 = evenOdd.filter(_ % 5 == 0)
+    val keySet = evenOdd.toKeySet()
 
-//    val slicer = evenOdd.keyToStream(k => impl.streamOf2(new XYCollector).bind(evenOdd)(_.addX).bind(div5)(_.addY))
+    //    evenOdd.reduce()
+//    val slicer = keySet.keyToStream(k => new XYCollector)
+//    val slicer = keySet.keyToStream(k => impl.streamOf3(new XYCollector).bind(evenOdd(k))(_.addX).bind(div5(k))(_.addY).all())
 //    val sliceBuilder : SliceBuilder[String, _, XYCollector] = if (reduce) slicer.reduce() else slicer.fold()
 //    val unslicedBuckets = sliceBuilder.
 //      join(evenOdd){b => b.addX}.
@@ -270,9 +278,21 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
           }
         })
       }
-      def slicePre():VectTerm[String, XYCollector] = ??? //unslicedBuckets.slice_pre( sliceOn )
-      def slicePost():VectTerm[String, XYCollector] = ??? //unslicedBuckets.slice_post( sliceOn )
-      def window():VectTerm[String, XYCollector] = ??? // unslicedBuckets.window( windowStream )
+      def slicePre():VectTerm[String, XYCollector] = {
+        val grouped = evenOdd.group[Any](SliceTriggerSpec.TERMINATION, SliceAlign.BEFORE)(SliceTriggerSpec.TERMINATION.asVectSliceSpec)
+        val slicer = grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
+        if (reduce) slicer.last else slicer.all
+      }
+      def slicePost():VectTerm[String, XYCollector] = {
+        val grouped = evenOdd.group[Any](SliceTriggerSpec.TERMINATION, SliceAlign.AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec)
+        val slicer = grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
+        if (reduce) slicer.last else slicer.all
+      }
+      def window():VectTerm[String, XYCollector] = {
+        val grouped = evenOdd.window(windowStream)
+        val slicer = grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
+        if (reduce) slicer.last else slicer.all
+      }
     }
   }
 

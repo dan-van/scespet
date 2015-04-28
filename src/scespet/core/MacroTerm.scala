@@ -307,8 +307,8 @@ class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.En
   }
 }
 
-// NODEPLOY this should be a Term that also supports partitioning operations
-class PartialBuiltSlicedBucket[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val cellLifecycle: SliceCellLifecycle[Y], val env:Environment) {
+// NODEPLOY can this be a Term mixin for the partitioning operations?
+class PartialBuiltSlicedBucket[Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val cellLifecycle: SliceCellLifecycle[Y], val env:Environment) {
   var bindings = List[(HasVal[_], (_ => _ => Unit))]()
 
   private lazy val scanAllTerm: MacroTerm[OUT] = {
