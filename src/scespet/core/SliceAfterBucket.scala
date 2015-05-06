@@ -19,25 +19,11 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
+class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
   var awaitingNextEventAfterReset = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
 
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
-
-    def calculate(): Boolean = {
-      // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
-      import collection.JavaConversions.iterableAsScalaIterable
-      var addedValueToBucket = false
-      for (t <- env.getTriggers(this)) {
-        val option = inputBindings.get(t)
-        if (option.isDefined) {
-          option.get.addValueToBucket(nextReduce)
-          addedValueToBucket = true
-        }
-      }
-      addedValueToBucket
-    }
 
     def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
       val inputBinding = new InputBinding[X](in, adder)
@@ -66,34 +52,60 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
 //        }
       }
     }
+
+    bindings.foreach(pair => {
+      val (hasVal, adder) = pair
+      type IN = Any
+      addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+    })
+
+    def calculate(): Boolean = {
+      // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
+      import collection.JavaConversions.iterableAsScalaIterable
+      var addedValueToBucket = false
+      for (t <- env.getTriggers(this)) {
+        val option = inputBindings.get(t)
+        if (option.isDefined) {
+          option.get.addValueToBucket(nextReduce)
+          addedValueToBucket = true
+        }
+      }
+      addedValueToBucket
+    }
+
   }
   env.addListener(joinValueRendezvous, this)
 
 
-  private def resetCurrentReduce() {
-    if (nextReduce != null) {
-      cellLifecycle.closeCell(nextReduce)
-      completedReduceValue = cellOut.out(nextReduce)  // Intellij thinks this a a compile error - it isn't
-      cellLifecycle.reset(nextReduce)
-    }
-    awaitingNextEventAfterReset = true
-  }
-
-  private val nextReduce : Y = cellLifecycle.newCell()
-  private val cellIsFunction :Boolean = if (nextReduce.isInstanceOf[MFunc]) {
-    // join values trigger the bucket
-    env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-    // listen to it so that we propagate value updates to the bucket
-    env.addListener(nextReduce, this)
-
-//    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
-//    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
-    true
-  } else {
-    false
-  }
-
+  private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
+  private var nextReduce : Y = _
   private var completedReduceValue : OUT = _
+
+  def assignNewReduce() :Unit = {
+    val newCell = cellLifecycle.newCell()
+    // tweak the listeners:
+    if (cellIsFunction) {
+      // watch out for the optimisation where the lifecycle re-uses the current cell
+      if (newCell != nextReduce) {
+        if (nextReduce != null) {
+          env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          // listen to it so that we propagate value updates to the bucket
+          env.removeListener(nextReduce, this)
+        }
+
+        nextReduce = newCell
+        // join values trigger the bucket
+        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        // listen to it so that we propagate value updates to the bucket
+        env.addListener(nextReduce, this)
+      }
+    } else {
+      nextReduce = newCell
+    }
+  }
+  // assign our first bucket
+  assignNewReduce()
+
 
   // if awaitingNextEventAfterReset then the nextReduce has been reset, and we should be exposing the last snap (even if we're in CUMULATIVE mode)
   def value :OUT = if (emitType == ReduceType.LAST || awaitingNextEventAfterReset) completedReduceValue else cellOut.out(nextReduce)
@@ -109,6 +121,8 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
 
     // NODEPLOY think about this further, but I'm going with nextReduce is in valid state now.
     // todo: maybe we could tweak this if Y instanceof something with initialisation state?
+    // e.g. if nextReduce is a hasVal, should we try to use its initialisation state?
+    // alternatively, this could be a question for the cellLifecycle?
     initialised = exposeInitialValue
   }
 
@@ -137,19 +151,28 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     }
   }
 
-  def calculate():Boolean = {
-    if (awaitingNextEventAfterReset) {
-      if (env.hasChanged(nextReduce)) {
-        // got one.
-        awaitingNextEventAfterReset = false
-      }
+  private def resetCurrentReduce() {
+    if (nextReduce != null) {
+      cellLifecycle.closeCell(nextReduce)
+      completedReduceValue = cellOut.out(nextReduce)
+      assignNewReduce()
     }
+    awaitingNextEventAfterReset = true
+  }
 
+  def calculate():Boolean = {
     val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
       if (cellIsFunction) env.hasChanged(nextReduce) else env.hasChanged(joinValueRendezvous)
     } else {
       false
     }
+    if (bucketFire) {
+      // for a cumulative reduce (i.e. scan), after a bucket reset we need to wait for the next event entering the bucket until we expose the
+      // contents of the new bucket.
+      // this boolean achieves that
+      awaitingNextEventAfterReset = false
+    }
+
     val sliceFire = if (sliceTriggered()) {
       resetCurrentReduce()
       true
@@ -158,8 +181,9 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     }
 
     val fire = bucketFire || sliceFire
-    if (fire)
-      initialised = true  // belt and braces initialiser
+    if (fire) {
+      initialised = true // belt and braces initialiser
+    }
     return fire
   }
 

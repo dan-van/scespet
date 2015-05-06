@@ -7,6 +7,8 @@ import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecy
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
 
+import scala.reflect.ClassTag
+
 /**
  * This needs to have 'init(env)' called before you can use it.
  * Why not a constructor!? Because I'm experimenting with the following approach that allows a 'program' to be encapsulated with access to all utilities
@@ -90,15 +92,17 @@ class EnvTermBuilder() extends DelayedInit {
     })
   }
 
-  def streamOf3[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT]) : PartialBuiltSlicedBucket[Y, OUT] = {
+  // NODEPLOY I think we can delete this now
+  def streamOf3[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
     //    if (data.isInstanceOf[EventSource]) {
     //      env.registerEventSource(data.asInstanceOf[EventSource])
     //    }
-    val cellLifeCycle:SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Int, Y](() => newCellFunc)
+    val cellLifeCycle:SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
     return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
   }
 
-  def streamOf2[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT]) : PartialBuiltSlicedBucket[Y, OUT] = {
+  // NODEPLOY I think we can delete this now
+  def streamOf2[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
     //    if (data.isInstanceOf[EventSource]) {
     //      env.registerEventSource(data.asInstanceOf[EventSource])
     //    }

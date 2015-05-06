@@ -28,9 +28,9 @@ class ScespetTestBase extends FunSuite with Matchers with AssertionsForJUnit wit
     val expectIter = expected.iterator
     stream.map(next => {
       assert(expectIter.hasNext, s"Stream $name, Event $eventI with value $next was additional to expected")
-      val expect = expectIter.next()
+      val expect = if (expectIter.hasNext) expectIter.next() else null
       expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
-      println(s"Observed event: $name-$eventI \t $next as expected")
+      println(s"Observed event: $name-$eventI \t $next as expected: "+expect)
       eventI += 1
     })
     addPostCheck(name)(checkComplete)

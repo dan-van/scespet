@@ -141,7 +141,7 @@ trait Func[X,Y] extends UpdatingHasVal[Y] {
 // sealed, enum, blah blah
 class ReduceType(val name:String) {}
 object ReduceType {
-  val CUMULATIVE = new ReduceType("Fold")
+  val CUMULATIVE = new ReduceType("Scan")
   val LAST = new ReduceType("Fold")
 }
 
@@ -222,9 +222,9 @@ trait Term[X] {
   def map[Y](f: (X) => Y, exposeNull:Boolean = true):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
-  def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O]
+  def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O]
 
-  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :Term[O]
+  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O]
 
   def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedTerm[X]
   
@@ -264,17 +264,12 @@ trait Term[X] {
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
-class PartialGroupedBucketStream[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (_ => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
+class PartialGroupedBucketStream[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
   private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y, OUT] = {
     val slicedBucket = triggerAlign match {
-      case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
-      case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
+      case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, ev, exposeInitialValue = false)
+      case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, ev, exposeInitialValue = false)
     }
-    bindings.foreach(pair => {
-      val (hasVal, adder) = pair
-      type IN = Any
-      slicedBucket.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-    })
     slicedBucket
   }
 

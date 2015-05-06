@@ -3,6 +3,7 @@ package scespet.core
 import java.util.logging.Logger
 
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
+import scespet.core.SliceCellLifecycle
 import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, AggSliceCellLifecycle, BucketCellLifecycleImpl}
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
@@ -474,20 +475,20 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   // THINK: this could be special cased to be faster
 //  def reduce[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K, Y#OUT] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)
-  def reduce[Y, O](newBFunc: => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = ??? // reduce[Y, O]((k:K) => newBFunc)(type_y, adder, yOut)
+  def reduce[Y, O](newBFunc: => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = reduce[Y, O]((k:K) => newBFunc)(type_y, adder, yOut)
   // THINK: this could be special cased to be faster
-  def reduce[Y, O](newBFunc: K => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = ??? //group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).reduce(newBFunc)(type_y, yOut, adder)
+  def reduce[Y, O](newBFunc: K => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).reduceK(newBFunc)(adder, yOut, type_y)
 
-  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = scan[Y, O]((k:K) => newBFunc)(adder,yOut)
+  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]):VectTerm[K, O] = scan[Y, O]((k:K) => newBFunc)(adder,yOut, type_b)
   // THINK: this could be special cased to be faster
-  def scan[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :VectTerm[K,O] = group[Null](null, AFTER)(SliceTriggerSpec.NULL.asVectSliceSpec).scanK(newBFunc)(adder,yOut)
+  def scan[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = group[Null](null, AFTER)(SliceTriggerSpec.NULL.asVectSliceSpec).scanK(newBFunc)(adder,yOut, type_b)
 
   // NODEPLOY are these shortcuts worth it?
-  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT]) :GroupedTerm2[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut)
+  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut, type_b)
 
   // NODEPLOY are these shortcuts worth it?
-  def bindTo[B <: Bucket, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT]) :GroupedTerm2[K, B, OUT] = {
-    group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).collapseWithK(newBFunc)(adder)(aggOut)
+  def bindTo[B <: Bucket, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
+    group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).collapseWithK(newBFunc)(adder)(aggOut, type_b)
   }
 
 
@@ -514,34 +515,36 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   private def window(keyToWindow:K => HasVal[Boolean], sliceStateDependencies :Set[EventGraphObject]) :GroupedVectTerm[K, X] = {
       val uncollapsed = new UncollapsedVectGroup[K, X] {
         override def applyNew[A, OUT](keyedLifecycle: KeyToSliceCellLifecycle[K, A], adder: (A) => CellAdder[X], cellOut: AggOut[A, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-          new DerivedVector[K, OUT] {
-            override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
-              val sourceCell = input.getValueHolder(i)
-              val lifecycle = keyedLifecycle.lifeCycleForKey(k)
-              val windowStream = keyToWindow(k)
-              val outputCell:UpdatingHasVal[OUT] = new WindowedReduce[X, A, OUT](sourceCell, adder, cellOut, windowStream, lifecycle, reduceType, env)
-              outputCell
-            }
-
-            override def dependsOn: Set[EventGraphObject] = sliceStateDependencies
-          }
+          ??? // DELETE THIS
+//          new DerivedVector[K, OUT] {
+//            override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
+//              val sourceCell = input.getValueHolder(i)
+//              val lifecycle = keyedLifecycle.lifeCycleForKey(k)
+//              val windowStream = keyToWindow(k)
+//              val outputCell:UpdatingHasVal[OUT] = new WindowedReduce[X, A, OUT](sourceCell, adder, cellOut, windowStream, lifecycle, reduceType, env)
+//              outputCell
+//            }
+//
+//            override def dependsOn: Set[EventGraphObject] = sliceStateDependencies
+//          }
         }
 
         override def applyB[B <: Bucket, OUT](keyedLifecycle: KeyToSliceCellLifecycle[K, B], cellOut: AggOut[B, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-        new DerivedVector[K, OUT] {
-          override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
-            val sourceCell = input.getValueHolder(i)
-            val lifecycle = keyedLifecycle.lifeCycleForKey(k)
-            val windowStream = keyToWindow(k)
-            val outputCell:UpdatingHasVal[OUT] = reduceType match {
-              case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, windowStream, lifecycle, env)
-              case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, windowStream, lifecycle, env)
-            }
-            outputCell
-          }
-
-          override def dependsOn: Set[EventGraphObject] = sliceStateDependencies
-        }
+          ??? // DELETE THIS
+          //        new DerivedVector[K, OUT] {
+//          override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
+//            val sourceCell = input.getValueHolder(i)
+//            val lifecycle = keyedLifecycle.lifeCycleForKey(k)
+//            val windowStream = keyToWindow(k)
+//            val outputCell:UpdatingHasVal[OUT] = reduceType match {
+//              case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, windowStream, lifecycle, env)
+//              case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, windowStream, lifecycle, env)
+//            }
+//            outputCell
+//          }
+//
+//          override def dependsOn: Set[EventGraphObject] = sliceStateDependencies
+//        }
       }
     }
     new GroupedVectTerm[K, X](this, uncollapsed, env)
@@ -555,7 +558,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
 // NODEPLOY - delete X!
 class VectCellLifecycle[K, X, Y](newCellF: K => Y)(implicit type_y:ClassTag[Y]) extends KeyToSliceCellLifecycle[K,Y]{
-  override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new CellSliceCellLifecycle[X, Y]( () => newCellF(k) )
+  override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y]( () => newCellF(k) )(type_y)
 
   override def isCellListenable: Boolean = classOf[MFunc].isAssignableFrom(type_y.runtimeClass)
 }
@@ -568,69 +571,34 @@ class VectAggLifecycle[K, X, Y <: Agg[X]](newCellF: K => Y) extends KeyToSliceCe
   override def isCellListenable: Boolean = ???
 }
 
-class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGroup[K, _], lifecycle:VectCellLifecycle[K,_,B], env:types.Env) {
-  var bindings = List[(VectTerm[K, _], (_ => _ => Unit))]()
+class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGroup[K, _], lifecycle:VectCellLifecycle[K,_,B], cellOut:AggOut[B, OUT], env:types.Env) {
+  private var bindings = List[(VectTerm[K, _], (B => _ => Unit))]()
+  private var dependsOn = Set[EventGraphObject]()
 
-  def last() :VectTerm[K,OUT] = {
-//    uncollapsed.
-//    val cellBuilder: (Int, K) => SlicedBucket[B, OUT] = ???
-//    newisomorphicVect(cellBuilder)
-    //    val ident :K=>MutableValue[X] = (k:K) => {val idx = input.input.indexOf(k); new MutableValue(input.input.get(idx))}
-//    val adder = implicitly[MutableValue[X] => CellAdder[X]]
-//    val yOut = implicitly[AggOut[MutableValue[X], X]]
-//    sealCollapse[MutableValue[X], X](ident, adder, yOut, ReduceType.LAST)
-    ???
-  }
 
-  def all() :VectTerm[K,OUT] = {
-//    val ident :K=>MutableValue[X] = (k:K) => {val idx = input.input.indexOf(k); new MutableValue(input.input.get(idx))}
-//    val adder = implicitly[MutableValue[X] => CellAdder[X]]
-//    val yOut = implicitly[AggOut[MutableValue[X], X]]
-//    sealCollapse[MutableValue[X], X](ident, adder, yOut, ReduceType.CUMULATIVE)
-    ???
-  }
+  def last() :VectTerm[K,OUT] = sealCollapse(ReduceType.LAST)
+
+  def all() :VectTerm[K,OUT] = sealCollapse(ReduceType.CUMULATIVE)
 
   def bind[S](stream: VectTerm[K, S])(adder: B => S => Unit): GroupedTerm2[K, B, OUT] = {
     bindings :+= (stream, adder)
-//    dependsOn :+= stream.input
-    ???
+    // the 'stream' vector should reshape before any cells
+    dependsOn += stream.input.getNewColumnTrigger
     this
   }
 
-  private def sealCollapse[Y, O](reduceType:ReduceType) :VectTerm[K,O] = {
-    val derived = new DerivedVector[K, O] {
-      override def newCell(i: Int, k: K): UpdatingHasVal[O] = {
-//        val cellLifecycle = lifecycle.lifeCycleForKey(k)
-        val cell :SlicedBucket[Y,O] = uncollapsed.newBucket(i, k, reduceType)
-        bindings.foreach(pair => {
-          val (vectTerm, adder) = pair
-          type IN = Any
-          val hasVal = vectTerm(k).input
-          cell.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-        })
+  private def sealCollapse(reduceType:ReduceType) :VectTerm[K,OUT] = {
+    val derived = new DerivedVector[K, OUT] {
+      override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
+        val cellLifecycle = lifecycle.lifeCycleForKey(k)
+        val bindingsForK :List[(HasVal[_], (B => _ => Unit))] = bindings.map(pair => pair._1.apply(k).input -> pair._2)
+        val cell :SlicedBucket[B,OUT] = uncollapsed.newBucket(i, k, reduceType, cellLifecycle, cellOut, bindingsForK)
         cell
       }
 
-      override def dependsOn: Set[EventGraphObject] = ???
+      override def dependsOn: Set[EventGraphObject] = GroupedTerm2.this.dependsOn
     }
     input.newIsomorphicVector(derived)
-//    val cellBuilder = (i:Int, k:K) => {
-//      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
-//      val slicer = triggerAlign match {
-//        case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev, exposeInitialValue = true)
-//        case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev, exposeInitialValue = true)
-//      }
-//      // add the captured bindings
-//      bindings.foreach(pair => {
-//        val (vectTerm, adder) = pair
-//        type IN = Any
-//        val hasVal = vectTerm(k).input
-//        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-//      })
-//      slicer
-//    }
-//    input.newIsomorphicVector(cellBuilder)
-    ???
   }
 
 }
@@ -644,63 +612,69 @@ class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: Uncol
     val ident :K=>MutableValue[X] = (k:K) => {val idx = input.input.indexOf(k); new MutableValue(input.input.get(idx))}
     val adder = implicitly[MutableValue[X] => CellAdder[X]]
     val yOut = implicitly[AggOut[MutableValue[X], X]]
-    _collapse[MutableValue[X], X](ident, adder, yOut).last()
+    val type_b = implicitly[ClassTag[MutableValue[X]]]
+    _collapse[MutableValue[X], X](ident, adder, yOut, type_b).last()
   }
 
   def all :VectTerm[K,X] = {
     val ident :K=>MutableValue[X] = (k:K) => {val idx = input.input.indexOf(k); new MutableValue(input.input.get(idx))}
     val adder = implicitly[MutableValue[X] => CellAdder[X]]
     val yOut = implicitly[AggOut[MutableValue[X], X]]
-    _collapse[MutableValue[X], X](ident,adder, yOut).all()
+    val type_b = implicitly[ClassTag[MutableValue[X]]]
+    _collapse[MutableValue[X], X](ident,adder, yOut, type_b).all()
   }
 
-  def collapseWith[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT]) :GroupedTerm2[K, B, OUT] = {
+  def collapseWith[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
     val keyToB :(K)=>B = (k:K) => newBFunc
-    collapseWithK(keyToB)(addFunc)(aggOut)
+    collapseWithK(keyToB)(addFunc)(aggOut, type_b)
   }
 
-  def collapseWith[B, OUT](newBFunc: K => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT]) :GroupedTerm2[K, B, OUT] = {
+  def collapseWith[B, OUT](newBFunc: K => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = addFunc(b)(x)
     }
-    _collapse[B,OUT](newBFunc, cellAdd, aggOut)
+    _collapse[B,OUT](newBFunc, cellAdd, aggOut, type_b)
   }
 
-  def collapseWithK[B, OUT](newBFunc: K => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT]) :GroupedTerm2[K, B, OUT] = {
+  def collapseWithK[B, OUT](newBFunc: K => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = addFunc(b)(x)
     }
-    _collapse[B,OUT](newBFunc, cellAdd, aggOut)
+    _collapse[B,OUT](newBFunc, cellAdd, aggOut, type_b)
   }
 
-  def collapse[B, OUT](newBFunc: => B)(implicit adder: B => CellAdder[X], aggOut: AggOut[B, OUT]) :GroupedTerm2[K, B, OUT] = {
+  def collapse[B, OUT](newBFunc: => B)(implicit adder: B => CellAdder[X], aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
     val keyToB :(K)=>B = (k:K) => newBFunc
-    _collapse(keyToB, adder, aggOut)
+    _collapse(keyToB, adder, aggOut, type_b)
   }
 
-  def collapseK[B, OUT](newBFunc: K => B)(implicit adder: B => CellAdder[X], aggOut: AggOut[B, OUT]) :GroupedTerm2[K, B, OUT] = {
-    _collapse(newBFunc, adder, aggOut)
+  def collapseK[B, OUT](newBFunc: K => B)(implicit adder: B => CellAdder[X], aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
+    _collapse(newBFunc, adder, aggOut, type_b)
   }
 
   // some shortcuts - are they worth keeping?
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = {
-    _collapse((k:K) => newBFunc, adder, yOut).last()
+    _collapse((k:K) => newBFunc, adder, yOut, type_b).last()
   }
 
-  def reduceK[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :VectTerm[K,O] = {
-    _collapse(newBFunc, adder, yOut).last()
+  def reduce[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = {
+    _collapse(newBFunc, adder, yOut, type_b).last()
   }
 
-  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :VectTerm[K,O] = {
-    _collapse((k:K) => newBFunc, adder, yOut).all()
-  }
-  def scanK[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O]) :VectTerm[K,O] = {
-    _collapse(newBFunc, adder, yOut).all()
+  def reduceK[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = {
+    _collapse(newBFunc, adder, yOut, type_b).last()
   }
 
-  def _collapse[B, OUT](newBFunc: K => B, adder:B => CellAdder[X], yOut :AggOut[B, OUT], type_b:ClassTag[B] = null) :GroupedTerm2[K, B, OUT] = {
+  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = {
+    _collapse((k:K) => newBFunc, adder, yOut, type_b).all()
+  }
+  def scanK[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = {
+    _collapse(newBFunc, adder, yOut, type_b).all()
+  }
+
+  def _collapse[B, OUT](newBFunc: K => B, adder:B => CellAdder[X], yOut :AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
     val lifecycle :VectCellLifecycle[K, X, B] = new VectCellLifecycle[K, X, B](newBFunc)(type_b)
-    val groupWithBindings = new GroupedTerm2[K, B, OUT](input, uncollapsedGroup, lifecycle, env)
+    val groupWithBindings = new GroupedTerm2[K, B, OUT](input, uncollapsedGroup, lifecycle, yOut, env)
     val addX :(B) => (X) => Unit = adder.andThen(ca => ca.add(_))
     groupWithBindings.bind[X](input)(addX)
   }
@@ -710,7 +684,7 @@ trait UncollapsedVectGroup[K, IN] {
   def applyB[B <: Bucket, OUT](lifecycle:KeyToSliceCellLifecycle[K, B], cellOut: AggOut[B, OUT], reduceType:ReduceType) :DerivedVector[K, OUT]
   def applyNew[A, OUT](lifecycle: KeyToSliceCellLifecycle[K, A], adder:A => CellAdder[IN], cellOut:AggOut[A,OUT], reduceType:ReduceType): DerivedVector[K, OUT]
 
-  def newBucket[B, OUT](i:Int, k:K, reduceType:ReduceType) :SlicedBucket[B,OUT] = ???
+  def newBucket[B, OUT](i:Int, k:K, reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT] = ???
 }
 
 trait DerivedVector[K, OUT] {
@@ -721,46 +695,67 @@ trait DerivedVector[K, OUT] {
 class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN], sliceSpec: S, triggerAlign:SliceAlign, env:types.Env, ev: VectSliceTriggerSpec[S]) extends UncollapsedVectGroup[K, IN] {
   val newCellDependencies = ev.newCellPrerequisites(sliceSpec)
 
-  override def applyNew[A, OUT](lifecycle: KeyToSliceCellLifecycle[K, A], adder: (A) => CellAdder[IN], cellOut: AggOut[A, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-    new DerivedVector[K, OUT] {
-      def newCell(i: Int, k: K):UpdatingHasVal[OUT] = {
-        val sourceCell = inputVector.getValueHolder(i)
-        val cellLifecycle = lifecycle.lifeCycleForKey(k)
-        val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
-        println("New sliced reduce for key: " + k + " from source: " + inputVector)
-        new SlicedReduce[S, IN, A, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
+  override def newBucket[B, OUT](i: Int, k: K, reduceType: ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]): SlicedBucket[B, OUT] = {
+    val sourceCell = inputVector.getValueHolder(i)
+    val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
+    println("New sliced reduce for key: " + k + " from source: " + inputVector)
+//    val cell = if (false && classOf[MFunc].isAssignableFrom(lifecycle.C_type.runtimeClass)) {
+//      new SlicedReduce[S, IN, B, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
+//    } else
+  val cell = triggerAlign match {
+      case BEFORE => {
+        new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = true)
       }
-      // NODEPLOY - if I could ask lifeCycle if its cells
-      override def dependsOn: Set[EventGraphObject] = newCellDependencies
+      case AFTER => {
+        new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = true)
+      }
+      case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
     }
+    cell
+  }
+
+  def applyNew[A, OUT](lifecycle: KeyToSliceCellLifecycle[K, A], adder: (A) => CellAdder[IN], cellOut: AggOut[A, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
+    ??? // DELETE THIS
+//    new DerivedVector[K, OUT] {
+//      def newCell(i: Int, k: K):UpdatingHasVal[OUT] = {
+//        val sourceCell = inputVector.getValueHolder(i)
+//        val cellLifecycle = lifecycle.lifeCycleForKey(k)
+//        val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
+//        println("New sliced reduce for key: " + k + " from source: " + inputVector)
+//        new SlicedReduce[S, IN, A, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
+//      }
+//      // NODEPLOY - if I could ask lifeCycle if its cells
+//      override def dependsOn: Set[EventGraphObject] = newCellDependencies
+//    }
   }
 
   def applyB[B <: Bucket, OUT](lifecycle: KeyToSliceCellLifecycle[K, B], cellOut: AggOut[B, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-    new DerivedVector[K, OUT] {
-      override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
-        val sourceCell = inputVector.getValueHolder(i)
-        val cellLifecycle = lifecycle.lifeCycleForKey(k)
-        val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
-        triggerAlign match {
-          case BEFORE => {
-              new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
-          }
-          case AFTER => {
-              new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
-          }
-          case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
-        }
-      }
-
-      override def dependsOn: Set[EventGraphObject] = newCellDependencies
-    }
+    ??? // DELETE THIS
+//    new DerivedVector[K, OUT] {
+//      override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
+//        val sourceCell = inputVector.getValueHolder(i)
+//        val cellLifecycle = lifecycle.lifeCycleForKey(k)
+//        val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
+//        triggerAlign match {
+//          case BEFORE => {
+//              new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
+//          }
+//          case AFTER => {
+//              new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
+//          }
+//          case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
+//        }
+//      }
+//
+//      override def dependsOn: Set[EventGraphObject] = newCellDependencies
+//    }
   }
 }
 
 // NODEPLOY this should be a Term that also supports partitioning operations
 // NODEPLOY rename Y to A
 class PartialBuiltSlicedVectBucket[K, Y, OUT](input:VectTerm[K, _], yOut :AggOut[Y, OUT], val keyCellLifecycle: KeyToSliceCellLifecycle[K, Y], val env:Environment) {
-  var bindings = List[(VectTerm[K, _], (_ => _ => Unit))]()
+  var bindings = List[(VectTerm[K, _], (Y => _ => Unit))]()
 
   private lazy val scanAllTerm: VectTerm[K, OUT] = {
     reset[Null](null)(SliceTriggerSpec.NULL).all()
@@ -817,22 +812,16 @@ class PartialGroupedVectBucketStream[K, S, Y, OUT](input:VectTerm[K,_],
                                                         triggerAlign:SliceAlign,
                                                         keyCellLifecycle:KeyToSliceCellLifecycle[K, Y],
                                                         cellOut: AggOut[Y, OUT],
-                                                        bindings :List[(VectTerm[K, _], (_ => _ => Unit))],
+                                                        bindings :List[(VectTerm[K, _], (Y => _ => Unit))],
                                                         sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
   private def buildSliced(reduceType:ReduceType) :VectTerm[K, OUT] = {
     val cellBuilder = (i:Int, k:K) => {
       val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
+      val bindingsForK :List[(HasVal[_], (Y => _ => Unit))] = bindings.map(pair => pair._1.apply(k).input -> pair._2)
       val slicer = triggerAlign match {
-        case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev, exposeInitialValue = true)
-        case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, ev, exposeInitialValue = true)
+        case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, bindingsForK, env, ev, exposeInitialValue = true)
+        case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, bindingsForK, env, ev, exposeInitialValue = true)
       }
-      // add the captured bindings
-      bindings.foreach(pair => {
-        val (vectTerm, adder) = pair
-        type IN = Any
-        val hasVal = vectTerm(k).input
-        slicer.addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-      })
       slicer
     }
     input.newIsomorphicVector(cellBuilder)

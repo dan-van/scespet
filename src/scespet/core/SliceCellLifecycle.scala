@@ -128,9 +128,7 @@ trait SliceCellLifecycle[C] {
 
 
 object SliceCellLifecycle {
-  // NODEPLOY delete X
-  class CellSliceCellLifecycle[X, A](newCellF: () => A) extends SliceCellLifecycle[A]{
-    override def C_type:ClassTag[A] = ???
+  class CellSliceCellLifecycle[A](newCellF: () => A)(implicit val C_type:ClassTag[A]) extends SliceCellLifecycle[A]{
     override def newCell(): A = newCellF()
     override def closeCell(c: A): Unit = {}
     override def reset(c: A): Unit = {}

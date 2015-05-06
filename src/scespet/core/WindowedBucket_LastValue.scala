@@ -26,7 +26,7 @@ import scespet.core._
  * todo: seems so similar in concept that it feels odd to have two different classes.
  * todo: will think more on this.
  */
-class WindowedBucket_LastValue[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], env :types.Env) extends SlicedBucket[Y, OUT] {
+class WindowedBucket_LastValue[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env) extends SlicedBucket[Y, OUT] {
   private var inWindow = if (windowEvents == null) true else windowEvents.value
 
   private var nextReduce : Y = _
@@ -41,6 +41,29 @@ class WindowedBucket_LastValue[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val wind
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
     var windowEdgeFired = false
+
+    def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
+      val inputBinding = new InputBinding[X](in, adder)
+      val trigger = in.getTrigger
+      inputBindings += trigger -> inputBinding
+      env.addListener(trigger, this)
+      if (in.initialised) {
+        inputBinding.addValueToBucket(nextReduce)
+        // make sure we fire the target bucket for this
+        // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
+        // relationships, we could fire the nextReduce before that is all complete.
+        // it also seems right, we establish all listeners on the new binding before it is fired
+        // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
+        // or if this is an existing bucket (which should be wakeupThisCycle)
+        env.fireAfterChangingListeners(nextReduce)
+      }
+    }
+
+    bindings.foreach(pair => {
+      val (hasVal, adder) = pair
+      type IN = Any
+      addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
+    })
 
     def calculate(): Boolean = {
       windowEdgeFired = false
@@ -81,23 +104,6 @@ class WindowedBucket_LastValue[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val wind
 
       val fireBucketCell = addedValueToBucket || windowEdgeFired
       fireBucketCell
-    }
-
-    def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
-      val inputBinding = new InputBinding[X](in, adder)
-      val trigger = in.getTrigger
-      inputBindings += trigger -> inputBinding
-      env.addListener(trigger, this)
-      if (in.initialised) {
-        inputBinding.addValueToBucket(nextReduce)
-        // make sure we fire the target bucket for this
-        // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
-        // relationships, we could fire the nextReduce before that is all complete.
-        // it also seems right, we establish all listeners on the new binding before it is fired
-        // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
-        // or if this is an existing bucket (which should be wakeupThisCycle)
-        env.fireAfterChangingListeners(nextReduce)
-      }
     }
   }
 
