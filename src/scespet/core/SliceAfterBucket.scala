@@ -21,6 +21,7 @@ import scespet.core.types.MFunc
  
 class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
   var awaitingNextEventAfterReset = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
+  var pendingInitialValue = List[HasVal[_]]()
 
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
@@ -35,9 +36,15 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
         // NODEPLOY - what is the best way to respond? We want to take the new value, and propagate on
         env.wakeupThisCycle(this)
       }
-      // NODEPLOY - in.initialised should now be redundant
+      // PONDER: should we add a value into the bucket when we are binding a new HasVal that is already initialised?
+      // if we want to do this, we'll have to watch out against double-inserting in case the
+      // hasVal has a pending wakeup pushed onto the stack
+      // see also SliceBeforeBucket
       if (in.initialised) {
-//        inputBinding.addValueToBucket(nextReduce)
+        pendingInitialValue :+= in
+        env.wakeupThisCycle(SliceAfterBucket.this)
+
+        //        inputBinding.addValueToBucket(nextReduce)
         // make sure we wake up to consume this
         // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
         // relationships, we could fire the nextReduce before that is all complete.
@@ -63,6 +70,22 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
       var addedValueToBucket = false
+
+      if (pendingInitialValue.nonEmpty) {
+        for (in <- pendingInitialValue) {
+          if (!env.hasChanged(in.getTrigger)) {
+            // this has not fired, but is initialised, so we need to insert the value
+            val option = inputBindings.get(in.getTrigger)
+            if (option.isDefined) {
+              option.get.addValueToBucket(nextReduce)
+              addedValueToBucket = true
+            }
+          }
+        }
+        pendingInitialValue = List()
+      }
+
+
       for (t <- env.getTriggers(this)) {
         val option = inputBindings.get(t)
         if (option.isDefined) {

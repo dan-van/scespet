@@ -28,8 +28,40 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceBeforeBucket[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
+class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
   if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
+
+  private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
+  private var nextReduce : Y = _
+  def assignNewReduce() :Unit = {
+    val newCell = cellLifecycle.newCell()
+    // tweak the listeners:
+    if (cellIsFunction) {
+      // watch out for the optimisation where the lifecycle re-uses the current cell
+      if (newCell != nextReduce) {
+        if (nextReduce != null) {
+          env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          // listen to it so that we propagate value updates to the bucket
+          env.removeListener(nextReduce, this)
+        }
+
+        nextReduce = newCell
+        // join values trigger the bucket
+        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        // listen to it so that we propagate value updates to the bucket
+        env.addListener(nextReduce, this)
+      }
+    } else {
+      nextReduce = newCell
+    }
+  }
+  // init the first reduce
+  //    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
+  //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+  assignNewReduce()
+
+  var pendingInitialValue = List[HasVal[_]]()
+
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[_]]()
@@ -41,18 +73,20 @@ class SliceBeforeBucket[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val sliceSpec
       inputBindings += trigger -> inputBinding
       env.addListener(trigger, this)
       if (in.initialised) {
-        inputBinding.addValueToBucket(nextReduce)
-        // make sure we wake up to consume this
-        // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
-        // relationships, we could fire the nextReduce before that is all complete.
-        // it also seems right, we establish all listeners on the new binding before it is fired
-        // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
-        // or if this is an existing bucket (which should be wakeupThisCycle)
-        if (cellIsFunction) {
-          env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
-        } else {
-          env.fireAfterChangingListeners(SliceBeforeBucket.this)
-        }
+        pendingInitialValue :+= in
+        env.wakeupThisCycle(SliceBeforeBucket.this)
+//        inputBinding.addValueToBucket(nextReduce)
+//        // make sure we wake up to consume this
+//        // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
+//        // relationships, we could fire the nextReduce before that is all complete.
+//        // it also seems right, we establish all listeners on the new binding before it is fired
+//        // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
+//        // or if this is an existing bucket (which should be wakeupThisCycle)
+//        if (cellIsFunction) {
+//          env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+//        } else {
+//          env.fireAfterChangingListeners(SliceBeforeBucket.this)
+//        }
       }
     }
 
@@ -73,6 +107,20 @@ class SliceBeforeBucket[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val sliceSpec
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
       var addedValueToBucket = false
+      if (pendingInitialValue.nonEmpty) {
+        for (in <- pendingInitialValue) {
+          if (!env.hasChanged(in.getTrigger)) {
+            // this has not fired, but is initialised, so we need to insert the value
+            val option = inputBindings.get(in.getTrigger)
+            if (option.isDefined) {
+              option.get.addValueToBucket(nextReduce)
+              addedValueToBucket = true
+            }
+          }
+        }
+        pendingInitialValue = List()
+      }
+
       for (t <- env.getTriggers(this)) {
         val option = inputBindings.get(t)
         if (option.isDefined) {
@@ -80,12 +128,12 @@ class SliceBeforeBucket[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val sliceSpec
           addedValueToBucket = true
         }
       }
-      if (doneSlice && addedValueToBucket) {
+      if (cellIsFunction & doneSlice && addedValueToBucket) {
         // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
         // still pending wiring.
         // The contract is that a bucket will receive a calculate after it has had its inputs added
         // therefore, we'll send a fire after establishing listener edges to preserve this contract.
-        env.fireAfterChangingListeners(nextReduce)
+        env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
       }
 
       val fireBucketCell = addedValueToBucket || doneSlice
@@ -118,33 +166,6 @@ class SliceBeforeBucket[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val sliceSpec
     completedReduce = cellOut.out(nextReduce)
   }
 
-  private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
-  private var nextReduce : Y = _
-  def assignNewReduce() :Unit = {
-    val newCell = cellLifecycle.newCell()
-    // tweak the listeners:
-    if (cellIsFunction) {
-      // watch out for the optimisation where the lifecycle re-uses the current cell
-      if (newCell != nextReduce) {
-        if (nextReduce != null) {
-          env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-          // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, this)
-        }
-
-        nextReduce = newCell
-        // join values trigger the bucket
-        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        // listen to it so that we propagate value updates to the bucket
-        env.addListener(nextReduce, this)
-      }
-    } else {
-      nextReduce = newCell
-    }
-  }
-  // init the first reduce
-//    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
-//    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
 
   private var completedReduce : OUT = _
 

@@ -170,7 +170,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     // build a vector where all cells share this single "collapsed" function
     val singleSharedCell = new VectorMap[Y](f)
     val cellBuilder = (index:Int, key:K) => singleSharedCell
-    newIsomorphicVector(cellBuilder)
+    newIsomorphicVector("mapVector", cellBuilder)
     // now return a single stream of the collapsed value:
     return new MacroTerm[Y](env)(singleSharedCell)
   }
@@ -211,7 +211,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       }
     }
     val cellBuilder = (index:Int, key:K) => new MapCell(index)
-    return newIsomorphicVector(cellBuilder)
+    return newIsomorphicVector("map", cellBuilder)
   }
 
   // TODO: common requirement to specify a f(X) => Option[Y] as a filter.map chain
@@ -222,13 +222,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   // new Test[Any]("Hello").myF(_ match {case x:Integer => Some(x);case _ => None}).in
 
   def filterType[Y : ClassTag]():VectTerm[K,Y] = {
+    val typeY = implicitly[ClassTag[Y]]
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
       //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
-      val classTag = reflect.classTag[Y]
+//      val classTag = reflect.classTag[Y]
       var value:Y = _
       def calculate() = {
         val inputVal = input.get(index)
-        val oy = classTag.unapply(inputVal)
+        val oy = typeY.unapply(inputVal)
         if (oy.isDefined) {
           value = oy.get
           initialised = true
@@ -239,7 +240,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       }
     }
     val cellBuilder = (index:Int, key:K) => new MapCell(index)
-    return newIsomorphicVector(cellBuilder)
+    return newIsomorphicVector(s"filterType[$typeY]",cellBuilder)
   }
 
   def filter(accept: (X) => Boolean):VectTerm[K,X] = {
@@ -266,7 +267,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
       newCell
     }
-    return newIsomorphicVector(cellBuilder)
+    return newIsomorphicVector("filter", cellBuilder)
   }
 
   //  def reduce_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT] = {
@@ -288,7 +289,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
 
   private [core] def newIsomorphicVector[Y](cellBuilder: DerivedVector[K, Y]): VectTerm[K, Y] = {
-    val newVect = newIsomorphicVector[Y](cellBuilder.newCell _)
+    val newVect = newIsomorphicVector[Y](cellBuilder.toString, cellBuilder.newCell _)
     for (dep <- cellBuilder.dependsOn) {
       // really we just need an ordering that dep 'comes-before' we try to build new cells
       // however in my simplified version of the graph walk, I've not supported that
@@ -297,7 +298,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     newVect
   }
 
-  private [core] def newIsomorphicVector[Y](cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
+  private [core] def newIsomorphicVector[Y](description:String, cellBuilder: (Int, K) => UpdatingHasVal[Y]): VectTerm[K, Y] = {
     val output: VectorStream[K, Y] = new ChainedVector[K, Y](input, env) {
       def newCell(i: Int, key: K): UpdatingHasVal[Y] = {
         val cellFunc: UpdatingHasVal[Y] = cellBuilder.apply(i, key)
@@ -339,6 +340,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
         }
         return cellFunc
       }
+
+      override def toString: String = input.toString + "->" + description
     }
     return new VectTerm[K, Y](env)(output)
   }
@@ -514,6 +517,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   private def window(keyToWindow:K => HasVal[Boolean], sliceStateDependencies :Set[EventGraphObject]) :GroupedVectTerm[K, X] = {
       val uncollapsed = new UncollapsedVectGroup[K, X] {
+
+        /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
+        override def getComesBefore: Iterable[EventGraphObject] = sliceStateDependencies
+
         override def applyNew[A, OUT](keyedLifecycle: KeyToSliceCellLifecycle[K, A], adder: (A) => CellAdder[X], cellOut: AggOut[A, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
           ??? // DELETE THIS
 //          new DerivedVector[K, OUT] {
@@ -549,6 +556,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     }
     new GroupedVectTerm[K, X](this, uncollapsed, env)
   }
+
+  override def toString: String = s"VectTerm[$input]"
 }
 
 //class PreSliceBuilder[K,B <: Bucket](newBFunc: K => B, input:VectorStream[K, _], env:types.Env) {
@@ -573,7 +582,7 @@ class VectAggLifecycle[K, X, Y <: Agg[X]](newCellF: K => Y) extends KeyToSliceCe
 
 class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGroup[K, _], lifecycle:VectCellLifecycle[K,_,B], cellOut:AggOut[B, OUT], env:types.Env) {
   private var bindings = List[(VectTerm[K, _], (B => _ => Unit))]()
-  private var dependsOn = Set[EventGraphObject]()
+  private var dependsOn = Set[EventGraphObject]( uncollapsed.getComesBefore.toArray :_*)
 
 
   def last() :VectTerm[K,OUT] = sealCollapse(ReduceType.LAST)
@@ -597,6 +606,8 @@ class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGr
       }
 
       override def dependsOn: Set[EventGraphObject] = GroupedTerm2.this.dependsOn
+
+      override def toString: String = input.input + s"->Reduce[$reduceType with $lifecycle]"
     }
     input.newIsomorphicVector(derived)
   }
@@ -675,16 +686,23 @@ class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: Uncol
   def _collapse[B, OUT](newBFunc: K => B, adder:B => CellAdder[X], yOut :AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
     val lifecycle :VectCellLifecycle[K, X, B] = new VectCellLifecycle[K, X, B](newBFunc)(type_b)
     val groupWithBindings = new GroupedTerm2[K, B, OUT](input, uncollapsedGroup, lifecycle, yOut, env)
-    val addX :(B) => (X) => Unit = adder.andThen(ca => ca.add(_))
+    val addX :(B) => (X) => Unit = (b:B) => (x:X) => {
+      val ca = adder.apply(b)
+      ca.add(x)
+    }
     groupWithBindings.bind[X](input)(addX)
   }
 }
 
 trait UncollapsedVectGroup[K, IN] {
+  /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
+  def getComesBefore :Iterable[EventGraphObject]
+
   def applyB[B <: Bucket, OUT](lifecycle:KeyToSliceCellLifecycle[K, B], cellOut: AggOut[B, OUT], reduceType:ReduceType) :DerivedVector[K, OUT]
   def applyNew[A, OUT](lifecycle: KeyToSliceCellLifecycle[K, A], adder:A => CellAdder[IN], cellOut:AggOut[A,OUT], reduceType:ReduceType): DerivedVector[K, OUT]
 
   def newBucket[B, OUT](i:Int, k:K, reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT] = ???
+
 }
 
 trait DerivedVector[K, OUT] {
@@ -694,6 +712,9 @@ trait DerivedVector[K, OUT] {
 
 class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN], sliceSpec: S, triggerAlign:SliceAlign, env:types.Env, ev: VectSliceTriggerSpec[S]) extends UncollapsedVectGroup[K, IN] {
   val newCellDependencies = ev.newCellPrerequisites(sliceSpec)
+
+  /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
+  override def getComesBefore: Iterable[EventGraphObject] = newCellDependencies
 
   override def newBucket[B, OUT](i: Int, k: K, reduceType: ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]): SlicedBucket[B, OUT] = {
     val sourceCell = inputVector.getValueHolder(i)
@@ -824,7 +845,7 @@ class PartialGroupedVectBucketStream[K, S, Y, OUT](input:VectTerm[K,_],
       }
       slicer
     }
-    input.newIsomorphicVector(cellBuilder)
+    input.newIsomorphicVector("PartialGroupedVectBucket", cellBuilder)
   }
 
   def all():VectTerm[K, OUT] = buildSliced(ReduceType.CUMULATIVE)
