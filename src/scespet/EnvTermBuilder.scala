@@ -76,7 +76,7 @@ class EnvTermBuilder() extends DelayedInit {
         gen(key)
       }
 
-      val getNewColumnTrigger = new ReshapeSignal(env)
+      val getNewColumnTrigger = new ReshapeSignal(env, this)
 
       val isInitialised: Boolean = true
 
@@ -89,7 +89,11 @@ class EnvTermBuilder() extends DelayedInit {
           i
         }
       }
+
+      override def toString: String = "LazyVect{"+gen+"}"
     })
+
+
   }
 
   // NODEPLOY I think we can delete this now

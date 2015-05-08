@@ -1,6 +1,8 @@
 package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
+import scespet.core.SlicedBucket.JoinValueRendezvous
+import scespet.core.types._
 
 
 /**
@@ -16,9 +18,10 @@ import gsa.esg.mekon.core.EventGraphObject
  * todo: seems so similar in concept that it feels odd to have two different classes.
  * todo: will think more on this.
  */
-class WindowedBucket_Continuous[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env) extends SlicedBucket[Y, OUT] {
+class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env) extends SlicedBucket[Y, OUT] {
   private var inWindow = if (windowEvents == null) true else windowEvents.value
 
+  private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
   private var completedReduce : Y = _
 
@@ -29,32 +32,10 @@ class WindowedBucket_Continuous[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val win
                       // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
 
   // most of the work is actually handled in this 'rendezvous' class
-  private val joinValueRendezvous = new types.MFunc {
-    var inputBindings = Map[EventGraphObject, InputBinding[_]]()
+  private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
     var windowEdgeFired = false
 
-    def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
-      val inputBinding = new InputBinding[X](in, adder)
-      val trigger = in.getTrigger
-      inputBindings += trigger -> inputBinding
-      env.addListener(trigger, this)
-      if (in.initialised) {
-        inputBinding.addValueToBucket(nextReduce)
-        // make sure we fire the target bucket for this
-        // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
-        // relationships, we could fire the nextReduce before that is all complete.
-        // it also seems right, we establish all listeners on the new binding before it is fired
-        // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
-        // or if this is an existing bucket (which should be wakeupThisCycle)
-        env.fireAfterChangingListeners(nextReduce)
-      }
-    }
-
-    bindings.foreach(pair => {
-      val (hasVal, adder) = pair
-      type IN = Any
-      addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-    })
+    override def nextReduce: Y = WindowedBucket_Continuous.this.nextReduce
 
     def calculate(): Boolean = {
       windowEdgeFired = false
@@ -76,6 +57,7 @@ class WindowedBucket_Continuous[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val win
 
       var addedValueToBucket = false
       if (inWindow) { // add some values...
+        // NODEPLOY I'll need to do initialisation using  JoinValueRendezvous.pendingInitialValue as we do for SlicedBucket
         import collection.JavaConversions.iterableAsScalaIterable
         for (t <- env.getTriggers(this)) {
           val option = inputBindings.get(t)
@@ -86,11 +68,13 @@ class WindowedBucket_Continuous[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val win
         }
       }
       if (windowEdgeFired && addedValueToBucket) {
+        // NODEPLOY not sure this is still true?
+
         // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
         // still pending wiring.
         // The contract is that a bucket will receive a calculate after it has had its inputs added
         // therefore, we'll send a fire after establishing listener edges to preserve this contract.
-        env.fireAfterChangingListeners(nextReduce)
+        if (cellIsFunction) env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
       }
 
       val fireBucketCell = addedValueToBucket || windowEdgeFired
@@ -120,8 +104,10 @@ class WindowedBucket_Continuous[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val win
 
   private def closeCurrentBucket() {
     if (nextReduce != null) {
-      env.removeListener(joinValueRendezvous, nextReduce)
-      env.removeListener(nextReduce, this)
+      if (cellIsFunction) {
+        env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        env.removeListener(nextReduce, this)
+      }
       cellLifecycle.closeCell(nextReduce)
     }
     completedReduce = nextReduce
@@ -132,21 +118,30 @@ class WindowedBucket_Continuous[Y <: Bucket, OUT](cellOut:AggOut[Y,OUT], val win
   // NOTE: closeCurrentBucket should always be called before this!
   private def readyNextReduce() {
     nextReduce = cellLifecycle.newCell()
-    // join values trigger the bucket
-    env.addListener(joinValueRendezvous, nextReduce)
-    // listen to it so that we propagate value updates to the bucket
-    env.addListener(nextReduce, this)
+    if (cellIsFunction) {
+      // join values trigger the bucket
+      env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+      // listen to it so that we propagate value updates to the bucket
+      env.addListener(nextReduce, this)
+    }
     // this is the next bucket, expose it
     valueSrc = nextReduce
   }
 
   def calculate():Boolean = {
   // listeners can see close events and bucket updates
-    if (env.hasChanged(joinValueRendezvous) && joinValueRendezvous.windowEdgeFired && !inWindow) {
-      // this is a close event
-      return true
+    if (env.hasChanged(joinValueRendezvous)) {
+      if (joinValueRendezvous.windowEdgeFired) {
+        if (!inWindow) {
+          // this is a close event
+          return true
+        }
+      } else {
+        // this is a 'value added to bucket' event
+        return true
+      }
     }
-    if (env.hasChanged(valueSrc)) {
+    if (cellIsFunction && env.hasChanged(valueSrc)) {
       // fire value changes
       return true
     }

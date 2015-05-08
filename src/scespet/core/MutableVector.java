@@ -48,7 +48,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
     public MutableVector(Environment env) {
         this.env = env;
-        reshaped = new ReshapeSignal(env);
+        reshaped = new ReshapeSignal(env, this);
         env.setStickyInGraph(reshaped, true);
     }
 

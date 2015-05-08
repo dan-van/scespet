@@ -13,7 +13,7 @@ import scala.reflect.ClassTag
 
 import scespet.util._
 import scespet.util.SliceAlign._
-import scala.Some
+import scala.{Predef, Some}
 
 /**
  * Created with IntelliJ IDEA.
@@ -516,44 +516,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   private def window(keyToWindow:K => HasVal[Boolean], sliceStateDependencies :Set[EventGraphObject]) :GroupedVectTerm[K, X] = {
-      val uncollapsed = new UncollapsedVectGroup[K, X] {
-
-        /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
-        override def getComesBefore: Iterable[EventGraphObject] = sliceStateDependencies
-
-        override def applyNew[A, OUT](keyedLifecycle: KeyToSliceCellLifecycle[K, A], adder: (A) => CellAdder[X], cellOut: AggOut[A, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-          ??? // DELETE THIS
-//          new DerivedVector[K, OUT] {
-//            override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
-//              val sourceCell = input.getValueHolder(i)
-//              val lifecycle = keyedLifecycle.lifeCycleForKey(k)
-//              val windowStream = keyToWindow(k)
-//              val outputCell:UpdatingHasVal[OUT] = new WindowedReduce[X, A, OUT](sourceCell, adder, cellOut, windowStream, lifecycle, reduceType, env)
-//              outputCell
-//            }
-//
-//            override def dependsOn: Set[EventGraphObject] = sliceStateDependencies
-//          }
-        }
-
-        override def applyB[B <: Bucket, OUT](keyedLifecycle: KeyToSliceCellLifecycle[K, B], cellOut: AggOut[B, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-          ??? // DELETE THIS
-          //        new DerivedVector[K, OUT] {
-//          override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
-//            val sourceCell = input.getValueHolder(i)
-//            val lifecycle = keyedLifecycle.lifeCycleForKey(k)
-//            val windowStream = keyToWindow(k)
-//            val outputCell:UpdatingHasVal[OUT] = reduceType match {
-//              case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, windowStream, lifecycle, env)
-//              case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, windowStream, lifecycle, env)
-//            }
-//            outputCell
-//          }
-//
-//          override def dependsOn: Set[EventGraphObject] = sliceStateDependencies
-//        }
-      }
-    }
+    val uncollapsed = new UncollapsedVectGroupWithWindow[K, X](input, keyToWindow, sliceStateDependencies, env)
     new GroupedVectTerm[K, X](this, uncollapsed, env)
   }
 
@@ -698,10 +661,7 @@ trait UncollapsedVectGroup[K, IN] {
   /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
   def getComesBefore :Iterable[EventGraphObject]
 
-  def applyB[B <: Bucket, OUT](lifecycle:KeyToSliceCellLifecycle[K, B], cellOut: AggOut[B, OUT], reduceType:ReduceType) :DerivedVector[K, OUT]
-  def applyNew[A, OUT](lifecycle: KeyToSliceCellLifecycle[K, A], adder:A => CellAdder[IN], cellOut:AggOut[A,OUT], reduceType:ReduceType): DerivedVector[K, OUT]
-
-  def newBucket[B, OUT](i:Int, k:K, reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT] = ???
+  def newBucket[B, OUT](i:Int, k:K, reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT]
 
 }
 
@@ -735,42 +695,28 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
     cell
   }
 
-  def applyNew[A, OUT](lifecycle: KeyToSliceCellLifecycle[K, A], adder: (A) => CellAdder[IN], cellOut: AggOut[A, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-    ??? // DELETE THIS
-//    new DerivedVector[K, OUT] {
-//      def newCell(i: Int, k: K):UpdatingHasVal[OUT] = {
-//        val sourceCell = inputVector.getValueHolder(i)
-//        val cellLifecycle = lifecycle.lifeCycleForKey(k)
-//        val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
-//        println("New sliced reduce for key: " + k + " from source: " + inputVector)
-//        new SlicedReduce[S, IN, A, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
-//      }
-//      // NODEPLOY - if I could ask lifeCycle if its cells
-//      override def dependsOn: Set[EventGraphObject] = newCellDependencies
-//    }
+}
+class UncollapsedVectGroupWithWindow[K, IN](inputVector:VectorStream[K, IN], keyToWindow:K => HasVal[Boolean], sliceStateDependencies :Set[EventGraphObject],  val env:types.Env) extends UncollapsedVectGroup[K, IN] {
+  /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
+  override def getComesBefore: Iterable[EventGraphObject] = sliceStateDependencies
+
+  override def newBucket[B, OUT](i: Int, k: K, reduceType: ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]): SlicedBucket[B, OUT] = {
+    val sourceCell = inputVector.getValueHolder(i)
+    println("New window reduce for key: " + k + " from source: " + inputVector)
+//    val cell = if (false && classOf[MFunc].isAssignableFrom(lifecycle.C_type.runtimeClass)) {
+//      new SlicedReduce[S, IN, B, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
+//    } else
+    val windowStream :HasValue[Boolean] = keyToWindow(k)
+// for non-listenable reductions - should we keep this?
+//              val outputCell:UpdatingHasVal[OUT] = new WindowedReduce[X, A, OUT](sourceCell, adder, cellOut, windowStream, lifecycle, reduceType, env)
+
+    val outputCell:SlicedBucket[B, OUT] = reduceType match {
+      case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, windowStream, lifecycle, bindings, env)
+      case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, windowStream, lifecycle, bindings, env)
+    }
+    outputCell
   }
 
-  def applyB[B <: Bucket, OUT](lifecycle: KeyToSliceCellLifecycle[K, B], cellOut: AggOut[B, OUT], reduceType: ReduceType): DerivedVector[K, OUT] = {
-    ??? // DELETE THIS
-//    new DerivedVector[K, OUT] {
-//      override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
-//        val sourceCell = inputVector.getValueHolder(i)
-//        val cellLifecycle = lifecycle.lifeCycleForKey(k)
-//        val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
-//        triggerAlign match {
-//          case BEFORE => {
-//              new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
-//          }
-//          case AFTER => {
-//              new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
-//          }
-//          case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
-//        }
-//      }
-//
-//      override def dependsOn: Set[EventGraphObject] = newCellDependencies
-//    }
-  }
 }
 
 // NODEPLOY this should be a Term that also supports partitioning operations

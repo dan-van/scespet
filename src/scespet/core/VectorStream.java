@@ -45,9 +45,11 @@ public interface VectorStream<K, V> {
 
     public static class ReshapeSignal implements Function, EventGraphObject.Lifecycle {
         private Environment env;
+        private VectorStream<?, ?> vector;      // this is mainly to aid debugging - which vector is this reshape relating too?
 
-        public ReshapeSignal(Environment env) {
+        public ReshapeSignal(Environment env, VectorStream<?,?> vector) {
             this.env = env;
+            this.vector = vector;
         }
 
         // todo: remnant of an old implementation, clean up, maps no longer needed
@@ -75,6 +77,11 @@ public interface VectorStream<K, V> {
                 env.wakeupThisCycle(this);
             }
             newColumnHasValue_pending.put(i, true);
+        }
+
+        @Override
+        public String toString() {
+            return "ReshapeTrigger{"+vector+"}";
         }
     }
 }

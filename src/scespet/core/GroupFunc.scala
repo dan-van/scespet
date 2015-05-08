@@ -20,7 +20,7 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
     env.addListener(source.trigger, this)
   }
 
-  val getNewColumnTrigger = new ReshapeSignal(env)
+  val getNewColumnTrigger = new ReshapeSignal(env, this)
 
   def newCell(i: Int, key: K) = {
     val cell = new ValueFunc[V](env)
@@ -46,4 +46,6 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
     func.setValue(nextVal)
     return true
   }
+
+  override def toString: String = "Grouped{"+source+"}"
 }

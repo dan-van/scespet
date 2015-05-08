@@ -26,7 +26,7 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
         this.env = env;
 
         // this listens to the source reshaping, applies our new columns, then fires on that we have reshaped
-        reshapeSignal = new ReshapeSignal(env) {
+        reshapeSignal = new ReshapeSignal(env, this) {
             private int seenKeys = 0;
             private ReshapeSignal sourceVectorChanged = sourceVector.getNewColumnTrigger();
             {

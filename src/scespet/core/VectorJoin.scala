@@ -4,7 +4,6 @@ import scespet.core.VectorStream.ReshapeSignal
 import scala.collection.mutable
 
 /**
- * This takes a Stream and demultiplexes it into a VectorStream using a value -> key function
  *
  * Created with IntelliJ IDEA.
  * User: danvan
@@ -74,7 +73,7 @@ class VectorJoin[K, K2, X, Y](xVect:VectorStream[K,X], yVect:VectorStream[K2,Y],
   }
 
 
-  val getNewColumnTrigger :ReshapeSignal = new ReshapeSignal(env) {
+  val getNewColumnTrigger :ReshapeSignal = new ReshapeSignal(env, this) {
     var x_seenKeys = 0
     var y_seenKeys = 0
 
