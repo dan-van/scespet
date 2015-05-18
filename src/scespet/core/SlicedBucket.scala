@@ -32,6 +32,8 @@ object SlicedBucket {
 
   abstract class JoinValueRendezvous[B](bucketSlicer:SlicedBucket[B, _], bindings:List[(HasVal[_], (B => _ => Unit))], env:types.Env) extends types.MFunc {
     var inputBindings = Map[EventGraphObject, InputBinding[B, _]]()
+
+    // NOTE: any implemenation of calculate needs to consume the pendingInitialValue set. I may change classes to make this more obvious
     var pendingInitialValue = List[HasVal[_]]()
 
     def nextReduce:B
@@ -41,18 +43,19 @@ object SlicedBucket {
       val trigger = in.getTrigger
       inputBindings += trigger -> inputBinding
       env.addListener(trigger, this)
-      if (env.hasChanged(trigger)) {
-        // we missed the event
-        // NODEPLOY - what is the best way to respond? We want to take the new value, and propagate on
-        env.wakeupThisCycle(this)
-      }
+// NODEPLOY - I think that adding to the pending set and waking(this) solves the concept below
+//      if (env.hasChanged(trigger)) {
+//        // we missed the event
+//        // NODEPLOY - what is the best way to respond? We want to take the new value, and propagate on
+//        env.wakeupThisCycle(this)
+//      }
       // PONDER: should we add a value into the bucket when we are binding a new HasVal that is already initialised?
       // if we want to do this, we'll have to watch out against double-inserting in case the
       // hasVal has a pending wakeup pushed onto the stack
       // see also SliceBeforeBucket
       if (in.initialised) {
         pendingInitialValue :+= in
-        env.wakeupThisCycle(bucketSlicer)
+        env.wakeupThisCycle(this)
 
         //        inputBinding.addValueToBucket(nextReduce)
         // make sure we wake up to consume this

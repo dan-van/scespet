@@ -34,11 +34,14 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
     var windowEdgeFired = false
+    var addedValueToBucket = false
 
     override def nextReduce: Y = WindowedBucket_Continuous.this.nextReduce
 
     def calculate(): Boolean = {
       windowEdgeFired = false
+      addedValueToBucket = false
+
       var isNowOpen = inWindow
       if (env.hasChanged(windowEvents.getTrigger)) {
         isNowOpen = windowEvents.value
@@ -55,8 +58,23 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
         }
       }
 
-      var addedValueToBucket = false
       if (inWindow) { // add some values...
+        if (pendingInitialValue.nonEmpty) {
+          val pendingIt = pendingInitialValue.iterator
+          while (pendingIt.hasNext) {
+            val in = pendingIt.next()
+            if (!env.hasChanged(in.getTrigger)) {
+              // this has not fired, but is initialised, so we need to insert the value
+              val option = inputBindings.get(in.getTrigger)
+              if (option.isDefined) {
+                option.get.addValueToBucket(nextReduce)
+                addedValueToBucket = true
+              }
+            }
+          }
+          pendingInitialValue = List()
+        }
+
         // NODEPLOY I'll need to do initialisation using  JoinValueRendezvous.pendingInitialValue as we do for SlicedBucket
         import collection.JavaConversions.iterableAsScalaIterable
         for (t <- env.getTriggers(this)) {
@@ -68,18 +86,22 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
         }
       }
       if (windowEdgeFired && addedValueToBucket) {
-        // NODEPLOY not sure this is still true?
+        // NODEPLOY - I think this comment below is false, and this block can be deleted
 
         // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
         // still pending wiring.
         // The contract is that a bucket will receive a calculate after it has had its inputs added
-        // therefore, we'll send a fire after establishing listener edges to preserve this contract.
-        if (cellIsFunction) env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+        // therefore, we need to send a fire
+        if (cellIsFunction) {
+          env.wakeupThisCycle(nextReduce.asInstanceOf[MFunc])
+        }
       }
 
       val fireBucketCell = addedValueToBucket || windowEdgeFired
       fireBucketCell
     }
+
+    override def toString: String = "JoinRendezvous{"+WindowedBucket_Continuous.this+"}"
   }
 
   if (windowEvents != null) {
@@ -131,21 +153,24 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
   def calculate():Boolean = {
   // listeners can see close events and bucket updates
     if (env.hasChanged(joinValueRendezvous)) {
-      if (joinValueRendezvous.windowEdgeFired) {
-        if (!inWindow) {
-          // this is a close event
-          return true
-        }
-      } else {
-        // this is a 'value added to bucket' event
+      if (joinValueRendezvous.windowEdgeFired && inWindow) {
+        // I think I should fire when a window opens, even if the window is empty - effectively 'reset'
+        // however, I don't think I should fire when the window closes, as this is a 'Scan' bucket, and the last even in the window has already
+        // propagated that interesting state. An event on fire would just be a duplicate
+        return true
+      }
+      if (joinValueRendezvous.addedValueToBucket) {
+        // always fire for any bucket additions.
         return true
       }
     }
+    // there's another option - if the cell is actually a function capable of raising its own events, we could be here.
     if (cellIsFunction && env.hasChanged(valueSrc)) {
       // fire value changes
       return true
+    } else {
+      return false
     }
-    false
   }
 }
 
