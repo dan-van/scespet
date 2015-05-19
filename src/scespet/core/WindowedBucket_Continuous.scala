@@ -75,7 +75,6 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
           pendingInitialValue = List()
         }
 
-        // NODEPLOY I'll need to do initialisation using  JoinValueRendezvous.pendingInitialValue as we do for SlicedBucket
         import collection.JavaConversions.iterableAsScalaIterable
         for (t <- env.getTriggers(this)) {
           val option = inputBindings.get(t)
@@ -83,17 +82,6 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
             option.get.addValueToBucket(nextReduce)
             addedValueToBucket = true
           }
-        }
-      }
-      if (windowEdgeFired && addedValueToBucket) {
-        // NODEPLOY - I think this comment below is false, and this block can be deleted
-
-        // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
-        // still pending wiring.
-        // The contract is that a bucket will receive a calculate after it has had its inputs added
-        // therefore, we need to send a fire
-        if (cellIsFunction) {
-          env.wakeupThisCycle(nextReduce.asInstanceOf[MFunc])
         }
       }
 
