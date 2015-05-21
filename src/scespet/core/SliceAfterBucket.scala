@@ -1,6 +1,7 @@
 package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
+import scespet.core.SlicedBucket.JoinValueRendezvous
 import scespet.util.Logged
 import scespet.core.types.MFunc
 
@@ -20,56 +21,22 @@ import scespet.core.types.MFunc
  */
  
 class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
+  private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
+  private var nextReduce : Y = _
+  private var completedReduceValue : OUT = _
+
   var awaitingNextEventAfterReset = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
-  var pendingInitialValue = List[HasVal[_]]()
 
-  private val joinValueRendezvous = new types.MFunc {
-    var inputBindings = Map[EventGraphObject, InputBinding[_]]()
+  // most of the work is actually handled in this 'rendezvous' class
+  private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
+    var doneSlice = false
+    var addedValueToBucket = false
 
-    def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
-      val inputBinding = new InputBinding[X](in, adder)
-      val trigger = in.getTrigger
-      inputBindings += trigger -> inputBinding
-      env.addListener(trigger, this)
-      if (env.hasChanged(trigger)) {
-        // we missed the event
-        // NODEPLOY - what is the best way to respond? We want to take the new value, and propagate on
-        env.wakeupThisCycle(this)
-      }
-      // PONDER: should we add a value into the bucket when we are binding a new HasVal that is already initialised?
-      // if we want to do this, we'll have to watch out against double-inserting in case the
-      // hasVal has a pending wakeup pushed onto the stack
-      // see also SliceBeforeBucket
-      if (in.initialised) {
-        pendingInitialValue :+= in
-        env.wakeupThisCycle(SliceAfterBucket.this)
-
-        //        inputBinding.addValueToBucket(nextReduce)
-        // make sure we wake up to consume this
-        // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
-        // relationships, we could fire the nextReduce before that is all complete.
-        // it also seems right, we establish all listeners on the new binding before it is fired
-        // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
-        // or if this is an existing bucket (which should be wakeupThisCycle)
-// NODEPLOY - why?
-//        if (cellIsFunction) {
-//          env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
-//        } else {
-//          env.fireAfterChangingListeners(SliceAfterBucket.this)
-//        }
-      }
-    }
-
-    bindings.foreach(pair => {
-      val (hasVal, adder) = pair
-      type IN = Any
-      addInputBinding[IN](hasVal.asInstanceOf[HasVal[IN]], adder.asInstanceOf[Y => IN => Unit])
-    })
+    override def nextReduce: Y = SliceAfterBucket.this.nextReduce
 
     def calculate(): Boolean = {
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
-      var addedValueToBucket = false
 
       if (pendingInitialValue.nonEmpty) {
         for (in <- pendingInitialValue) {
@@ -93,16 +60,24 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
           addedValueToBucket = true
         }
       }
+
+      // NODEPLOY This may not be required?
+      if (cellIsFunction & doneSlice && addedValueToBucket) {
+        // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
+        // still pending wiring.
+        // The contract is that a bucket will receive a calculate after it has had its inputs added
+        // therefore, we'll send a fire after establishing listener edges to preserve this contract.
+        env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+      }
+
+      // whenever we add a value to the bucket, we need to fire, this is because the bucket and/or the SliceAfterBucket need to know when there has been a mutation
       addedValueToBucket
     }
 
+    override def toString: String = "JoinRendezvous{"+SliceAfterBucket.this+"}"
   }
   env.addListener(joinValueRendezvous, this)
 
-
-  private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
-  private var nextReduce : Y = _
-  private var completedReduceValue : OUT = _
 
   def assignNewReduce() :Unit = {
     val newCell = cellLifecycle.newCell()
@@ -117,16 +92,21 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
         }
 
         nextReduce = newCell
-        // join values trigger the bucket
+        // input bindings that mutate the nextReduce should fire the bucket
+// NODEPLOY
+//        join has fired, so nextReduce will fire, then this will calc, and see that slice has fired, and will re-slice. hmmm.
+        throw new UnsupportedOperationException("Need better graph cycle support")
         env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        // listen to it so that we propagate value updates to the bucket
+        // listen to it so that we fire value events whenever the nextReduce fires
         env.addListener(nextReduce, this)
       }
     } else {
       nextReduce = newCell
     }
   }
-  // assign our first bucket
+  // init the first reduce
+  //    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
+  //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
   assignNewReduce()
 
 
@@ -203,7 +183,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       false
     }
 
-    val fire = bucketFire || sliceFire
+    val fire = if (emitType == ReduceType.CUMULATIVE) bucketFire else sliceFire
     if (fire) {
       initialised = true // belt and braces initialiser
     }

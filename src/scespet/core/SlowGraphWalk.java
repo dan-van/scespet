@@ -171,8 +171,8 @@ public class SlowGraphWalk {
     public void removeTrigger(final EventGraphObject source, final Function target) {
         Node sourceNode = getNode(source);
         Node targetNode = getNode(target);
-        if (hasCalculated(sourceNode) && targetNode != currentFiringNode) {
-            throw new UnsupportedOperationException("NODEPLOY - I don't think I want to support this");
+        if (hasCalculated(sourceNode) && hasChanged(sourceNode) && !hasCalculated(targetNode)) {
+            throw new UnsupportedOperationException("NODEPLOY - I don't think I want to support this - removing listener edge before a fire can propagate, this would be rather non-deterministic I think");
         }
         // I think we should always apply remove after fire propagation. to dodge tricky questions of removing a link that has already fired (or maybe not fired)
         if (isFiring) {

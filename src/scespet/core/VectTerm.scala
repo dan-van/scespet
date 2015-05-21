@@ -491,7 +491,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   // NODEPLOY are these shortcuts worth it?
   def bindTo[B <: Bucket, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
-    group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).collapseWithK(newBFunc)(adder)(aggOut, type_b)
+    group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).collapseWith[B, OUT](newBFunc)(adder)(aggOut, type_b)
   }
 
 

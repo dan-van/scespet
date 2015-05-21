@@ -34,32 +34,6 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
 
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
-  def assignNewReduce() :Unit = {
-    val newCell = cellLifecycle.newCell()
-    // tweak the listeners:
-    if (cellIsFunction) {
-      // watch out for the optimisation where the lifecycle re-uses the current cell
-      if (newCell != nextReduce) {
-        if (nextReduce != null) {
-          env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-          // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, this)
-        }
-
-        nextReduce = newCell
-        // join values trigger the bucket
-        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        // listen to it so that we propagate value updates to the bucket
-        env.addListener(nextReduce, this)
-      }
-    } else {
-      nextReduce = newCell
-    }
-  }
-  // init the first reduce
-  //    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
-  //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
-  assignNewReduce()
 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
@@ -111,6 +85,34 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
       fireBucketCell
     }
   }
+
+  def assignNewReduce() :Unit = {
+    val newCell = cellLifecycle.newCell()
+    // tweak the listeners:
+    if (cellIsFunction) {
+      // watch out for the optimisation where the lifecycle re-uses the current cell
+      if (newCell != nextReduce) {
+        if (nextReduce != null) {
+          env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          // listen to it so that we propagate value updates to the bucket
+          env.removeListener(nextReduce, this)
+        }
+
+        nextReduce = newCell
+        // join values trigger the bucket
+        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        // listen to it so that we propagate value updates to the bucket
+        env.addListener(nextReduce, this)
+      }
+    } else {
+      nextReduce = newCell
+    }
+  }
+  // init the first reduce
+  //    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
+  //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+  assignNewReduce()
+
 
   // We can't 'sliceBefore' nextReduce fires, as we have no idea it is about to fire.
   private val eventCountInput = if (cellIsFunction) Set(nextReduce.asInstanceOf[EventGraphObject]) else joinValueRendezvous.inputBindings.keySet
