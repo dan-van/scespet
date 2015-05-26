@@ -16,7 +16,6 @@ class SlowGraphWalkTest extends FunSuite with Matchers with AssertionsForJUnit w
   class MyNode(name:String)(implicit graph:SlowGraphWalk) extends MFunc {
     var builtSubtree = false
     var changeSet = List[Set[EventGraphObject]]()
-
     def eventCount = changeSet.size
 
     override def calculate(): Boolean = {
@@ -64,8 +63,10 @@ class SlowGraphWalkTest extends FunSuite with Matchers with AssertionsForJUnit w
     graph.fire(rootFunc)
 
     l1.eventCount shouldBe 1
-
     l2.eventCount shouldBe 1
+    l3.eventCount shouldBe 1
+    l4.eventCount shouldBe 1
+
     l2.changeSet(0) should contain only(l1)
     l3.changeSet(0) should contain only(l1)
     l2a.eventCount shouldBe(1)
@@ -75,10 +76,59 @@ class SlowGraphWalkTest extends FunSuite with Matchers with AssertionsForJUnit w
     graph.fire(rootFunc)
     l2a.eventCount shouldBe(2)
     l3a.eventCount shouldBe(2)
+    l4.eventCount shouldBe(2)
 
     //    graph.fire(rootFunc)
 
   }
 
+  test("cycle has changed") {
+    implicit val graph = new SlowGraphWalk
+
+    val rootFunc = new MFunc {
+      override def calculate(): Boolean = true
+      override def toString: String = "Root"
+    }
+    val l2a = new MyNode("l2a")
+    val l2b = new MyNode("l2b")
+    val l2c = new MyNode("l2c") {
+      override def calculate(): Boolean = {
+        super.calculate()
+        eventCount <= 2 // fire two cycles
+      }
+    }
+
+    graph.addTrigger(rootFunc, l2a)
+    graph.addTrigger(l2a, l2b)
+    graph.addTrigger(l2b, l2c)
+    graph.addTrigger(l2c, l2a)
+
+    val l3 = new MyNode("l3")
+    graph.addTrigger(l2b, l3)
+    graph.addTrigger(l2c, l3)
+    graph.addTrigger(rootFunc, l3)
+
+    graph.fire(rootFunc)
+
+    l2a.eventCount shouldBe 3
+    l2b.eventCount shouldBe 3
+    l2c.eventCount shouldBe 3
+    l3.eventCount shouldBe  3
+
+    l2a.changeSet(0) shouldBe Set(rootFunc)
+    l2b.changeSet(0) shouldBe Set(l2a)
+    l2c.changeSet(0) shouldBe Set(l2b)
+    l3.changeSet(0) shouldBe Set(rootFunc, l2b, l2c)
+
+    l2a.changeSet(1) shouldBe Set(l2c)
+    l2b.changeSet(1) shouldBe Set(l2a)
+    l2c.changeSet(1) shouldBe Set(l2b)
+    l3.changeSet (1) shouldBe Set(l2b, l2c)
+
+    l2a.changeSet(2) shouldBe Set(l2c)
+    l2b.changeSet(2) shouldBe Set(l2a)
+    l2c.changeSet(2) shouldBe Set(l2b)
+    l3.changeSet (2) shouldBe Set(l2b, l2c)
+  }
 
 }

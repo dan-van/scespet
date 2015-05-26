@@ -29,7 +29,7 @@ public class SlowGraphWalk {
     private Node currentFiringNode = null;
 
     public class Node {
-        private int lastFired = -1;
+        private int lastFired = -1; // note that currentCycle is initialised to 0, ensuring that a newly built node never looks like it has fired.
         private int lastCalculated = -1;
         private Set<Node> in = new HashSet<Node>(2);
         private Set<Node> out = new HashSet<Node>(2);
@@ -80,9 +80,6 @@ public class SlowGraphWalk {
         }
 
         public void trigger() {
-            if (hasChanged(this)) {
-                logger.severe("NODEPLOY already fired!");
-            }
             if (in.size() + in_orderingOnly.size() > 1) {
                 // it is a rendezvous, punt it
                 if (!joinNodes.contains(this)) {
@@ -102,28 +99,33 @@ public class SlowGraphWalk {
                 propagate = ((Function) graphObject).calculate();
             }
             if (propagate) {
-                if (lastFired == cycleCount) {
-                    throw new AssertionError("cycle: "+cycleCount+" This simple graph walk is trying to double-fire a node: "+graphObject);
-                } else {
-                    lastFired = cycleCount;
-                }
+                lastFired = cycleCount;
                 for (Node node : out) {
-                    node.trigger();
+                    if (hasCalculated(node)) {
+                        cyclicFires.add(node);
+                        logger.info("Cyclic fire of " + node.graphObject);
+                        // nudge my last-fired so that on the next cycle I show as having changed
+                        lastFired = cycleCount + 1;
+                    } else {
+                        node.trigger();
+                    }
                 }
             }
         }
     }
 
-    private PriorityQueue<Node> joinNodes = new PriorityQueue<Node>(10, new Comparator<Node>() {
+    private static Comparator<Node> NODE_COMPARE = new Comparator<Node>() {
         @Override
         public int compare(Node o1, Node o2) {
             return o1.order - o2.order;
         }
-    });
+    };
+    private PriorityQueue<Node> joinNodes = new PriorityQueue<Node>(10, NODE_COMPARE);
+    private Deque<Node> cyclicFires = new ArrayDeque<>(16);
     private IdentityHashMap<EventGraphObject, Node> nodes = new IdentityHashMap<EventGraphObject, Node>();
     private List<Node> newNodesThisCycle = new ArrayList<>();
-    private int cycleCount = -1;
-    private int propagationSweep = 0; // to avoid recursion in cyclic graphs
+    private int cycleCount = 0; // This counts event propagation to determine has-changed values, increments per cycle. Don't change init value without adjusting Node.lastFired init
+    private int propagationSweep = 0; // to avoid recursion when propagating wiring changes in cyclic graphs
     private boolean isFiring = false;
     private boolean isChanging = false;
     // graph changes should occur between propagations to avoid very complex behaviour semantics
@@ -204,11 +206,11 @@ public class SlowGraphWalk {
     }
 
     private boolean hasChanged(Node node) {
-        return node.lastFired >= cycleCount && cycleCount >= 0;
+        return node.lastFired >= cycleCount; // note that cycleCount can go backwards in the applyChanges initialisation block!
     }
 
     private boolean hasCalculated(Node node) {
-        return node.lastCalculated >= cycleCount && cycleCount >= 0;
+        return node.lastCalculated >= cycleCount;
     }
 
     /**
@@ -274,19 +276,24 @@ public class SlowGraphWalk {
 
     private void doFire(EventGraphObject graphObject) {
         isFiring = true;
-        cycleCount++;
-        Node node = getNode(graphObject);
-        eventLogger.beginWalk(node);
-
-        joinNodes.add(node);
-        while (!joinNodes.isEmpty()) {
-            Node next = joinNodes.remove();
-            if (!hasCalculated(next)) {
-                next.execute();
-            } else { // a wakeup could have put this in here whilst a dependency could also want to fire it if we've been lazy and not registered all wakeup edges
-                logger.info("Looks like a non-registered wakeup?");
+        joinNodes.add(getNode(graphObject));
+        do {
+            cycleCount++;
+            while (!joinNodes.isEmpty()) {
+                Node next = joinNodes.remove();
+                if (!hasCalculated(next)) {
+                    eventLogger.beginWalk(next);
+                    next.execute();
+                } else { // a wakeup could have put this in here whilst a dependency could also want to fire it if we've been lazy and not registered all wakeup edges
+                    // NODEPLOY is this a cycle?
+                    logger.info("Looks like a non-registered wakeup?");
+                }
             }
-        }
+            if (cyclicFires.size() > 0) {
+                joinNodes.addAll(cyclicFires);
+                cyclicFires.clear();
+            }
+        } while (!joinNodes.isEmpty());
         isFiring = false;
     }
 
@@ -304,6 +311,10 @@ public class SlowGraphWalk {
                     deferredChange.run();
                 }
                 deferredChanges.clear();
+
+                // this is an interesting attempt to play with alternate approach to initialisation.
+                // if a new node has never been initialised (i.e. had cacluate called), and it is listening to a source that has fired in the past
+                // then tweak the 'hasChanged' logic and 'fire' the new node so that it can react to the input nodes.
                 Collections.sort(newNodesThisCycle, new Comparator<Node>() {
                     @Override
                     public int compare(Node o1, Node o2) {
@@ -312,6 +323,7 @@ public class SlowGraphWalk {
                 });
                 //NODEPLOY - no longer think that 'init' is necessary. Now that a 'wakeup this cycle' can be called from a constructor
                 //NODEPLOY - and now that we can call 'isInitialised' for our sources, we should be able to do all the init we need without this.
+                // NODEPLOY - TODO: track down whether we rely on this?
                 int currentCycle = cycleCount;
                 cycleCount = 0; // this effectively makes all nodes that have ever fired be hasChanged==true
                 for (Node node : newNodesThisCycle) {

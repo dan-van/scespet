@@ -93,9 +93,6 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
 
         nextReduce = newCell
         // input bindings that mutate the nextReduce should fire the bucket
-// NODEPLOY
-//        join has fired, so nextReduce will fire, then this will calc, and see that slice has fired, and will re-slice. hmmm.
-        throw new UnsupportedOperationException("Need better graph cycle support")
         env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
         // listen to it so that we fire value events whenever the nextReduce fires
         env.addListener(nextReduce, this)
