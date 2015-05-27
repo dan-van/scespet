@@ -43,11 +43,13 @@ public interface VectorStream<K, V> {
      */
     ReshapeSignal getNewColumnTrigger();
 
-    public static class ReshapeSignal implements Function {
+    public static class ReshapeSignal implements Function, EventGraphObject.Lifecycle {
         private Environment env;
+        private VectorStream<?, ?> vector;      // this is mainly to aid debugging - which vector is this reshape relating too?
 
-        public ReshapeSignal(Environment env) {
+        public ReshapeSignal(Environment env, VectorStream<?,?> vector) {
             this.env = env;
+            this.vector = vector;
         }
 
         // todo: remnant of an old implementation, clean up, maps no longer needed
@@ -60,11 +62,26 @@ public interface VectorStream<K, V> {
             return ! newColumnHasValue.isEmpty();
         }
 
+        @Override
+        public boolean init(Collection<EventGraphObject> initialisedInputs) {
+            return true;
+        }
+
+        @Override
+        public void destroy() {
+
+        }
+
         public void newColumnAdded(int i) {
             if (newColumnHasValue_pending.isEmpty()) {
                 env.wakeupThisCycle(this);
             }
             newColumnHasValue_pending.put(i, true);
+        }
+
+        @Override
+        public String toString() {
+            return "ReshapeTrigger{"+vector+"}";
         }
     }
 }

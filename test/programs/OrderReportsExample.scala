@@ -78,12 +78,12 @@ object Test1 extends OrderReportsExample {
 }
 object Test2 extends OrderReportsExample {
   def doBody() {
-    out("New orders") (orderEvents.filterType[NewOrder]())
+    out("New orders") (orderEvents.filterType[NewOrder])
   }
 }
 object Test3 extends OrderReportsExample {
   def doBody() {
-    val orderIdToName = orderEvents.filterType[NewOrder]().by(_.orderId).map(_.stock)
+    val orderIdToName = orderEvents.filterType[NewOrder].by(_.orderId).map(_.stock)
     val orderEventsByName = orderEvents.by(evt => orderIdToName.apply(evt.orderId).value)
     out("evt by name"){orderEventsByName}
 //    val sumFillByName = orderEvents.filterType[Fill].map(fill => (orderIdToName(fill.orderId).value, fill)).by(_._1).map(_._2.qty).fold_all(new Sum[Int]).map(_.sum)
@@ -96,7 +96,7 @@ object Test4 extends OrderReportsExample {
     val orderIdToName = eventsById.filterType[NewOrder]().map(_.stock)
     val orderIdToIsOpen = eventsById.map(!_.isInstanceOf[Terminate])
     val orderIdToTrades = orderIdToName.keyToStream(id => priceFactory.getTrades( orderIdToName(id).value ))
-    val accVolPerOrder = orderIdToTrades.map(_.qty).fold(new Sum[Double]).window(orderIdToIsOpen)
+    val accVolPerOrder = orderIdToTrades.map(_.qty).window(orderIdToIsOpen).scan(new Sum[Double])
     Plot.plot (accVolPerOrder)
   }
 }
@@ -107,7 +107,7 @@ object TestN extends OrderReportsExample {
     val orderActive = eventsById.map(!_.isInstanceOf[Terminate])
     val orderIdToStock = eventsById.filterType[NewOrder].map(_.stock)
     val orderIdToTrades = eventsById.keyToStream(id => {val stock = orderIdToStock(id).value; priceFactory.getTrades(stock)})
-    out ("ordId:external Volume ") { orderIdToTrades.map(_.qty.toInt).reduce( new Sum[Int] ).window( orderActive ) }
+    out ("ordId:external Volume ") { orderIdToTrades.map(_.qty.toInt).window( orderActive ).reduce( new Sum[Int] ) }
   }
 }
 

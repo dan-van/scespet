@@ -1,6 +1,9 @@
 package scespet.core;
 
 import gsa.esg.mekon.core.Environment;
+import gsa.esg.mekon.core.EventGraphObject;
+
+import java.util.Collection;
 
 /**
  * Created with IntelliJ IDEA.
@@ -23,16 +26,24 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
         this.env = env;
 
         // this listens to the source reshaping, applies our new columns, then fires on that we have reshaped
-        reshapeSignal = new ReshapeSignal(env) {
+        reshapeSignal = new ReshapeSignal(env, this) {
             private int seenKeys = 0;
             private ReshapeSignal sourceVectorChanged = sourceVector.getNewColumnTrigger();
             {
                 env.addListener(sourceVectorChanged, this);
             }
-            public boolean calculate() {
-                if (!initialised && sourceVector.isInitialised()) {
-                    initialised = true;
+
+            @Override
+            public boolean init(Collection<EventGraphObject> initialisedInputs) {
+                boolean init = super.init(initialisedInputs);
+                initialised = sourceVector.isInitialised();
+                if (initialised) {
+                    calculate();
                 }
+                return initialised;
+            }
+
+            public boolean calculate() {
                 for (int i=seenKeys; i<sourceVector.getSize(); i++) {
                     K newKey = sourceVector.getKey(i);
                     add(newKey);
@@ -44,7 +55,9 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
         // we've just done some listener linkage, ripple an event after listeners established
         // not sure why we don't immediately do calculate here? Maybe because it would not propagate any mapping functions
         // but then again, surely the construction of a mapping function would use exactly the same 'should i init' approach?
-        env.fireAfterChangingListeners(reshapeSignal);
+
+// NODEPLOY I think I can delete all this:
+//        env.fireAfterChangingListeners(reshapeSignal);
 //        env.wakeupThisCycle(reshapeSignal);
 //        reshapeSignal.calculate();
     }
@@ -52,6 +65,10 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
     @Override
     public boolean isInitialised() {
         return initialised;
+    }
+
+    protected VectorStream<K, ?> getSourceVector() {
+        return sourceVector;
     }
 
     @Override

@@ -1,8 +1,9 @@
 package scespet.core
 
-import scespet.core.MultiVectorJoin.BucketCell
 import gsa.esg.mekon.core.EventGraphObject
+import scespet.core.SlicedBucket.JoinValueRendezvous
 import scespet.util.Logged
+import scespet.core.types.MFunc
 
 
 /**
@@ -28,24 +29,43 @@ import scespet.util.Logged
  *
  */
  
-class SliceBeforeBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, newReduce :()=>Y, emitType:ReduceType, env :types.Env) extends SlicedBucket[Y] {
+class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
   if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
+
+  private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
+  private var nextReduce : Y = _
+
   // most of the work is actually handled in this 'rendezvous' class
-  private val joinValueRendezvous = new types.MFunc {
-    var inputBindings = Map[EventGraphObject, InputBinding[_]]()
+  private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
     var doneSlice = false
+
+    override def nextReduce: Y = SliceBeforeBucket.this.nextReduce
 
     def calculate(): Boolean = {
       doneSlice = false
       if (sliceTriggered()) {
         closeCurrentBucket()
-        readyNextReduce()
+        assignNewReduce()
         doneSlice = true
       }
 
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
       var addedValueToBucket = false
+      if (pendingInitialValue.nonEmpty) {
+        for (in <- pendingInitialValue) {
+          if (!env.hasChanged(in.getTrigger)) {
+            // this has not fired, but is initialised, so we need to insert the value
+            val option = inputBindings.get(in.getTrigger)
+            if (option.isDefined) {
+              option.get.addValueToBucket(nextReduce)
+              addedValueToBucket = true
+            }
+          }
+        }
+        pendingInitialValue = List()
+      }
+
       for (t <- env.getTriggers(this)) {
         val option = inputBindings.get(t)
         if (option.isDefined) {
@@ -53,36 +73,50 @@ class SliceBeforeBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, ne
           addedValueToBucket = true
         }
       }
-      if (doneSlice && addedValueToBucket) {
+      if (cellIsFunction & doneSlice && addedValueToBucket) {
         // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
         // still pending wiring.
         // The contract is that a bucket will receive a calculate after it has had its inputs added
         // therefore, we'll send a fire after establishing listener edges to preserve this contract.
-        env.fireAfterChangingListeners(nextReduce)
+        env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
       }
-      
+
       val fireBucketCell = addedValueToBucket || doneSlice
       fireBucketCell
     }
-
-    def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
-      val inputBinding = new InputBinding[X](in, adder)
-      val trigger = in.getTrigger
-      inputBindings += trigger -> inputBinding
-      env.addListener(trigger, this)
-      if (in.initialised) {
-        inputBinding.addValueToBucket(nextReduce)
-        // make sure we fire the target bucket for this
-        // I've chosen 'fireAfterListeners' as I'm worried that more input sources may fire, and since we've not expressed causality
-        // relationships, we could fire the nextReduce before that is all complete.
-        // it also seems right, we establish all listeners on the new binding before it is fired
-        // maybe if this needs to change, we should condition on whether this is a new bucket (which would be fireAfterListeners)
-        // or if this is an existing bucket (which should be wakeupThisCycle)
-        env.fireAfterChangingListeners(nextReduce)
-      }
-    }
   }
 
+  def assignNewReduce() :Unit = {
+    val newCell = cellLifecycle.newCell()
+    // tweak the listeners:
+    if (cellIsFunction) {
+      // watch out for the optimisation where the lifecycle re-uses the current cell
+      if (newCell != nextReduce) {
+        if (nextReduce != null) {
+          env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          // listen to it so that we propagate value updates to the bucket
+          env.removeListener(nextReduce, this)
+        }
+
+        nextReduce = newCell
+        // join values trigger the bucket
+        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        // listen to it so that we propagate value updates to the bucket
+        env.addListener(nextReduce, this)
+      }
+    } else {
+      nextReduce = newCell
+    }
+  }
+  // init the first reduce
+  //    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
+  //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+  assignNewReduce()
+
+
+  // We can't 'sliceBefore' nextReduce fires, as we have no idea it is about to fire.
+  private val eventCountInput = if (cellIsFunction) Set(nextReduce.asInstanceOf[EventGraphObject]) else joinValueRendezvous.inputBindings.keySet
+  var sliceEvents :types.EventGraphObject = ev.buildTrigger(sliceSpec, eventCountInput, env)
   // wire up slice listening:
   if (sliceEvents != null) {
     env.addListener(sliceEvents, joinValueRendezvous)
@@ -98,32 +132,36 @@ class SliceBeforeBucket[Y <: Bucket](val sliceEvents :types.EventGraphObject, ne
 
 
   private def closeCurrentBucket() {
-    if (nextReduce != null) {
-      env.removeListener(joinValueRendezvous, nextReduce)
-      env.removeListener(nextReduce, this)
-      nextReduce.complete()
+    if (cellIsFunction && env.hasChanged(nextReduce)) {
+      throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
     }
-    completedReduce = nextReduce
+    cellLifecycle.closeCell(nextReduce)
+    completedReduce = cellOut.out(nextReduce)
   }
 
-  // NOTE: closeCurrentBucket should always be called before this!
-  private def readyNextReduce() {
-    nextReduce = newReduce()
-    // join values trigger the bucket
-    env.addListener(joinValueRendezvous, nextReduce)
-    // listen to it so that we propagate value updates to the bucket
-    env.addListener(nextReduce, this)
+
+  private var completedReduce : OUT = _
+
+  def value:OUT = {
+    if (emitType == ReduceType.CUMULATIVE)
+      cellOut.out(nextReduce)
+    else
+      completedReduce
   }
 
-  private var nextReduce : Y = _
-  readyNextReduce()
-  
-  private var completedReduce : Y = _
+  if (emitType == ReduceType.LAST) {
+    initialised = false
+  } else {
+    // hmm, interesting implications here.
+    // a CUMULATIVE reduce will be pushing out state changes for each new datapoint.
+    // the question is, is the state valid for downstream map/filter/join before that first datapoint has arrived?
+    // i.e. are we happy exposing the emptystate of nextReduce?
+    // maybe this answer is up to the implementation of Y?
 
-  def value = if (emitType == ReduceType.CUMULATIVE) nextReduce else completedReduce
-//  initialised = value != null
-  initialised = false // todo: hmm, for CUMULATIVE reduce, do we really think it is worth pushing our state through subsequent map operations?
-                      // todo: i.e. by setting initialised == true, we actually fire an event on construction of an empty bucket
+    // NODEPLOY think about this further, but I'm going with nextReduce is in valid state now.
+    // todo: maybe we could tweak this if Y instanceof something with initialisation state?
+    initialised = exposeInitialValue
+  }
 
   def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
     joinValueRendezvous.addInputBinding(in, adder)

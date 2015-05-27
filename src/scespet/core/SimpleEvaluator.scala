@@ -2,8 +2,7 @@ package scespet.core
 
 import collection.mutable.ArrayBuffer
 import collection.mutable
-import scespet.expression.{CapturedTerm, Scesspet, RootTerm}
-import scespet.{EnvTermBuilder, expression}
+import scespet.{EnvTermBuilder}
 import gsa.esg.mekon.core.EventSource.EventManagerInteractor
 import gsa.esg.mekon.core
 import core.{EventGraphObject, EventSource}

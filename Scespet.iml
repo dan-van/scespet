@@ -1,15 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="JAVA_MODULE" version="4">
-  <component name="FacetManager">
-    <facet type="scala" name="Scala">
-      <configuration>
-        <option name="compileOrder" value="JavaThenScala" />
-        <option name="compilerLibraryLevel" value="Global" />
-        <option name="compilerLibraryName" value="scala-2.10" />
-        <option name="compilerOptions" value="-Xexperimental" />
-      </configuration>
-    </facet>
-  </component>
   <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
     <content url="file://$MODULE_DIR$">
@@ -19,22 +9,17 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="mekon" />
     <orderEntry type="library" name="scala-2.10" level="application" />
     <orderEntry type="library" scope="TEST" name="jep-plot" level="application" />
-    <orderEntry type="module" module-name="macros" />
     <orderEntry type="library" name="annotations-2.0" level="project" />
-    <orderEntry type="module" module-name="mekon" />
     <orderEntry type="library" name="trove-3.0" level="project" />
     <orderEntry type="library" name="jfreechart-1.0" level="project" />
     <orderEntry type="library" name="jcommon-1.0" level="project" />
     <orderEntry type="module" module-name="stubs" />
-    <orderEntry type="library" name="jcommon-1.0.17" level="project" />
-    <orderEntry type="library" name="jfreechart-1.0.14" level="project" />
-    <orderEntry type="library" name="trove-3.0.3" level="project" />
-    <orderEntry type="library" name="junit-4.10" level="application" />
-    <orderEntry type="library" name="scalatest_2.10-2.0.M5b" level="project" />
     <orderEntry type="library" name="msgpack-0.6.8" level="project" />
     <orderEntry type="library" scope="TEST" name="junit-4.10" level="project" />
+    <orderEntry type="library" name="scalatest_2.10-2.0" level="project" />
+    <orderEntry type="library" name="scala-sdk-2.10.4" level="application" />
   </component>
 </module>
-

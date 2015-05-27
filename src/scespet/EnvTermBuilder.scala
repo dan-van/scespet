@@ -2,8 +2,12 @@ package scespet
 
 import core._
 import core.types
-import scespet.expression.{HasValRoot, RootTerm, CapturedTerm}
 import gsa.esg.mekon.core.EventSource
+import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecycle}
+import scespet.core.VectorStream.ReshapeSignal
+import scespet.core.types.MFunc
+
+import scala.reflect.ClassTag
 
 /**
  * This needs to have 'init(env)' called before you can use it.
@@ -46,19 +50,6 @@ class EnvTermBuilder() extends DelayedInit {
     return new MacroTerm[X](env)(data)
   }
 
-  def query[X,Y](value: CapturedTerm[X, Y]) :Term[Y] = {
-    if (value.parent != null) {
-      val localParent = query(value.parent)
-      val localThis = value.applyTo(localParent)
-      localThis
-    } else if (value.isInstanceOf[ RootTerm[Y] ]) {
-      var hasVal = value.asInstanceOf[RootTerm[Y]].buildHasVal(env)
-      new MacroTerm[Y](env)(hasVal)
-    } else {
-      ???
-    }
-  }
-
   def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
     val hasVal = newHasVal(env)
     asStream(hasVal)
@@ -69,7 +60,65 @@ class EnvTermBuilder() extends DelayedInit {
     new VectTerm[X,X](env)(new MutableVector(elements.asJava, env))
   }
 
-//  def reduce[B <: types.MFunc](aggregateBuilder: => B) :ReduceBuilder[B] = {
+  /**
+   * A VectTerm that generates new cells on demand according to the given K=>HasVal[X] function
+   * e.g. you could use this to present an existing factory as a Vector, allowing easy joins
+   *
+   * @param gen
+   * @tparam K
+   * @tparam X
+   * @return
+   */
+  def lazyVect[K, X](gen:K => HasVal[X]) :VectTerm[K, X] = {
+    new VectTerm[K,X](env)(new AbstractVectorStream[K, X](env) {
+
+      override def newCell(i: Int, key: K): HasValue[X] = {
+        gen(key)
+      }
+
+      val getNewColumnTrigger = new ReshapeSignal(env, this)
+
+      val isInitialised: Boolean = true
+
+      override def indexOf(key: K): Int = {
+        val i = super.indexOf(key)
+        if (i < 0) {
+          add(key)
+          getSize - 1
+        } else {
+          i
+        }
+      }
+
+      override def toString: String = "LazyVect{"+gen+"}"
+    })
+
+
+  }
+
+  // NODEPLOY I think we can delete this now
+  def streamOf3[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
+    //    if (data.isInstanceOf[EventSource]) {
+    //      env.registerEventSource(data.asInstanceOf[EventSource])
+    //    }
+    val cellLifeCycle:SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
+    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
+  }
+
+  // NODEPLOY I think we can delete this now
+  def streamOf2[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
+    //    if (data.isInstanceOf[EventSource]) {
+    //      env.registerEventSource(data.asInstanceOf[EventSource])
+    //    }
+    val cellLifeCycle:SliceCellLifecycle[Y] = new BucketCellLifecycle[Y] {
+      override def newCell(): Y = newCellFunc
+    }
+    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
+  }
+
+
+
+  //  def reduce[B <: types.MFunc](aggregateBuilder: => B) :ReduceBuilder[B] = {
 //    new ReduceBuilder[B](aggregateBuilder)
 //  }
 
@@ -87,6 +136,6 @@ object EnvTermBuilder {
     builder.init(env)
     builder
   }
-  
+  // this implicit should be somewhere else. I want it generally available to enable mapping from standard Mekon streams into Scesspet streams
   implicit def eventObjectToHasVal[X <: types.EventGraphObject](evtObj:X) :HasVal[X] = new IsVal(evtObj)
 }

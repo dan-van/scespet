@@ -17,6 +17,7 @@ import gsa.esg.mekon.core.{Environment, EventGraphObject}
 import scala.collection.JavaConverters._
 import java.awt.geom.Rectangle2D
 import org.jfree.chart.entity.EntityCollection
+import javax.swing.JLabel
 
 /**
  * @version $Id$
@@ -40,6 +41,7 @@ object Plot {
         Plot.wait()
       }
       println("Finished waiting for plot close")
+      _chartState = null
     }
   }
 
@@ -120,7 +122,7 @@ object Plot {
 
   def plot[K, X:Numeric](stream: VectTerm[K, X]) :Options[K,X] = {
     val options = new Options[K, X](chartstate)
-    class DatasetAdder(key:K, options:Options[K, X]) extends SelfAgg[X] {
+    class DatasetAdder(key:K, options:Options[K, X]) extends CellAdder[X] {
       val dataset = chartstate.dataset  // I'll clean this later
       val currentCount = dataset.getSeriesCount
 
@@ -135,7 +137,7 @@ object Plot {
         dataset.add(seriesId, x, y)
       }
     }
-    stream.reduce_all(new DatasetAdder(_, options))
+    stream.reduce((k:K) => new DatasetAdder(k, options))
     options
   }
 
@@ -180,6 +182,11 @@ object Plot {
       seriesList.foreach( applySeriesOptions )
       this
     }
+  }
+
+  def clear() {
+    _chartState = null
+    top.contents = Component.wrap(new JLabel("Empty"))
   }
 
   def chartstate :ChartState = {

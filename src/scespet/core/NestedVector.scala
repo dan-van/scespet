@@ -8,13 +8,14 @@ import scespet.core.VectorStream.ReshapeSignal
  * todo: ho hum, given that we're potentially multiplexing events, we should either:
  *    introduce a buffer to drain multiplexed events? Yuck, breaks causality in general (yeh, ok, we could special case the 'only one input fired' scenario)
  *    or make a ReKeyedVector implement VectTerm[K2, List[V]]. But then mapping and transforming a List[V] whenever a single V updates is sucky (both from API and performance)
- *    I think
+ *
+ * ponder: I think this will become clear when I move to 'multifire' support in the graph walk
  */
 class NestedVector[K2 ,K, V](source:VectorStream[K,V], keyFunc:K => K2, env:types.Env) extends AbstractVectorStream[K2, VectorStream[K,V]](env) with types.MFunc {
   def isInitialised: Boolean = source.isInitialised
 
   val inputAsTerm = new VectTerm[K,V](env)(source)
-  val getNewColumnTrigger = new ReshapeSignal(env)
+  val getNewColumnTrigger = new ReshapeSignal(env, this)
 
   env.addListener(source.getNewColumnTrigger, this)
   var lastSourceSize:Int = 0

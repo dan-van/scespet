@@ -2,7 +2,6 @@ package scespet.core
 
 import collection.mutable
 import gsa.esg.mekon.core._
-import scespet.expression.{Scesspet, RootTerm, CapturedTerm}
 import java.util.TimeZone
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle
 import java.lang.Iterable
@@ -75,6 +74,7 @@ class SimpleEnv() extends Environment {
         initialised.add( e )
       }
     }
+    graph.applyChanges()
 
     val stopAt = eventI + n
     while (! eventSourceQueue.isEmpty && eventI < stopAt) {
@@ -126,13 +126,17 @@ class SimpleEnv() extends Environment {
     graph.removeTrigger(source.asInstanceOf[types.EventGraphObject], sink.asInstanceOf[types.MFunc])
   }
 
+  def addWakeupOrdering[T](source: scala.Any, wakeupTarget: types.EventGraphObject): Unit = {
+    graph.addWakeupDependency(source.asInstanceOf[types.EventGraphObject], wakeupTarget.asInstanceOf[types.MFunc])
+  }
+
   def hasChanged(trigger: Any):Boolean = {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
   }
 
-  def hasChanged(trigger: EventGraphObject):Boolean = {
-    graph.hasChanged(trigger)
-  }
+  def hasChanged(trigger: EventGraphObject) :Boolean = graph.hasChanged(trigger)
+
+  def isInitialised(trigger: EventGraphObject) = graph.isInitialised(trigger)
 
   def getTriggers(function: scala.Any): Iterable[EventGraphObject] = {
     graph.getTriggers(function.asInstanceOf[EventGraphObject])
@@ -168,8 +172,6 @@ class SimpleEnv() extends Environment {
   def getService[T <: Service](serviceClass: Class[T]) = ???
 
   def getSharedObject[T](clazz: Class[T], constructorSig: Array[Class[_]], args: AnyRef*) = ???
-
-  def registerBeanMaintainer(beanMaintainer: BeanMaintainer[_]) {}
 
   def getClockTime = ???
 

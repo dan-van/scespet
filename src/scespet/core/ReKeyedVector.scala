@@ -4,19 +4,12 @@ import scespet.core.VectorStream.ReshapeSignal
 import gsa.esg.mekon.core.EventGraphObject
 
 /**
- * Derive a new multiStream with a new key defintion.
- *
- * todo: ho hum, given that we're potentially multiplexing events, we should either:
- *    introduce a buffer to drain multiplexed events? Yuck, breaks causality in general (yeh, ok, we could special case the 'only one input fired' scenario)
- *    or make a ReKeyedVector implement VectTerm[K2, List[V]]. But then mapping and transforming a List[V] whenever a single V updates is sucky (both from API and performance)
-    // build an event multiplexer? Or what about formalising this concept in core graph, letting the graph
-    // have a special class of Function that can provide multiple events? Then we'd drain them atomically in the graph walk
- *    I think
+ * Derive a new multiStream with a new key defintion. key def yields option, and if None, then the key is dropped
  */
 class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => Option[K2], env:types.Env) extends AbstractVectorStream[K2, V](env) with types.MFunc {
   def isInitialised: Boolean = source.isInitialised
 
-  val getNewColumnTrigger = new ReshapeSignal(env)
+  val getNewColumnTrigger = new ReshapeSignal(env, this)
   env.addListener(source.getNewColumnTrigger, this)
 
   var lastSourceSize:Int = 0

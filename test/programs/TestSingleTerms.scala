@@ -4,9 +4,10 @@ import collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
 import org.junit.Test
-import org.scalatest.matchers.Matchers
 import scespet.core.types.MFunc
 import scespet.EnvTermBuilder
+import scala.concurrent.duration._
+import scespet.core.types._
 
 
 /**
@@ -21,7 +22,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.{AssertionsForJUnit, ShouldMatchersForJUnit, JUnitRunner}
 
 @RunWith(classOf[JUnitRunner])
-class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
+class TestSingleTerms extends ScespetTestBase with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
   case class Trade(name:String, price:Double, qty:Int)
   var tradeList = new ArrayBuffer[Trade]()
   tradeList += new Trade("VOD.L", 1.12, 1)
@@ -46,14 +47,9 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
 
-  val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
-  }
-
-  def addPostCheck(name:String)(check: => Unit) {
-    postRunChecks.append(() => { check })
   }
 
   var names = IteratorEvents(nameList)((_,_) => 0L)
@@ -65,9 +61,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 
   override protected def afterEach() {
     env.run()
-    for (r <- postRunChecks) {
-      r()
-    }
+    super.afterEach()
   }
 
   def v1 = {
@@ -80,8 +74,8 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
   }
   def v2 = {
     out("Vod trade bucket:") {
-      var map: MacroTerm[Int] = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
-      map.reduce(new Sum[Int]).each(2)
+      var map = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
+      map.group(2.events).reduce(new Sum[Int])
     }
   }
   def v3 = {
@@ -105,17 +99,6 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 //  remoteRun
 //  impl.run
 
-  class StreamTest[X](name:String, expected:Iterable[X], stream:Term[X]) {
-    var eventI = 0
-    val expectIter = expected.iterator
-    stream.map(next => {
-      assert(expectIter.hasNext, s"Stream $name, Event $eventI with value $next was additional to expected")
-      val expect = expectIter.next()
-      expectResult(expect, s"Stream $name, Event $eventI was not expected")(next)
-      println(s"Observed event: $name-$eventI \t $next as expected")
-      eventI += 1
-    })
-  }
 
   test("stream increment") {
     val elements = 0 to 20
@@ -132,7 +115,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     expectedOut should be(List(6, 15, 24, 21))
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.reduce(new Sum[Int]).each(3).map(_.toInt)
+    val mult10 = stream.group(3.events).reduce(new Sum[Int]).map(_.toInt)
     new StreamTest("mult10", expectedOut, mult10)
   }
 
@@ -150,9 +133,14 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
     expectedOut should be(List(List(2, 4, 6), List(2, 4, 6), List(2, 4, 6), List(2, 4)).flatten)
 
-    import scala.concurrent.duration._
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val mult10 = stream.accum(new Sum[Int]).every(3.events).map(_.toInt)
+
+    // need to express the following combinations:
+    // scan, reset every X
+    // lastValue, reset every X
+    // scan, all
+    // lastValue
+    val mult10 = stream.group(3.events).scan(new Sum[Int]).map(_.toInt)
 
 //    val mult10 = stream.agg(new Sum[Int]).every(3.events, reset = BEFORE)
 //    val mult10 = stream.agg(new Sum[Int]).every(3.minutes)
@@ -168,26 +156,26 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 
   test("slice before") {
     val elements = List.fill(3)(1) ::: (10 :: List.fill(3)(1))
-    val expectReduce = List(3, 13)
-    val expectScan = List(List(1, 2, 3), List(10, 11, 12, 13)).flatten
+    val expectReduce = List(3, 13).map(_.toDouble)
+    val expectScan = List(List(1, 2, 3), List(10, 11, 12, 13)).flatten.map(_.toDouble)
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.fold(new Sum[Int]).slice_pre( sliceTrigger ).map(_.toInt)
-    val reduce = stream.reduce(new Sum[Int]).slice_pre( sliceTrigger ).map(_.toInt)
+    val scan = stream.group( sliceTrigger, SliceAlign.BEFORE).scan(new Sum[Int])
+    val reduce = stream.group( sliceTrigger, SliceAlign.BEFORE).reduce(new Sum[Int])
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
 
   test("slice after") {
     val elements = List.fill(3)(1) ::: (10 :: List.fill(3)(1))
-    val expectReduce = List(13, 3)
-    val expectScan = List(List(1, 2, 3, 13), List(1, 2, 3)).flatten
+    val expectReduce = List(13, 3).map(_.toDouble)
+    val expectScan = List(List(1, 2, 3, 13), List(1, 2, 3)).flatten.map(_.toDouble)
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
     val sliceTrigger = stream.filter(_ == 10)
-    val scan = stream.fold(new Sum[Int]).slice_post( sliceTrigger ).map(_.toInt)
-    val reduce = stream.reduce(new Sum[Int]).slice_post( sliceTrigger ).map(_.toInt)
+    val scan = stream.group( sliceTrigger, SliceAlign.AFTER).scan(new Sum[Int])
+    val reduce = stream.group( sliceTrigger, SliceAlign.AFTER).reduce(new Sum[Int])
     new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
@@ -205,7 +193,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
 
   test("reduce while") {
     val elements = List(1, 2, 4, "Open", 8, 16, "Open", 32, 64, "Close", 128, "Close", "Open", 256, "Close", "Open", 512)
-    val expectReduce = List(120, 256)
+    val expectReduce = List(120, 256).map(_.toDouble)
 //    val expectScan = List(0, 8, 24, 56, 130, 0, 256)
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
@@ -218,37 +206,38 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     val isOpen = stringStream.map(_ == "Open").asInstanceOf[MacroTerm[Boolean]]
 
 //    val scan = numberStream.fold(new Sum[Int]).window( isOpen ).map(_.toInt)
-    val reduce = numberStream.reduce(new Sum[Int]).window( isOpen ).map(_.toInt)
+    val reduce = numberStream.window(isOpen).reduce(new Sum[Int])
 //    new StreamTest("scan", expectScan, scan)
     new StreamTest("reduce", expectReduce, reduce)
   }
 
-  test("by") {
-    val elements = "aaAbAB".toCharArray
-    val expectOut = Map('A' -> 4, 'B' -> 2)
-
-    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
-    val byUpper = stream.by(_.toUpper)
-    out("by upper")(byUpper)
-
-    val countByLetter = byUpper.reduce_all(new Counter)
-//    val countByLetter = byUpper.fold_all(new Counter)
-    out("count")(countByLetter)
-    addPostCheck("Counts") {
-      import collection.JavaConverters._
-      expectResult(expectOut.keySet, "Keyset mismatch")(countByLetter.input.getKeys.asScala.toSet)
-      for (e <- expectOut) {
-        var i = countByLetter.input.indexOf(e._1)
-        val value = countByLetter.input.get(i)
-        expectResult(e._2, s"Value mismatch for key ${e._1}, index: $i")(value)
-      }
-    }
-  }
+  //NODEPLOY - enable this
+//  test("by") {
+//    val elements = "aaAbAB".toCharArray
+//    val expectOut = Map('A' -> 4, 'B' -> 2)
+//
+//    val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
+//    val byUpper = stream.by(_.toUpper)
+//    out("by upper")(byUpper)
+//
+//    val countByLetter = byUpper.reduce(new Counter)
+////    val countByLetter = byUpper.fold_all(new Counter)
+//    out("count")(countByLetter)
+//    addPostCheck("Counts") {
+//      import collection.JavaConverters._
+//      expectResult(expectOut.keySet, "Keyset mismatch")(countByLetter.input.getKeys.asScala.toSet)
+//      for (e <- expectOut) {
+//        var i = countByLetter.input.indexOf(e._1)
+//        val value = countByLetter.input.get(i)
+//        expectResult(e._2, s"Value mismatch for key ${e._1}, index: $i")(value)
+//      }
+//    }
+//  }
 
   test("Simple reduce each") {
     out("Vod trade bucket:") {
       var qty: MacroTerm[Int] = impl.asStream(trades).filter(_.name == "VOD.L").map(_.qty)
-      qty.reduce(new Sum[Int]).each(2)
+      qty.group(2.events).reduce(new Sum[Int])
     }
   }
 
@@ -257,7 +246,7 @@ class TestSingleTerms extends FunSuite with BeforeAndAfterEach with OneInstanceP
     out("Vod Trade")(vodTrades)
     out("Vod trade bucket:") {
       var qty: MacroTerm[Int] = vodTrades.map(_.qty)
-      qty.fold(new Sum[Int]).each(2)
+      qty.group(2.events).scan(new Sum[Int])
     }
   }
 

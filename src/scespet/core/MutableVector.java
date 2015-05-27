@@ -8,6 +8,15 @@ import java.util.*;
 import java.util.logging.Logger;
 
 /**
+ * This represents an append-only set, but exposed as a VectorStream.
+ * i.e. keys == values, however, if the values are actually EventGraphObjects then any chained vector will chain for cell updates.
+ * e.g. you could have a MutableVector[TradeSource], then chain on a summation, to create a VectorStream[TradeSource, AccVol]
+ *
+ * it is very handy for taking a stream of values (e.g. stockSymbols), creating a VectorStream of the unique values, then using that to build
+ * a vectorStream with symbol as the key, and something useful as the value.
+ *
+ * Think of this as a builder for the keyset of a map.
+ *
  * @version $Id$
  * @author: danvan
  */
@@ -19,9 +28,8 @@ public class MutableVector<X> implements VectorStream<X,X> {
     private ArrayList<HasValue<X>> cells = new ArrayList<HasValue<X>>();
     private ArrayList<Boolean> initialised = new ArrayList<>();
     private Set<X> uniqueness = new HashSet<X>();
-    Boolean elementsListenable = null;
 
-    final Function nullListenable = new Function() {
+    final Function isInitialised = new Function() {
         public boolean calculate() {
             return false;
         }
@@ -40,7 +48,7 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
     public MutableVector(Environment env) {
         this.env = env;
-        reshaped = new ReshapeSignal(env);
+        reshaped = new ReshapeSignal(env, this);
         env.setStickyInGraph(reshaped, true);
     }
 
@@ -118,10 +126,24 @@ public class MutableVector<X> implements VectorStream<X,X> {
     }
 
     private class Cell<X> implements HasValue<X> {
-        private final X next;
+        private final X value;
+        private final EventGraphObject changeTrigger;
 
-        public Cell(X next) {
-            this.next = next;
+        public Cell(X value) {
+            this.value = value;
+            if (value instanceof EventGraphObject) {
+                changeTrigger = (EventGraphObject) value;
+            } else {
+                Function oneShotInit = new Function() {
+                    @Override
+                    public boolean calculate() {
+                        return true;
+                    }
+                };
+                // this will ensure that anyone listening to this cell, or using env.isInitialised( me ) will behave correctly.
+                env.wakeupThisCycle(oneShotInit);
+                changeTrigger = oneShotInit;
+            }
         }
 
         @Override
@@ -131,19 +153,12 @@ public class MutableVector<X> implements VectorStream<X,X> {
 
         @Override
         public X value() {
-            return next;
+            return value;
         }
 
         @Override
         public EventGraphObject getTrigger() {
-            if (elementsListenable == null) {
-                elementsListenable = EventGraphObject.class.isAssignableFrom(next.getClass());
-            }
-            if (elementsListenable) {
-                return (EventGraphObject) next;
-            } else {
-                return nullListenable;
-            }
+            return changeTrigger;
         }
     }
 

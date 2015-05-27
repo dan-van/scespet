@@ -5,6 +5,9 @@ import gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
+import scespet.util._
+import scespet.util.SliceAlign._
+
 
 
 package object types {
@@ -12,6 +15,13 @@ package object types {
   type EventGraphObject = gsa.esg.mekon.core.EventGraphObject
   type MFunc = gsa.esg.mekon.core.Function
   type EventSource = gsa.esg.mekon.core.EventSource
+
+  case class Events(n:Int) extends AnyVal
+  implicit class IntToEvents(val i:Int) extends AnyVal {
+    def events = new Events(i)
+  }
+
+
 }
 
 /**
@@ -45,6 +55,7 @@ trait FuncCollector {
 
 /**
  * Something that provides a value (i.e. a source)
+ * todo: rename me to ListenableHasVal
  * @tparam X
  */
 trait HasVal[X] extends HasValue[X]{
@@ -61,7 +72,18 @@ trait HasVal[X] extends HasValue[X]{
   def getTrigger: EventGraphObject = trigger
 }
 
+trait ToHasVal[T,X] {
+  def toHasVal(t:T) :HasVal[X]
+}
+
+object ToHasVal {
+  implicit class MacroTermToHasVal[X](term:MacroTerm[X]) extends ToHasVal[MacroTerm[X], X] {
+    override def toHasVal(h: MacroTerm[X]): HasVal[X] = h.input
+  }
+}
+
 object HasVal {
+  // TODO: unify this with IsVal
   implicit def funcToHasVal[F <: EventGraphObject](f:F) = new HasVal[F] {
     val value = f
     def trigger = value.asInstanceOf[EventGraphObject]
@@ -115,109 +137,43 @@ trait Func[X,Y] extends UpdatingHasVal[Y] {
 
 }
 
-case class Events(n:Int)
 
 // sealed, enum, blah blah
 class ReduceType(val name:String) {}
 object ReduceType {
-  val CUMULATIVE = new ReduceType("Fold")
+  val CUMULATIVE = new ReduceType("Scan")
   val LAST = new ReduceType("Fold")
 }
 
-trait BucketBuilder[X,T] {
-  def each(n:Int):Term[T]
 
-  /**
-   * define buckets by transitions from true->false in a boolean stream.
-   * i.e. while 'windowStream' value is true, add to bucket.
-   * Close the bucket on true -> false transition.
-   * Open a new bucket on false ->  true transition
-   *
-   * this is useful for effectively constructing 'while' aggregations.
-   * e.g. tradeSize.reduce(new Sum).window( continuousTrading )
-   * @param windowStream
-   * @return
-   */
-  def window(windowStream: Term[Boolean]) :Term[T]
-
-  def all():Term[T]
-//
-//  def window(n:Events):MacroTerm[T]
-//  def window(n:Time):MacroTerm[T]
-//  def window(windowStream:MacroTerm[Boolean]):MacroTerm[T]
-//
-  // todo: think about how to build an implicit conversion from eventGraphObject -> Term
-  // todo: if we have a Builder instance in scope, then it is possible with implicits
-  def slice_pre(trigger:EventGraphObject):MacroTerm[T]
-  def slice_post(trigger:EventGraphObject):MacroTerm[T]
-  def slice_pre(trigger:MacroTerm[_]):MacroTerm[T]
-  def slice_post(trigger:MacroTerm[_]):MacroTerm[T]
+/**
+ * Agg is an aggregation function.
+ * it is mutable state (Cell), that is updated with calls to add (from CellAdder)
+ *
+ * todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
+ * todo: I think I could split this into a 'Provides' interface
+ */
+trait Agg[-X] extends Cell with CellAdder[X] {
+//  def add(x:X)
 }
 
-trait BucketBuilderVect[K, T] {
-  def each(n:Int):VectTerm[K,T]
-
-  /**
-   * window the whole vector by a single bucket stream (e.g. 9:00-17:00 EU)
-   * @param windowStream
-   * @return
-   */
-  def window(windowStream: MacroTerm[Boolean]) :VectTerm[K, T]
-
-  /**
-   * window each element in the vector with the given window function
-   * @return
-   */
-  def window(windowFunc: K => HasValue[Boolean]) :VectTerm[K, T]
-
-  /**
-   * do a takef on the given vector to get hasValue[Boolean] for each key in this vector.
-   * if the other vector does not have the given key, the window will be assumed to be false (i.e. not open)
-   * @return
-   */
-  def window(windowVect: VectTerm[K,Boolean]) :VectTerm[K, T]
-
-  /**
-   * collect data into buckets that get 'closed' *before* the given event fires.
-   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
-   * e.g. bucket trades into buckets created whenever the trade direction changes
-   *
-   * @see #slice_post
-   * @param trigger
-   * @return
-   */
-  def slice_pre(trigger: EventGraphObject):VectTerm[K,T]
-
-  /**
-   * collect data into buckets that get 'closed' *after* the given event fires.
-   * This is important if the same event can both be added to a bucket, and be responsible for closing the bucket.
-   * e.g. bucket trades between trade events where the size is < median trade.
-   *
-   * @see reset_pre
-   * @param trigger
-   * @return
-   */
-  def slice_post(trigger: EventGraphObject):VectTerm[K,T]
-}
-
-// todo - I think I should unify this with Bucket i.e. a base class will have complete() and value:Out
-trait Agg[-X] {
+trait Cell {
   type OUT
   def value :OUT
-  def add(x:X)
 }
 
 /**
- * More traditional parameterised type version of Agg (rather than using dependent object types)
+ * TODO: work out if this is necessary
+ * This is the same as Agg, but with the output type parameter (V) explicit in the signature.
  * @tparam X
  * @tparam V
  */
-trait Reducer[-X, V] extends Agg[X] {
+trait Reducer[-X, V] extends Agg[X] with OutTrait[V] { // NODEPLOY - Agg[X] can be replaced by CellAdder[X]
   type OUT = V
 }
 
 /**
- * defines an aggregation that uses itself as the exposed aggregated value
+ * trait to add to a class to enable itself to the state that is exposed as a result of aggregating
  * @tparam X
  */
 trait SelfAgg[-X] extends Agg[X] {
@@ -226,28 +182,53 @@ trait SelfAgg[-X] extends Agg[X] {
   def add(x:X)
 }
 
-// todo - I think I want to merge Reduce and Bucket
-//trait Bucket extends {
-trait Bucket extends types.MFunc with Serializable {
+/**
+ * The history of this is for integration with another codebase, where I have lots of MFunc-like classes
+ * and I wanted to use them in a similar syntax to working with Agg aggregations.
+ *
+// todo - would be nicer to treat the 'Agg' trait and Bucket trait as compatible features that can be added to Cell
+// todo - certainly the "bindTo" verb could work with a vanilla Cell
+// NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
+  */
+trait Bucket extends MFunc {
+  def open():Unit
   /**
    * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
+   * NODEPLOY - rename to Close
    */
   def complete(){}
 }
 
+
+// NODEPLOY - union with above?
+trait KeyToSliceCellLifecycle[K, C] {
+  def lifeCycleForKey(k:K):SliceCellLifecycle[C]
+
+  /**
+   * if the new cell will be self-generating events in addition to having values 'added' then we need to know to wire things up differently
+   * @return
+   */
+  def isCellListenable:Boolean
+}
+
+
 trait Term[X] {
   implicit def eventObjectToHasVal[E <: types.EventGraphObject](evtObj:E) :HasVal[E] = new IsVal(evtObj)
+//  implicit def toHasVal():HasVal[X]
 
   def value:X
 
-  def fold_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
+//  def fold_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
   def map[Y](f: (X) => Y, exposeNull:Boolean = true):Term[Y]
   def filter(accept: (X) => Boolean):Term[X]
 
-  def reduce_all[Y <: Agg[X]](y: Y):Term[Y#OUT]
-  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
+  def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O]
 
-  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilder[X, Y#OUT]
+  def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O]
+
+  def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedTerm[X]
+  
+  def window(window:HasValue[Boolean]) : GroupedTerm[X]
 
   def by[K](f: X => K) :MultiTerm[K,X]
 
@@ -257,6 +238,7 @@ trait Term[X] {
 
   /**
    * emit an updated tuples of (this.value, y) when either series fires
+   * yes, this is like 'zip', but because 'take' is similar I didn't want to use that term
    */
   def join[Y](y:MacroTerm[Y]):MacroTerm[(X,Y)]
 
@@ -270,7 +252,7 @@ trait Term[X] {
    */
   def sample(evt:EventGraphObject):MacroTerm[X]
 
-  def filterType[T:ClassTag]():Term[T] = {
+  def filterType[T:ClassTag]:Term[T] = {
     filter( v => reflect.classTag[T].unapply(v).isDefined ).map(v => v.asInstanceOf[T])
   }
 
@@ -282,8 +264,33 @@ trait Term[X] {
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
+class PartialGroupedBucketStream[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
+  private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y, OUT] = {
+    val slicedBucket = triggerAlign match {
+      case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, ev, exposeInitialValue = false)
+      case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, ev, exposeInitialValue = false)
+    }
+    slicedBucket
+  }
+
+  def all():MacroTerm[OUT] = {
+    val hasVal = buildSliced(ReduceType.CUMULATIVE)
+    new MacroTerm(env)(hasVal)
+  }
+
+  def last():MacroTerm[OUT] = {
+    val hasVal = buildSliced(ReduceType.LAST)
+    new MacroTerm(env)(hasVal)
+  }
+}
+
+object MultiTerm {
+  implicit def identTraversable[X] : X => TraversableOnce[X] = (x:X) => Traversable(x)
+}
+
 trait MultiTerm[K,X] {
   implicit def eventObjectToHasVal[E <: types.EventGraphObject](evtObj:E) :HasVal[E] = new IsVal(evtObj)
+
 
   /**
    * for symmetry with MacroTerm.value
@@ -351,16 +358,19 @@ trait MultiTerm[K,X] {
 
   def sample(evt:EventGraphObject):VectTerm[K,X]
 
-  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
-  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)
+  def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:VectSliceTriggerSpec[S]) :GroupedVectTerm[K, X]
 
-  def reduce_all[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K,Y#OUT]
-  def reduce_all[Y <: Agg[X]](newBFunc:  => Y):VectTerm[K,Y#OUT]  = reduce_all[Y]((k:K) => newBFunc)
+//  def reduce[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
+//  def reduce[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = reduce[Y]((k:K) => newBFunc)
 
-  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
-  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = fold[Y]((k:K) => newBFunc)
-  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT]
-  def fold_all[Y <: Agg[X]](reduceBuilder : => Y):VectTerm[K,Y#OUT]   = fold_all[Y]((k:K) => reduceBuilder)
+//  def reduce_all[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K,Y#OUT]
+//  def reduce_all[Y <: Agg[X]](newBFunc:  => Y):VectTerm[K,Y#OUT]  = reduce_all[Y]((k:K) => newBFunc)
+//
+  // NODEPLOY rename to scan
+//  def fold[Y <: Agg[X]](newBFunc: K => Y):BucketBuilderVect[K, Y#OUT]
+//  def fold[Y <: Agg[X]](newBFunc: => Y):BucketBuilderVect[K, Y#OUT] = fold[Y]((k:K) => newBFunc)
+//  def fold_all[Y <: Agg[X]](reduceBuilder : K => Y):VectTerm[K,Y#OUT]
+//  def fold_all[Y <: Agg[X]](reduceBuilder : => Y):VectTerm[K,Y#OUT]   = fold_all[Y]((k:K) => reduceBuilder)
 }
 
 

@@ -117,7 +117,7 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
 
     @Override
     public String toString() {
-        StringBuilder buf = new StringBuilder("{");
+        StringBuilder buf = new StringBuilder(getClass().getSimpleName()+"{");
         for (int i=0; i<getSize(); i++) {
             buf.append(getKey(i)).append("=").append(get(i)).append(", ");
         }
