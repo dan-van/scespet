@@ -134,7 +134,7 @@ class SimpleEnv() extends Environment {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
   }
 
-  def hasChanged(trigger: EventGraphObject) = graph.hasChanged(trigger)
+  def hasChanged(trigger: EventGraphObject) :Boolean = graph.hasChanged(trigger)
 
   def isInitialised(trigger: EventGraphObject) = graph.isInitialised(trigger)
 
