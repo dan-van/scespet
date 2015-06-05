@@ -36,7 +36,7 @@ package util {
     /**
      * Sometimes a grouping may define a grouping boundary that occurs atomically with the data being grouped.
      * This flag defines Whether the new group should be created before, or after the new datapoint is coalesced
-     * This means that the Slice occurs before any events are collapsed.
+     * This means that the Slice occurs after any events are collapsed.
      */
     val AFTER = new SliceAlign("AFTER")
   }

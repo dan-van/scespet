@@ -97,15 +97,6 @@ class EnvTermBuilder() extends DelayedInit {
   }
 
   // NODEPLOY I think we can delete this now
-  def streamOf3[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
-    //    if (data.isInstanceOf[EventSource]) {
-    //      env.registerEventSource(data.asInstanceOf[EventSource])
-    //    }
-    val cellLifeCycle:SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
-    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
-  }
-
-  // NODEPLOY I think we can delete this now
   def streamOf2[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
     //    if (data.isInstanceOf[EventSource]) {
     //      env.registerEventSource(data.asInstanceOf[EventSource])
@@ -113,7 +104,9 @@ class EnvTermBuilder() extends DelayedInit {
     val cellLifeCycle:SliceCellLifecycle[Y] = new BucketCellLifecycle[Y] {
       override def newCell(): Y = newCellFunc
     }
-    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
+//    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
+    // TODO: build "bucketStream" concept
+    ???
   }
 
 

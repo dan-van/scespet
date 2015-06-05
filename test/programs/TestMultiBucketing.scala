@@ -321,7 +321,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
 
   test("bucket window fold") {
-  val stream = generateCounterAndPartialBucketDef(reduce = false, 26).window()
+    val stream = generateCounterAndPartialBucketDef(reduce = false, 26).window()
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     val counterExpectations = (0 to 10) ++ Seq(10) ++ (22 to 26)
     new StreamTest("Recombined count", counterExpectations, recombinedCounter)

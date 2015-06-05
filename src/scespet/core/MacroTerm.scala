@@ -262,29 +262,29 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 //        new WindowedReduce[X, A, OUT](input, adder, cellOut, window, lifecycle, reduceType, env)
       }
     }
-    new GroupedTerm(uncollapsed, env)
+    new GroupedTerm(this, uncollapsed, env)
   }
 
   // NODEPLOY rename SliceAlign to TriggerAlign, with values = OPEN/CLOSE
   def group[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :GroupedTerm[X] = {
     val uncollapsed = new UncollapsedGroupWithTrigger[S, X](input, sliceSpec, triggerAlign, env, ev)
-    new GroupedTerm[X](uncollapsed, env)
+    new GroupedTerm[X](this, uncollapsed, env)
   }
 
-  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit yOut :AggOut[B, OUT]) :PartialBuiltSlicedBucket[B,OUT] = {
-    val cellLifeCycle:SliceCellLifecycle[B] = new BucketCellLifecycle[B] {
-      override def newCell(): B = newBFunc
-    }
-    return new PartialBuiltSlicedBucket[B, OUT](yOut, cellLifeCycle, env).bind(this)(adder)
+  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B,OUT] = {
+    group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).collapseWith[B, OUT](() => newBFunc)(adder)(aggOut, type_b)
   }
 }
 
 /**
+ * NODEPLOY reame to BucketFactory
  * {@see scespet.core.UncollapsedVectGroup}
  * @tparam IN
  */
 trait UncollapsedGroup[IN] {
+  // NODEPLOY delete
   def applyB[B <: Bucket, OUT](lifecycle:SliceCellLifecycle[B], reduceType:ReduceType, cellOut:AggOut[B,OUT]) :HasVal[OUT]
+  // NODEPLOY delete
   def applyAgg[A, OUT](lifecycle:SliceCellLifecycle[A], adder:A => CellAdder[IN], cellOut:AggOut[A,OUT], reduceType:ReduceType) :HasVal[OUT]
 
   def newBucket[B, OUT](reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT]
@@ -331,56 +331,75 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, trigge
   }
 }
 
-class GroupedTerm[X](val uncollapsedGroup: UncollapsedGroup[X], val env:types.Env) {
+/**
+ * NODEPLOY make this API symmetric with {@link scespet.core.GroupedVectTerm}
+ */
+class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGroup[X], val env:types.Env) {
 //  def reduce[Y <: Cell](newBFunc: => Y) :Term[Y#OUT] = ???
 //  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    collapse(newBFunc, adder, yOut, ReduceType.LAST, yType)
+  _collapse[Y,O](() => newBFunc, adder, yOut, yType).last()
   }
 
   def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    collapse(newBFunc, adder, yOut, ReduceType.CUMULATIVE, yType)
+    _collapse[Y,O](() => newBFunc, adder, yOut, yType).all()
   }
 
-  private def collapse[Y, O](newBFunc: => Y, adder:Y => CellAdder[X], yOut :AggOut[Y, O], reduceType:ReduceType, yType:ClassTag[Y]) :Term[O] = {
-    type OUT = O
-    val lifecycle = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
-    val slicer :HasVal[OUT] = uncollapsedGroup.applyAgg[Y, OUT](lifecycle, adder, yOut, reduceType).asInstanceOf[HasVal[OUT]]
-    new MacroTerm[OUT](env)(slicer)
+  def collapseWith2[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
+    collapseWith[B,OUT](()=>newBFunc)(addFunc)(aggOut, type_b)
+  }
+
+  def collapseWith[B, OUT](newBFunc: () => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
+    val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
+      override def add(x: X): Unit = addFunc(b)(x)
+    }
+    _collapse[B,OUT](newBFunc, cellAdd, aggOut, type_b)
+  }
+
+  def _collapse[B, OUT](newBFunc: () => B, adder:B => CellAdder[X], yOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[ B, OUT] = {
+    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](newBFunc)(type_b)
+    val groupWithBindings = new PartialBuiltSlicedBucket[B, OUT](uncollapsedGroup, yOut, lifecycle, env)
+    val addX :(B) => (X) => Unit = (b:B) => (x:X) => {
+      val ca = adder.apply(b)
+      ca.add(x)
+    }
+    groupWithBindings.bind[X](term.input)(addX)
   }
 }
 
-// NODEPLOY can this be a Term mixin for the partitioning operations?
-class PartialBuiltSlicedBucket[Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], val cellLifecycle: SliceCellLifecycle[Y], val env:Environment) {
+// NODEPLOY rename. can this be a Term mixin for the partitioning operations?
+class PartialBuiltSlicedBucket[Y, OUT](uncollapsed:UncollapsedGroup[_], cellOut:AggOut[Y,OUT], val cellLifecycle: SliceCellLifecycle[Y], val env:Environment) {
   var bindings = List[(HasVal[_], (Y => _ => Unit))]()
 
-  private lazy val scanAllTerm: MacroTerm[OUT] = {
-    val slicer = new SliceAfterBucket[Null, Y, OUT](cellOut, null, cellLifecycle, ReduceType.CUMULATIVE, bindings, env, SliceTriggerSpec.NULL, exposeInitialValue = false)
-    new MacroTerm[OUT](env)(slicer)
-  }
-
-
   def last(): MacroTerm[OUT] = {
-    val slicer = new SliceBeforeBucket[Any, Y, OUT](cellOut:AggOut[Y,OUT], null, cellLifecycle, ReduceType.LAST, bindings, env, SliceTriggerSpec.TERMINATION, exposeInitialValue = false)
-    new MacroTerm[OUT](env)(slicer)
+    sealCollapse(ReduceType.LAST)
   }
 
   // NODEPLOY - delegate remaining Term interface calls here using lazyVal approach
-  def all(): MacroTerm[OUT] = scanAllTerm
+  def all(): MacroTerm[OUT] = sealCollapse(ReduceType.CUMULATIVE)
+
 
   def bind[S](stream: HasVal[S])(adder: Y => S => Unit): PartialBuiltSlicedBucket[Y, OUT] = {
     bindings :+=(stream, adder)
     this
   }
 
+  private def sealCollapse(reduceType:ReduceType) :MacroTerm[OUT] = {
+    val cell :SlicedBucket[Y,OUT] = uncollapsed.newBucket(reduceType, cellLifecycle, cellOut, bindings)
+    new MacroTerm[OUT](env)(cell)
+  }
+
+
   // NODEPLOY - I think this would be better named as 'reset', once you already have a stream->reducer binding, talking about grouping is confusing.
   //NODEPLOY - think:
   // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
   // this avoids needing a new slice trigger definition each slice.
-  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialGroupedBucketStream[S, Y, OUT] = {
-    new PartialGroupedBucketStream[S, Y, OUT](cellOut, triggerAlign, cellLifecycle, bindings, sliceSpec, ev, env)
+  def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialBuiltSlicedBucket[Y, OUT] = {
+    // NODEPLOY move calls to this to be of the stream.group(slice).collapse pattern
+    ???
   }
 }
+
 
 object MacroTerm {
   implicit def termToHasVal[E](term:MacroTerm[E]) :HasVal[E] = term.input

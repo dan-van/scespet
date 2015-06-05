@@ -166,7 +166,8 @@ object TestReduce extends RealTradeTests {
   // TODO: this seems pointless - we actually want a stream of buckets for the given keyset. How is this different form keyToStream?
   //NODEPLOY
   val summary = trades.keyToStream(k => impl.streamOf2(new TradeQuoteStats(k)).bind(trades(k))(_.addTrade).bind(quotes(k))(_.addQuote).reset(oneMinute).last())
-//  val summary = trades.reduce(new TradeQuoteStats(_)).bind(quotes)(_.addQuote).every(oneMinute).last()
+//  val summary = trades.keyToStream(k => impl.asStream(new TradeQuoteStats(k))).group(oneMinute).bind(trades(k))(_.addTrade).bind(quotes(k))(_.addQuote).reset(oneMinute).last())
+//  val summary = trades.group(oneMinute).collapseWith(new TradeQuoteStats(_))(_.addTrade).bind(quotes)(_.addQuote).last()
 //  out("Summary")(summary)
 //  Plot.plot(summary.map(_.q.ask))
   env.run(50000)

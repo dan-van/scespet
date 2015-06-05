@@ -61,13 +61,11 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
         }
       }
 
-      // NODEPLOY This may not be required?
-      if (cellIsFunction & doneSlice && addedValueToBucket) {
-        // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
-        // still pending wiring.
-        // The contract is that a bucket will receive a calculate after it has had its inputs added
-        // therefore, we'll send a fire after establishing listener edges to preserve this contract.
-        env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+      if (cellIsFunction & doneSlice) {
+        // wire up the bucket to this rendezvous so that it gets a calculate whenever we have mutated it
+        // PONDER - should I have an API to allow deferred event wiring and put this statement in with the newReduce assignment
+        env.addListener(this, nextReduce.asInstanceOf[MFunc])
+        doneSlice = false
       }
 
       // whenever we add a value to the bucket, we need to fire, this is because the bucket and/or the SliceAfterBucket need to know when there has been a mutation
@@ -77,6 +75,11 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     override def toString: String = "JoinRendezvous{"+SliceAfterBucket.this+"}"
   }
   env.addListener(joinValueRendezvous, this)
+
+  private val eventCountInput = if (!cellIsFunction) joinValueRendezvous else new MFunc() {
+    env.addListener(joinValueRendezvous, this)
+    override def calculate(): Boolean = true
+  }
 
 
   def assignNewReduce() :Unit = {
@@ -89,13 +92,19 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // listen to it so that we propagate value updates to the bucket
           env.removeListener(nextReduce, this)
+          env.removeListener(nextReduce, eventCountInput)
         }
 
         nextReduce = newCell
-        // input bindings that mutate the nextReduce should fire the bucket
-        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        // input bindings that mutate the nextReduce should fire the bucket.
+        // however, don't add the listener just yet, otherwise the new bucket could pick up
+        // an event from joinValueRendezvous. Wait until joinValueRendezvous fires.
+        // PONDER - should I have an API to allow deferred event wiring?
+        joinValueRendezvous.doneSlice = true
+
         // listen to it so that we fire value events whenever the nextReduce fires
         env.addListener(nextReduce, this)
+        env.addListener(nextReduce, eventCountInput)
       }
     } else {
       nextReduce = newCell
@@ -130,9 +139,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     joinValueRendezvous.addInputBinding(in, adder)
   }
 
-  // nextReduce fires when a value event has occured, so we pass it to the sliceTrigger builder
-  private val eventCountInput = if (cellIsFunction) Set(nextReduce.asInstanceOf[EventGraphObject]) else joinValueRendezvous.inputBindings.keySet
-  var sliceEvents :types.EventGraphObject = ev.buildTrigger(sliceSpec, eventCountInput, env)
+  var sliceEvents :types.EventGraphObject = ev.buildTrigger(sliceSpec, Set(eventCountInput), env)
   // wire up slice listening:
   if (sliceEvents != null) {
     env.addListener(sliceEvents, this)

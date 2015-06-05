@@ -264,26 +264,6 @@ trait Term[X] {
   private def valueToSingleton[Y] = (x:X) => Traversable(x.asInstanceOf[Y])
 }
 
-class PartialGroupedBucketStream[S, Y <: MFunc, OUT](cellOut:AggOut[Y,OUT], triggerAlign:SliceAlign, lifecycle:SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
-  private def buildSliced(reduceType:ReduceType) :SlicedBucket[Y, OUT] = {
-    val slicedBucket = triggerAlign match {
-      case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, ev, exposeInitialValue = false)
-      case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, ev, exposeInitialValue = false)
-    }
-    slicedBucket
-  }
-
-  def all():MacroTerm[OUT] = {
-    val hasVal = buildSliced(ReduceType.CUMULATIVE)
-    new MacroTerm(env)(hasVal)
-  }
-
-  def last():MacroTerm[OUT] = {
-    val hasVal = buildSliced(ReduceType.LAST)
-    new MacroTerm(env)(hasVal)
-  }
-}
-
 object MultiTerm {
   implicit def identTraversable[X] : X => TraversableOnce[X] = (x:X) => Traversable(x)
 }

@@ -29,7 +29,8 @@ object Plot {
   lazy val top = new MainFrame(){
     active = true
     override def closeOperation() {
-      println("Hiding frame");this.iconify()
+      println("Hiding frame");
+      this.iconify()
       active = false
       Plot.synchronized( Plot.notifyAll() )
     }

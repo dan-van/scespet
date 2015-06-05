@@ -211,13 +211,13 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   }
 
   test("bind grouped scan") {
-    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).all()
+    val out = stream.group(3.events).collapseWith2(new BindableAppendFunc[Char])(_.add).all()
     val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     new StreamTest("scan", expected, out)
   }
 
   test("bind grouped reduce") {
-    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).reset(3.events).last()
+    val out = stream.group(3.events).collapseWith2(new BindableAppendFunc[Char])(_.add).last()
     val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
     new StreamTest("scan", expected, out)
   }

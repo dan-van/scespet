@@ -495,7 +495,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   // NODEPLOY are these shortcuts worth it?
   def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut, type_b)
 
-  // NODEPLOY are these shortcuts worth it?
+  // NODEPLOY are these shortcuts worth it? Probably not if we have a groupAll function
   def bindTo[B <: Bucket, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :GroupedTerm2[K, B, OUT] = {
     group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).collapseWith[B, OUT](newBFunc)(adder)(aggOut, type_b)
   }
@@ -549,6 +549,7 @@ class VectAggLifecycle[K, X, Y <: Agg[X]](newCellF: K => Y) extends KeyToSliceCe
   override def isCellListenable: Boolean = ???
 }
 
+// NODEPLOY better name! Maybe an interface: UncollapsedGroup ?
 class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGroup[K, _], lifecycle:VectCellLifecycle[K,_,B], cellOut:AggOut[B, OUT], env:types.Env) {
   private var bindings = List[(VectTerm[K, _], (B => _ => Unit))]()
   private var dependsOn = Set[EventGraphObject]( uncollapsed.getComesBefore.toArray :_*)
@@ -583,6 +584,9 @@ class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGr
 
 }
 
+/**
+ *  @see GroupedTerm2
+ */
 class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: UncollapsedVectGroup[K, X], val env:types.Env) {
 //  var orderDepends = Seq[VectTerm[K,_]]()
 //  private [core] def newCellsDependOn(prerequisite :EventGraphObject) = {
@@ -663,6 +667,7 @@ class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: Uncol
   }
 }
 
+// NODEPLOY rename to VectBucketFactory
 trait UncollapsedVectGroup[K, IN] {
   /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
   def getComesBefore :Iterable[EventGraphObject]
