@@ -230,7 +230,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 
 // -------------- Pure old-style function streams
   test("MFunc scan") {
-    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).all() )
+    val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).all() )
     val expectedDigits = generateAppendScan(data_digit)
     val expectedAlpha = generateAppendScan(data_chars)
     new StreamTest("scan :Digits", expectedDigits, out("Digit"))
@@ -238,7 +238,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("MFunc reduce") {
-    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).last() )
+    val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).last() )
     val expectedDigits = Seq(generateAppendScan(data_digit).last)
     val expectedAlpha = Seq(generateAppendScan(data_chars).last)
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
@@ -246,7 +246,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("MFunc grouped scan") {
-    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).all() )
+    val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).all() )
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
 
@@ -255,7 +255,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("MFunc grouped reduce") {
-    val out = stream.keyToStream( key => impl.streamOf2(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).last() )
+    val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).last() )
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
 

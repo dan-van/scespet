@@ -290,7 +290,7 @@ trait UncollapsedGroup[IN] {
   def newBucket[B, OUT](reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT]
 }
 
-class UncollapsedGroupWithTrigger[S, IN](input:HasValue[IN], sliceSpec:S, triggerAlign:SliceAlign, env:types.Env, ev: SliceTriggerSpec[S]) extends UncollapsedGroup[IN] {
+class UncollapsedGroupWithTrigger[S, IN](input:HasValue[_], sliceSpec:S, triggerAlign:SliceAlign, env:types.Env, ev: SliceTriggerSpec[S]) extends UncollapsedGroup[IN] {
 
   override def newBucket[B, OUT](reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT] = {
     val sourceCell = input

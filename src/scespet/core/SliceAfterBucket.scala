@@ -1,6 +1,7 @@
 package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
+import scespet.core.SlicedBucket
 import scespet.core.SlicedBucket.JoinValueRendezvous
 import scespet.util.Logged
 import scespet.core.types.MFunc
@@ -8,6 +9,12 @@ import scespet.core.types.MFunc
 
 /**
  * todo: remove code duplication with SlicedReduce
+ *
+ * if a slice event fires atomically with a value to be added to the bucket:
+ * the NEW value is added to the OLD bucket, which is then complete. A NEW bucket will be constructed and presented on some later event.
+ * i.e. this is 'end-inclusive'
+ *
+ *
  *  event wiring
  *
  * joinInputs--+
@@ -29,7 +36,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
-    var doneSlice = false
+    var newBucketBuilt = false
     var addedValueToBucket = false
 
     override def nextReduce: Y = SliceAfterBucket.this.nextReduce
@@ -61,11 +68,11 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
         }
       }
 
-      if (cellIsFunction & doneSlice) {
+      if (cellIsFunction & newBucketBuilt) {
         // wire up the bucket to this rendezvous so that it gets a calculate whenever we have mutated it
         // PONDER - should I have an API to allow deferred event wiring and put this statement in with the newReduce assignment
         env.addListener(this, nextReduce.asInstanceOf[MFunc])
-        doneSlice = false
+        newBucketBuilt = false
       }
 
       // whenever we add a value to the bucket, we need to fire, this is because the bucket and/or the SliceAfterBucket need to know when there has been a mutation
@@ -91,19 +98,21 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
         if (nextReduce != null) {
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, this)
+          env.removeListener(nextReduce, SliceAfterBucket.this)
           env.removeListener(nextReduce, eventCountInput)
         }
 
         nextReduce = newCell
-        // input bindings that mutate the nextReduce should fire the bucket.
-        // however, don't add the listener just yet, otherwise the new bucket could pick up
-        // an event from joinValueRendezvous. Wait until joinValueRendezvous fires.
-        // PONDER - should I have an API to allow deferred event wiring?
-        joinValueRendezvous.doneSlice = true
+
+        // we want to ensure that joinValueRendezvous is 'before' nextReduce
+        // this ensures that we get a chance to call the bucket adders before a cell gets to have its calculate func called.
+        // however the joinValueRendezvous may have just fired along with the bucket slice, that would cause this new reduce
+        // to get a load of events that weren't intended for it. Hence we only add an ordering here, then later promote to a full trigger
+        env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        joinValueRendezvous.newBucketBuilt = true
 
         // listen to it so that we fire value events whenever the nextReduce fires
-        env.addListener(nextReduce, this)
+        env.addListener(nextReduce, SliceAfterBucket.this)
         env.addListener(nextReduce, eventCountInput)
       }
     } else {

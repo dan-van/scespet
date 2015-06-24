@@ -10,7 +10,10 @@ import scespet.core.types.MFunc
  * todo: remove code duplication with SlicedReduce
  *
  * if a slice event fires atomically with a value to be added to the bucket:
- * the old bucket is completed and the next bucket receives the new input value
+ * the old bucket is completed and a NEW bucket receives the NEW input value
+ *
+ *  * i.e. this is 'end-exclusive'
+
  * NOTE: emityType = CONTINUOUS is not yet supported as it would imply that for a single input value
  * we'd have to both slice the bucket, and emit an event for the input value being added to the new bucket
  * this is obviously a one to many event propagation, which is not natively supported just yet.

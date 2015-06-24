@@ -1,11 +1,12 @@
 package scespet
 
-import core._
-import core.types
-import gsa.esg.mekon.core.EventSource
+import scespet.core._
+import gsa.esg.mekon.core.{Environment, EventSource}
 import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecycle}
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
+import scespet.util.SliceAlign
+import scespet.util.SliceAlign._
 
 import scala.reflect.ClassTag
 
@@ -44,8 +45,8 @@ class EnvTermBuilder() extends DelayedInit {
   }
 
   def asStream[X](data: HasVal[X]) : MacroTerm[X] = {
-    if (data.isInstanceOf[EventSource]) {
-      env.registerEventSource(data.asInstanceOf[EventSource])
+    if (data.getTrigger.isInstanceOf[EventSource]) {
+      env.registerEventSource(data.getTrigger.asInstanceOf[EventSource])
     }
     return new MacroTerm[X](env)(data)
   }
@@ -96,28 +97,63 @@ class EnvTermBuilder() extends DelayedInit {
 
   }
 
-  // NODEPLOY I think we can delete this now
-  def streamOf2[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
+  // NODEPLOY support a verb that gives reset mutation on buckets, and delete this?
+  def streamOf2[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
     //    if (data.isInstanceOf[EventSource]) {
     //      env.registerEventSource(data.asInstanceOf[EventSource])
     //    }
-    val cellLifeCycle:SliceCellLifecycle[Y] = new BucketCellLifecycle[Y] {
-      override def newCell(): Y = newCellFunc
-    }
-//    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
-    // TODO: build "bucketStream" concept
+//    val cellLifeCycle:SliceCellLifecycle[Y] = new BucketCellLifecycle[Y] {
+//      override def newCell(): Y = newCellFunc
+//    }
     ???
+//    val group = new UncollapsedGroupWithTrigger[](null, )
+//    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
   }
 
+  def bucketStream[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y, OUT], yType:ClassTag[Y]) : ResettableBucketStreamBuild[Y, OUT] = {
+    /* This is a 'slicer' that actually just calls open and close on the same bucket instance */
+    val reset = new SliceCellLifecycle[Y] {
+      lazy val cell = newCellFunc
 
+      override def C_type: ClassTag[Y] = yType
 
-  //  def reduce[B <: types.MFunc](aggregateBuilder: => B) :ReduceBuilder[B] = {
-//    new ReduceBuilder[B](aggregateBuilder)
-//  }
+      /**
+       * create a new cell.
+       * @return
+       */
+      override def newCell(): Y = {
+        cell.open()
+        cell
+      }
 
+      override def closeCell(c: Y): Unit = {
+        cell.complete()
+      }
+
+      // NODEPLOY - I think reset should now be deleted
+      override def reset(c: Y): Unit = ???
+    }
+    new ResettableBucketStreamBuild[Y, OUT](aggOut, reset, yType, env)
+  }
 }
 
-//class ReduceBuilder[B <: types.MFunc](aggregateBuilder : => B) {
+  class ResettableBucketStreamBuild[Y, OUT](aggOut:AggOut[Y, OUT],cellReset: SliceCellLifecycle[Y], yType:ClassTag[Y], val env:Environment) {
+    private def noreset() :PartialBuiltSlicedBucket[Y, OUT] = reset[Any](null, triggerAlign = AFTER)(SliceTriggerSpec.TERMINATION)
+
+    def all() :MacroTerm[OUT] = noreset().all()
+    def last() :MacroTerm[OUT] = noreset().last()
+
+    def bind[S](stream: HasVal[S])(adder: Y => S => Unit): PartialBuiltSlicedBucket[Y, OUT] = {
+      noreset().bind(stream)(adder)
+    }
+
+    def reset[S](sliceSpec:S, triggerAlign:SliceAlign = AFTER)(implicit ev:SliceTriggerSpec[S]) :PartialBuiltSlicedBucket[Y, OUT] = {
+      val uncollapsed :UncollapsedGroupWithTrigger[S, _] = new UncollapsedGroupWithTrigger[S, Any](null, sliceSpec, triggerAlign, env, ev)
+      new PartialBuiltSlicedBucket[Y, OUT](uncollapsed, aggOut, cellReset, env)
+    }
+  }
+
+  //class ReduceBuilder[B <: types.MFunc](aggregateBuilder : => B) {
 //  val bBuilder = aggregateBuilder
 //
 //  def join[X](MultiTerm[])
