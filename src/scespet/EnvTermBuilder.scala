@@ -2,7 +2,7 @@ package scespet
 
 import scespet.core._
 import gsa.esg.mekon.core.{Environment, EventSource}
-import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecycle}
+import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
 import scespet.util.SliceAlign
@@ -112,27 +112,7 @@ class EnvTermBuilder() extends DelayedInit {
 
   def bucketStream[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y, OUT], yType:ClassTag[Y]) : ResettableBucketStreamBuild[Y, OUT] = {
     /* This is a 'slicer' that actually just calls open and close on the same bucket instance */
-    val reset = new SliceCellLifecycle[Y] {
-      lazy val cell = newCellFunc
-
-      override def C_type: ClassTag[Y] = yType
-
-      /**
-       * create a new cell.
-       * @return
-       */
-      override def newCell(): Y = {
-        cell.open()
-        cell
-      }
-
-      override def closeCell(c: Y): Unit = {
-        cell.complete()
-      }
-
-      // NODEPLOY - I think reset should now be deleted
-      override def reset(c: Y): Unit = ???
-    }
+    val reset = new MutableBucketLifecycle[Y](() => newCellFunc)(yType)
     new ResettableBucketStreamBuild[Y, OUT](aggOut, reset, yType, env)
   }
 }

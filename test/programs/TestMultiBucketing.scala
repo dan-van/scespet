@@ -66,15 +66,23 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
 //  class XYCollector() extends Bucket with OutTrait[XYCollector] with CellAdder[Int] {
-  class XYCollector() extends Bucket with Reducer[Int, XYCollector] {
+  class XYCollector() extends Bucket with CellAdder[Int] with Cloneable {
     var firstX:Int = -1
     var lastX:Int = -1
     var xChanged ,yChanged = 0
     var countX, countY, countBoth = 0
     var done = false
 
-    // NODEPLOY can we make this implicit? If something has no OutTrait, then it *is* an OutTrait of itself?
-    override def value(): XYCollector = this
+    override def open(): Unit = {
+      firstX = -1
+      lastX = -1
+      xChanged = 0
+      yChanged = 0
+      countX = 0
+      countY = 0
+      countBoth = 0
+      done = false
+    }
 
     override def complete() {
       if (done) throw new AssertionError("double call to done: "+this)
@@ -91,7 +99,6 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     def add(x:Int) = addX(x)
     def addX(x:Int) = {xChanged += 1; lastX = x; if (firstX == -1) firstX = x}
     def addY(x:Int) = yChanged += 1
-    override def open(): Unit = ???
 
     override def toString: String = s"firstX:$firstX x:$lastX nx:$countX, ny:$countY, nboth:$countBoth, done:$done"
 
@@ -122,7 +129,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   }
 
   test("bucket sliced reduce pre") {
-    val stream = generateCounterAndPartialBucketDef(reduce = true, 26).slicePre()
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last()
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(11, 11, 5), recombinedEventCount)
 
@@ -145,7 +152,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   }
 
   test("bucket sliced reduce post") {
-    val stream = generateCounterAndPartialBucketDef(reduce = true, 26).slicePost()
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).last()
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(12, 11, 4), recombinedEventCount)
 
@@ -213,7 +220,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
 
   ignore("bucket fold, slice before") { //See docs on SliceBeforeBucket for why I can't support this yet
-    val stream = generateCounterAndPartialBucketDef(reduce = false, 26).slicePre()
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last()
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     new StreamTest("Recombined count", (0 to 26), recombinedCounter)
 
@@ -230,7 +237,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   // fails due to missing event after slice
   test("bucket fold, slice after") {
-    val stream = generateCounterAndPartialBucketDef(reduce = false, 26).slicePost()
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).all()
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     new StreamTest("Recombined count", (0 to 26), recombinedCounter)
 
@@ -245,12 +252,12 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     new StreamTest("Odd", expectedOdd, stream("Odd"))
   }
 
-  def generateCounterAndPartialBucketDef(reduce:Boolean, n:Int) = {
+  class generateCounterAndPartialBucketDef(n: Int) {
     // set up two vector streams that fire events, sometimes co-inciding, sometimes independent
     val counter = impl.asStream(IteratorEvents(0 to n)((x,i)=>i.toLong))
     val evenOdd = counter.by(c => if (c % 2 == 0) "Even" else  "Odd")
     val div5 = evenOdd.filter(_ % 5 == 0)
-    val keySet = evenOdd.toKeySet()
+//    val keySet = evenOdd.toKeySet()
 
     //    evenOdd.reduce()
 //    val slicer = keySet.keyToStream(k => new XYCollector)
@@ -260,45 +267,37 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 //      join(evenOdd){b => b.addX}.
 //      join(div5){b => b.addY}
 
-    new {
-      private def mySliceDef(i:Int) = {
-        val doIt = i > 0 && i % 11 == 0
-        if (doIt)
-          println("Slice!")
-        doIt
-      }
-      lazy val sliceOn:MacroTerm[Int] = counter.filter(mySliceDef)
-      lazy val windowStream:MacroTerm[Boolean] = {
-        sliceOn.fold_all(new Reducer[Any, Boolean] {
-          var windowOpen = true
-          def value = windowOpen
-          def add(x: Any): Unit = {
-            windowOpen = !windowOpen;
-            println("Window edge. WindowOpen = "+windowOpen)
-          }
-        })
-      }
-      def slicePre():VectTerm[String, XYCollector] = {
-        val grouped = evenOdd.group[Any](SliceTriggerSpec.TERMINATION, SliceAlign.BEFORE)(SliceTriggerSpec.TERMINATION.asVectSliceSpec)
-        val slicer = grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
-        if (reduce) slicer.last else slicer.all
-      }
-      def slicePost():VectTerm[String, XYCollector] = {
-        val grouped = evenOdd.group[Any](SliceTriggerSpec.TERMINATION, SliceAlign.AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec)
-        val slicer = grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
-        if (reduce) slicer.last else slicer.all
-      }
-      def window():VectTerm[String, XYCollector] = {
-        val grouped = evenOdd.window(windowStream)
-        val slicer = grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
-        if (reduce) slicer.last else slicer.all
-      }
+    private def mySliceDef(i:Int) = {
+      val doIt = i > 0 && i % 11 == 0
+      if (doIt)
+        println("Slice!")
+      doIt
+    }
+    lazy val sliceOn:MacroTerm[Int] = counter.filter(mySliceDef)
+    // turn 'sliceOn into a window, each fire of sliceOn is an open or close edge of a window
+    lazy val windowStream:MacroTerm[Boolean] = {
+      sliceOn.fold_all(new Reducer[Any, Boolean] {
+        var windowOpen = true
+        def value = windowOpen
+        def add(x: Any): Unit = {
+          windowOpen = !windowOpen;
+          println("Window edge. WindowOpen = "+windowOpen)
+        }
+      })
+    }
+    def slicedStream(align:SliceAlign):GroupedTerm2[String, XYCollector, XYCollector] = {
+      val grouped = evenOdd.group(sliceOn, align)
+      grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
+    }
+    def windowedStream():GroupedTerm2[String, XYCollector, XYCollector] = {
+      val grouped = evenOdd.window(windowStream)
+      grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
     }
   }
 
 
   test("bucket windows reduce") {
-    val stream = generateCounterAndPartialBucketDef(reduce = true, 26).window()
+    val stream = new generateCounterAndPartialBucketDef(26).windowedStream().last()
 
     // This is similar to slice_pre - if the window close event is atomic with a value for the bucket, that value is deemed to be not-in the bucket
     // i.e. close comes first
@@ -321,7 +320,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
 
   test("bucket window fold") {
-    val stream = generateCounterAndPartialBucketDef(reduce = false, 26).window()
+    val stream = new generateCounterAndPartialBucketDef(26).windowedStream().last()
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     val counterExpectations = (0 to 10) ++ Seq(10) ++ (22 to 26)
     new StreamTest("Recombined count", counterExpectations, recombinedCounter)

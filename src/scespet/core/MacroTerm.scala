@@ -1,6 +1,6 @@
 package scespet.core
 
-import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, BucketCellLifecycle, AggSliceCellLifecycle}
+import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
 import scespet.core._
 import scespet.util._
 import scespet.util.SliceAlign._
@@ -24,7 +24,11 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   import scala.collection.JavaConverters._
 
 //  override implicit def toHasVal():HasVal[X] = input
-  override def value = input.value
+  override def value = {
+// NODEPLOY it would be handy to keep this, but init causes failure. can we work around this?
+//  if (!env.hasChanged(trigger)) throw new AssertionError("interrogating value when !hasChanged is probably broken")
+  input.value
+}
   override def initialised: Boolean = input.initialised
   override def trigger: types.EventGraphObject = input.trigger
 
@@ -49,8 +53,9 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   }
 
   /**
-   * Fold is a running reduction - the new state of the reduction is exposed after each element addition
-   * e.g. a running cumulative sum, as opposed to a sum
+   * NODEPLOY - is this replaced by 'reduce'?  NOTE, the implementation is far simpler here, may be worth keeping.
+   *
+   * Reduce collapses all values into a single value emitted at env.terminationEvent
    * @param y
    * @tparam Y
    * @return
@@ -249,18 +254,6 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
         }
       }
 
-      def applyB[B <: Bucket, OUT](lifecycle: SliceCellLifecycle[B], reduceType: ReduceType, cellOut:AggOut[B,OUT]): HasVal[OUT] = {
-        ??? // DELETE
-//        reduceType match {
-//          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, window, lifecycle, env)
-//          case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, window, lifecycle, env)
-//        }
-      }
-
-      def applyAgg[A, OUT](lifecycle: SliceCellLifecycle[A], adder:A => CellAdder[X], cellOut:AggOut[A,OUT], reduceType: ReduceType): HasVal[OUT] = {
-        ??? // DELETE
-//        new WindowedReduce[X, A, OUT](input, adder, cellOut, window, lifecycle, reduceType, env)
-      }
     }
     new GroupedTerm(this, uncollapsed, env)
   }
@@ -271,8 +264,20 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
     new GroupedTerm[X](this, uncollapsed, env)
   }
 
+  /**
+   * bindTo is a mechanism to allow easier interop with lower-level mutable streams and existing business logic.
+   * e.g. stats collectors that work on having mutator methods called from price and trade events, and having 'open' and 'close'
+   * to mark bucket boundaries
+   * NOTE: bucket is instantiated per key, but thereafer is mutated, unlike calls to scan and reduce
+   */
   def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B,OUT] = {
-    group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).collapseWith[B, OUT](() => newBFunc)(adder)(aggOut, type_b)
+    val groupedTerm = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION)
+
+    val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
+      override def add(x: X): Unit = adder(b)(x)
+    }
+    val lifecycle :SliceCellLifecycle[B] = new MutableBucketLifecycle[B](() => newBFunc)(type_b)
+    groupedTerm._collapse[B, OUT](lifecycle, cellAdd, aggOut)
   }
 }
 
@@ -282,11 +287,6 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
  * @tparam IN
  */
 trait UncollapsedGroup[IN] {
-  // NODEPLOY delete
-  def applyB[B <: Bucket, OUT](lifecycle:SliceCellLifecycle[B], reduceType:ReduceType, cellOut:AggOut[B,OUT]) :HasVal[OUT]
-  // NODEPLOY delete
-  def applyAgg[A, OUT](lifecycle:SliceCellLifecycle[A], adder:A => CellAdder[IN], cellOut:AggOut[A,OUT], reduceType:ReduceType) :HasVal[OUT]
-
   def newBucket[B, OUT](reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT]
 }
 
@@ -316,19 +316,6 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[_], sliceSpec:S, trigger
     cell
   }
 
-  def applyAgg[A, OUT](lifecycle: SliceCellLifecycle[A], adder:A => CellAdder[IN], cellOut:AggOut[A,OUT], reduceType:ReduceType): HasVal[OUT] = {
-    ??? // DELETE ME
-//    new SlicedReduce[S, IN, A, OUT](input, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, ev, exposeInitialValue = false)
-  }
-
-  def applyB[B <: Bucket, OUT](lifecycle: SliceCellLifecycle[B], reduceType:ReduceType, cellOut:AggOut[B,OUT]): HasVal[OUT] = {
-??? // DELETE ME
-//    triggerAlign match {
-//      case BEFORE => new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
-//      case AFTER => new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, env, ev, exposeInitialValue = false)
-//      case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
-//    }
-  }
 }
 
 /**
@@ -338,11 +325,13 @@ class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGro
 //  def reduce[Y <: Cell](newBFunc: => Y) :Term[Y#OUT] = ???
 //  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-  _collapse[Y,O](() => newBFunc, adder, yOut, yType).last()
+  val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
+  _collapse[Y,O](lifecycle, adder, yOut).last()
   }
 
   def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    _collapse[Y,O](() => newBFunc, adder, yOut, yType).all()
+    val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
+    _collapse[Y,O](lifecycle, adder, yOut).all()
   }
 
   def collapseWith2[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
@@ -353,11 +342,11 @@ class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGro
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = addFunc(b)(x)
     }
-    _collapse[B,OUT](newBFunc, cellAdd, aggOut, type_b)
+    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](newBFunc)(type_b)
+    _collapse[B,OUT](lifecycle, cellAdd, aggOut)
   }
 
-  def _collapse[B, OUT](newBFunc: () => B, adder:B => CellAdder[X], yOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[ B, OUT] = {
-    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](newBFunc)(type_b)
+  def _collapse[B, OUT](lifecycle:SliceCellLifecycle[B], adder:B => CellAdder[X], yOut :AggOut[B, OUT]) :PartialBuiltSlicedBucket[ B, OUT] = {
     val groupWithBindings = new PartialBuiltSlicedBucket[B, OUT](uncollapsedGroup, yOut, lifecycle, env)
     val addX :(B) => (X) => Unit = (b:B) => (x:X) => {
       val ca = adder.apply(b)

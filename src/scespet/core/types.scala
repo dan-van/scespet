@@ -1,5 +1,7 @@
 package scespet.core
 
+import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
+
 import reflect.macros.Context
 import gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
 import scala.reflect.ClassTag
@@ -200,15 +202,28 @@ trait Bucket extends MFunc {
 }
 
 
-// NODEPLOY - union with above?
 trait KeyToSliceCellLifecycle[K, C] {
   def lifeCycleForKey(k:K):SliceCellLifecycle[C]
+}
+object KeyToSliceCellLifecycle {
+  private class KeyCellImplicit[K, Y](newCellF: K => Y, type_y:ClassTag[Y]) extends KeyToSliceCellLifecycle[K,Y]{
+    override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y]( () => newCellF(k) )(type_y)
 
-  /**
-   * if the new cell will be self-generating events in addition to having values 'added' then we need to know to wire things up differently
-   * @return
-   */
-  def isCellListenable:Boolean
+  }
+  private class KeyBucketImplicit[K, B <: Bucket](newCellF: K => B, type_y:ClassTag[B]) extends KeyToSliceCellLifecycle[K,B]{
+    override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = new MutableBucketLifecycle[B]( () => newCellF(k) )(type_y)
+  }
+
+  // PONDER: I could work out how to use implicits here, but I only envision two usecases right now:
+  def getKeyToSliceLife[K,C](newCellF:K=>C, type_c:ClassTag[C]): KeyToSliceCellLifecycle[K, C] = {
+    if (classOf[Bucket].isAssignableFrom(type_c.runtimeClass)) {
+      // I don't know what I'm doing....
+      type CB = C with Bucket
+      return new KeyBucketImplicit[K,CB](newCellF.asInstanceOf[K=>CB], type_c.asInstanceOf[ClassTag[CB]]).asInstanceOf[KeyToSliceCellLifecycle[K,C]]
+    } else {
+      return new KeyCellImplicit[K,C](newCellF, type_c)
+    }
+  }
 }
 
 

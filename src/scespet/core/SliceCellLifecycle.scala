@@ -1,8 +1,5 @@
 package scespet.core
 
-import scespet.core.SliceCellLifecycle.AggSliceCellLifecycle
-
-import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 /**
@@ -120,10 +117,8 @@ trait SliceCellLifecycle[C] {
    * @return
    */
   def newCell():C
-  // NODEPLOY - I think reset should now be deleted
-  def reset(c:C)
+
   def closeCell(c:C)
-  // NODEPLOY - I think we should have a callback on every 'row' e.g. updated
 }
 
 
@@ -131,28 +126,48 @@ object SliceCellLifecycle {
   class CellSliceCellLifecycle[A](newCellF: () => A)(implicit val C_type:ClassTag[A]) extends SliceCellLifecycle[A]{
     override def newCell(): A = newCellF()
     override def closeCell(c: A): Unit = {}
-    override def reset(c: A): Unit = {}
   }
 
 
-  implicit class AggSliceCellLifecycle[X, A <: Agg[X]](newCellF: () => A) extends SliceCellLifecycle[A] {
-    override def C_type:ClassTag[A] = ???
-    override def newCell(): A = newCellF()
-    override def closeCell(c: A): Unit = {}
-    override def reset(c: A): Unit = {}
+  class MutableBucketLifecycle[B <: Bucket](newCellFunc: () => B)(implicit val b_type:ClassTag[B]) extends SliceCellLifecycle[B] {
+    lazy val cell = newCellFunc()
+
+    override def C_type: ClassTag[B] = b_type
+
+    /**
+     * create a new cell.
+     * @return
+     */
+    override def newCell(): B = {
+      cell.open()
+      cell
+    }
+
+    override def closeCell(c: B): Unit = {
+      cell.complete()
+    }
+
   }
 
-  abstract class BucketCellLifecycle[C <: Bucket] extends SliceCellLifecycle[C] {
-    override def C_type:ClassTag[C] = ???
 
-    def newCell(): C
+  //  implicit class AggSliceCellLifecycle[X, A <: Agg[X]](newCellF: () => A) extends SliceCellLifecycle[A] {
+//    override def C_type:ClassTag[A] = ???
+//    override def newCell(): A = newCellF()
+//    override def closeCell(c: A): Unit = {}
+//    override def reset(c: A): Unit = {}
+//  }
 
-    override def reset(c: C): Unit = {}
-
-    override def closeCell(c: C): Unit = c.complete()
-  }
-
-  class BucketCellLifecycleImpl[C <: Bucket](newBucket: => C) extends BucketCellLifecycle[C] {
-    override def newCell(): C = newBucket
-  }
+//  abstract class BucketCellLifecycle[C <: Bucket] extends SliceCellLifecycle[C] {
+//    override def C_type:ClassTag[C] = ???
+//
+//    def newCell(): C
+//
+//    override def reset(c: C): Unit = {}
+//
+//    override def closeCell(c: C): Unit = c.complete()
+//  }
+//
+//  class BucketCellLifecycleImpl[C <: Bucket](newBucket: => C) extends BucketCellLifecycle[C] {
+//    override def newCell(): C = newBucket
+//  }
 }
