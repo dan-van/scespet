@@ -1,10 +1,13 @@
 package programs
 
+import gsa.esg.mekon.core.EventGraphObject
 import org.junit.runner.RunWith
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit, JUnitRunner}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
+import scespet.core.SliceCellLifecycle.MutableBucketLifecycle
 import scespet.core._
 import scespet.core.types.{MFunc, IntToEvents}
+import scespet.util.SliceAlign._
 import scespet.util.{SliceAlign, ScespetTestBase}
 import scespet.EnvTermBuilder
 
@@ -232,7 +235,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 
 
 // -------------- Pure old-style function streams
-  ignore("MFunc scan") {
+  test("MFunc scan") {
     val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).all() )
     val expectedDigits = generateAppendScan(data_digit)
     val expectedAlpha = generateAppendScan(data_chars)
@@ -240,7 +243,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  ignore("MFunc reduce") {
+  test("MFunc reduce") {
     val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).last() )
     val expectedDigits = Seq(generateAppendScan(data_digit).last)
     val expectedAlpha = Seq(generateAppendScan(data_chars).last)
@@ -248,7 +251,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  ignore("MFunc grouped scan") {
+  test("MFunc grouped scan") {
     val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).all() )
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
@@ -257,7 +260,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("scan :Alpha", expectedAlpha, out("Alpha"))
   }
 
-  ignore("MFunc grouped reduce") {
+  test("MFunc grouped reduce") {
     val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).last() )
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq
@@ -265,7 +268,10 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
     new StreamTest("reduce :Alpha", expectedAlpha, out("Alpha"))
   }
-// -------------- tricky composition of self-generator and binding
+// -------------- tricky composition of self-generator and binding. OldStyleFuncAppend is both doing its own subs to the
+  // constructor HasVal, but is also being bound with an 'adder' mutation
+
+
   ignore("MFunc bind scan") {
     val alternate:Function1[Char, Boolean] = new Function1[Char,Boolean] {
       var accept = false

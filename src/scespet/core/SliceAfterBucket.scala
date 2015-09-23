@@ -46,6 +46,12 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
 
+      // NODEPLOY, should this come later?
+      if (queuedNewAssignment) {
+        queuedNewAssignment = false
+        assignNewReduce()
+      }
+
       addedValueToBucket = false
 
       if (pendingInitialValue.nonEmpty) {
@@ -171,26 +177,13 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     }
   }
 
-  private def resetCurrentReduce() {
-    if (nextReduce != null) {
-      cellLifecycle.closeCell(nextReduce)
-      completedReduceValue = cellOut.out(nextReduce)
-
-      assignNewReduce()
-      // fire a cyclic call to ensure that the assignment occurs after we have processed this close operation
-      //      queuedNewAssignment = true
-      //      env.wakeupThisCycle(this)
-    }
-    awaitingNextEventAfterReset = true
-  }
-
   def calculate():Boolean = {
-//    if (queuedNewAssignment) {
-//      queuedNewAssignment = false
-//      assignNewReduce()
-//    }
+    if (queuedNewAssignment) {
+      queuedNewAssignment = false
+      assignNewReduce()
+    }
     val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
-      if (cellIsFunction) env.hasChanged(nextReduce) else env.hasChanged(joinValueRendezvous)
+      env.hasChanged(joinValueRendezvous) || cellIsFunction && env.hasChanged(nextReduce)
     } else {
       false
     }
@@ -205,7 +198,15 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
 //    if this is the first fire during construction dont reset it?
     val sliceFire = if (sliceTriggered()) {
       if (env.isInitialised(this)) {
-        resetCurrentReduce()
+        if (nextReduce != null) {
+          cellLifecycle.closeCell(nextReduce)
+          completedReduceValue = cellOut.out(nextReduce)
+          // don't assign a new one right away, we want to consume this value before we do the next assign
+          // fire a cyclic call to ensure that the assignment occurs after we have processed the value of the closed bucket
+          queuedNewAssignment = true
+          env.wakeupThisCycle(joinValueRendezvous)
+        }
+        awaitingNextEventAfterReset = true
       } else {
         logger.info("NODEPLOY: this was the first calc ever, I'm not going to reset the bucket!")
       }

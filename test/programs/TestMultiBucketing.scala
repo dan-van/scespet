@@ -128,7 +128,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     override def clone(): XYCollector = super.clone().asInstanceOf[XYCollector]
   }
 
-  test("bucket sliced reduce pre") {
+  ignore("bucket sliced reduce pre") {
     val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last()
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(11, 11, 5), recombinedEventCount)
@@ -151,7 +151,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     new StreamTest("Odd", expectedOdd, oddBuckets)
   }
 
-  test("bucket sliced reduce post") {
+  ignore("bucket sliced reduce post") {
     val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).last()
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(12, 11, 4), recombinedEventCount)
