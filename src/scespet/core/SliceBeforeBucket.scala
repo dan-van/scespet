@@ -33,26 +33,22 @@ import scespet.core.types.MFunc
  */
  
 class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
-  if (emitType == ReduceType.CUMULATIVE) throw new UnsupportedOperationException("Not yet implemented due to event atomicity concerns. See class docs")
-
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
+  var queuedNewAssignment = false
+
 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
-    var doneSlice = false
-
     override def nextReduce: Y = SliceBeforeBucket.this.nextReduce
 
     def calculate(): Boolean = {
-      doneSlice = false
-      if (sliceTriggered()) {
-        closeCurrentBucket()
+      if (queuedNewAssignment) {
+        // this covers the case where we have done the bucket-close event, but haven't yet processed the self-wakeup to open a new bucket
         assignNewReduce()
-        doneSlice = true
+        queuedNewAssignment = false
       }
 
-      // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
       var addedValueToBucket = false
       if (pendingInitialValue.nonEmpty) {
@@ -76,12 +72,12 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
           addedValueToBucket = true
         }
       }
-      if (cellIsFunction & doneSlice && addedValueToBucket) {
-        // we've added a value to a fresh bucket. This won't normally receive this trigger event, as the listener edges are
-        // still pending wiring.
-        // The contract is that a bucket will receive a calculate after it has had its inputs added
-        // therefore, we'll send a fire after establishing listener edges to preserve this contract.
-        env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
+      val doneSlice = env.hasChanged(sliceHandler)
+
+      if (addedValueToBucket && doneSlice) {
+        // oh, this could be nasty - what if we're using a mutable cell, and the 'out' function is exposing mutable state?
+        // NODEPLOY, umm, what is sca
+        throw new UnsupportedOperationException("We have closed a bucket, but got an event to add to the new one. We can't do that, because we haven't yet propagated the state of the closed bucket. Requirements contradiction for bucket: "+nextReduce)
       }
 
       val fireBucketCell = addedValueToBucket || doneSlice
@@ -117,20 +113,33 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
   assignNewReduce()
 
 
-  // We can't 'sliceBefore' nextReduce fires, as we have no idea it is about to fire.
-  private val eventCountInput = if (cellIsFunction) Set(nextReduce.asInstanceOf[EventGraphObject]) else joinValueRendezvous.inputBindings.keySet
-  var sliceEvents :types.EventGraphObject = ev.buildTrigger(sliceSpec, eventCountInput, env)
-  // wire up slice listening:
-  if (sliceEvents != null) {
-    env.addListener(sliceEvents, joinValueRendezvous)
+  val sliceHandler = new MFunc() {
+    override def calculate(): Boolean = {
+      if (sliceTriggered()) {
+        closeCurrentBucket()
+        // we open a new one in the main calculate() method
+      }
+      true
+    }
   }
-
+  env.addListener(sliceHandler, joinValueRendezvous)
   // not 100% sure about this - if we are only emitting completed buckets, we close and emit a bucket when the system finishes
   private val termination = env.getTerminationEvent
   if (emitType == ReduceType.LAST) {
-    env.addListener(termination, joinValueRendezvous)
+    env.addListener(termination, sliceHandler)
   }
 
+
+  // We can't 'sliceBefore' nextReduce fires, as we have no idea it is about to fire.
+  private val eventCountInput = if (cellIsFunction) Set(nextReduce.asInstanceOf[EventGraphObject]) else joinValueRendezvous.inputBindings.keySet
+  var sliceEvents :types.EventGraphObject = ev.buildTrigger(sliceSpec, eventCountInput, env)
+
+  // wire up slice listening:
+  if (sliceEvents != null) {
+    env.addListener(sliceEvents, sliceHandler)
+  }
+
+  // NODPLOY maybe 'this' should actually be the JoinValueRendezvous?
   env.addListener(joinValueRendezvous, this)
 
 
@@ -177,16 +186,29 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
   }
 
   def calculate():Boolean = {
+    val sliceFire = env.hasChanged(sliceHandler)
+    val reduceFired = cellIsFunction && env.hasChanged(nextReduce)
+
+    if (queuedNewAssignment && reduceFired) {
+      throw new UnsupportedOperationException("The slice was fired, but the bucket fired afterwards before we could call newCell., Can you use sliceAfter, or make the Bucket stop doing its own listener wiring?: "+nextReduce)
+    }
+    if (queuedNewAssignment) {
+      if (sliceFire) {
+        throw new AssertionError("Slice has fired again whilst we were trying to process the first one")
+      }
+      assignNewReduce()
+      queuedNewAssignment = false
+    }
+    if (sliceFire) {
+      queuedNewAssignment = true
+      env.wakeupThisCycle(this)
+    }
+
     val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
-      env.hasChanged(value)
+      env.hasChanged(joinValueRendezvous) || reduceFired
     } else {
       false
     }
-    val sliceFire = if (joinValueRendezvous.doneSlice) {
-      // consumed
-      joinValueRendezvous.doneSlice = false
-      true
-    } else false
 
     val fire = bucketFire || sliceFire
     if (fire)

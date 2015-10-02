@@ -38,6 +38,7 @@ public class SlowGraphWalk {
         private EventGraphObject graphObject;
         private int order = -1;
         private int lastPropagationSweep = -1;
+        public int foundCyclicCallAt = -1;
 
         private Node(EventGraphObject graphObject) {
             this.graphObject = graphObject;
@@ -290,6 +291,10 @@ public class SlowGraphWalk {
                 }
             }
             if (cyclicFires.size() > 0) {
+                // NOTE: actually it is probably better to prioritise "deeper" cycles first.
+                // i.e. the ordering should be opposite to joinNodes.
+                // I don't think i'm really hitting this at the moment.
+                if (cyclicFires.size() > 1) throw new UnsupportedOperationException("NODEPLOY I need to do some work to reorder the consumption of this queue in correct order");
                 joinNodes.addAll(cyclicFires);
                 cyclicFires.clear();
             }
@@ -381,7 +386,14 @@ public class SlowGraphWalk {
     }
 
     public void wakeup(EventGraphObject graphObject) {
-        if (currentFiringNode != null && currentFiringNode.graphObject == graphObject) return;   // redundant, and not bad. Already doing it.
+        if (currentFiringNode != null && currentFiringNode.graphObject == graphObject) {
+            if (currentFiringNode.foundCyclicCallAt < cycleCount) {
+                // a self-wakeup, punt it as a cycle
+                cyclicFires.add(currentFiringNode);
+                currentFiringNode.foundCyclicCallAt = cycleCount;
+            }
+            return;
+        }
 
         Node node = getNode(graphObject);
         if (hasCalculated(node)) {
