@@ -4,7 +4,7 @@ import gsa.esg.mekon.core.EventGraphObject
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
 import scespet.EnvTermBuilder
-import scespet.core.SliceCellLifecycle.MutableBucketLifecycle
+import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, MutableBucketLifecycle}
 import scespet.core._
 import scespet.core.types._
 import scespet.util.{SliceAlign, ScespetTestBase}
@@ -30,10 +30,10 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * @param reduceType
    * @param expected
    * @param triggerAlign
-   * @return
+   * @return (sourceA, sourceB, slice)
    */
-  def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign) = {
-    type S = EventGraphObject
+  def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign, doMutable:Boolean = false) = {
+    type S = EventGraphObject                                                                     // NODEPLOY need to set up mutable tests
     type Y = OldStyleFuncAppend[Char]
     type OUT = OldStyleFuncAppend[Char]
     val slice = new MFunc() {
@@ -41,15 +41,32 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     }
     val sourceA :ValueFunc[Char] = new ValueFunc[Char](env)
     val sourceB :ValueFunc[Char] = new ValueFunc[Char](env)
+    val valueStreamForOldStyleEvents :ValueFunc[Char] = new ValueFunc[Char](env)
+
     val aggOut = implicitly[AggOut[Y, OUT]]
     val sliceSpec = implicitly[SliceTriggerSpec[S]]
-    //    val otherBindings =
-    val lifecycle :SliceCellLifecycle[OldStyleFuncAppend[Char]] = new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( sourceA, env))
+
     var otherBindings = List[(HasVal[_], (Y => _ => Unit))]()
+    otherBindings :+= sourceA -> ((y:Y) => (c:Char) => y.append(c))
     otherBindings :+= sourceB -> ((y:Y) => (c:Char) => y.append(c))
+
     val sliceBucket = triggerAlign match {
-      case SliceAlign.AFTER => new SliceAfterBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
-      case SliceAlign.BEFORE => new SliceBeforeBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
+      case SliceAlign.AFTER if doMutable => {
+        val lifecycle = new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
+        new SliceAfterBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
+      }
+      case SliceAlign.AFTER if !doMutable => {
+        val lifecycle = new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
+        new SliceAfterBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
+      }
+      case SliceAlign.BEFORE if doMutable => {
+        val lifecycle = new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
+        new SliceBeforeBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
+      }
+      case SliceAlign.BEFORE if !doMutable => {
+        val lifecycle = new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
+        new SliceBeforeSimpleCell[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
+      }
     }
 
     env.addListener(sliceBucket, new MFunc() {
@@ -63,13 +80,13 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
         true
       }
     })
-    (sourceA, sourceB, slice)
+    (sourceA, sourceB, slice, valueStreamForOldStyleEvents)
   }
 
   test("Concept sliceAfter CUMULATIVE") {
     val expected = List("A", "AB", "ABC"/*slice*/, "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
 
     sourceA.setValue('A')
     env.graph.fire(sourceA.trigger)
@@ -93,7 +110,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   test("Concept sliceAfter LAST") {
     val expected = List("ABC"/*slice*/, "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
     val reduceType = ReduceType.LAST
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
 
     sourceA.setValue('A')
     env.graph.fire(sourceA.trigger)
@@ -114,10 +131,10 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     env.graph.fire(slice)
   }
 
-  ignore("Concept sliceBefore CUMULATIVE") {
+  test("Concept sliceBefore CUMULATIVE") {
     val expected = List("A", "AB", "ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
     sourceA.setValue('A')
     env.graph.fire(sourceA.trigger)
@@ -128,7 +145,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     sourceA.setValue('C')
     env.graph.fire(sourceA.trigger)
 
-    //SLICE
+    //SLICE (this should not fire an event, as the bucket close adds no information to CUMULATIVE)
     env.graph.fire(slice)
 
     sourceA.setValue('D')
@@ -144,7 +161,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   test("Concept sliceBefore LAST") { // cumulative slice before not implemented (is that still necessary?)
     val expected = List("ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
     val reduceType = ReduceType.LAST
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
     sourceA.setValue('A')
     env.graph.fire(sourceA.trigger)
@@ -167,27 +184,28 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     env.graph.fire(slice)
   }
 
-  test("mutable bucket cant concurrent sliceBefore") { // cumulative slice before not implemented (is that still necessary?)
-    val expected = List("A", /*slice*/ "B" , /*slice*/ "").map(_.toCharArray.toList)
+  test("mutable bucket cant concurrent sliceBefore") { // mutable buckets can't do 'slice before' concurrently with a value being added
+    val expected = List("A", /*slice*/ "BC").map(_.toCharArray.toList)
     val reduceType = ReduceType.LAST
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
-    val concurrentSlice = new MFunc() {
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
+    val sliceAndSourceA = new MFunc() {
       override def calculate(): Boolean = true
     }
-    env.addListener(concurrentSlice, slice)
-    env.addListener(concurrentSlice, sourceA)
+    env.addListener(sliceAndSourceA, slice)
+    env.addListener(sliceAndSourceA, sourceA)
 
     sourceA.setValue('A')
     env.graph.fire(sourceA.trigger)
 
-    //SLICE concurrent with sourceA firing 'B'
+    //SLICE concurrent with sourceA firing 'B' - in this test, Slice preceeds new values, so we expect
+    // the bucket to close with just an A
     sourceA.setValue('B')
-    env.graph.fire(concurrentSlice)
+    env.graph.fire(sliceAndSourceA)
 
     sourceA.setValue('C')
     env.graph.fire(sourceA.trigger)
 
-    //SLICE
+    //SLICE will now expose BC
     env.graph.fire(slice)
   }
 
@@ -195,7 +213,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     val expected = List("A", "AB", "ABC", /*slice*/ "DD", /*slice*/ "EE", /*slice*/ "").map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
 
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     sourceA.setValue('A')
     env.graph.fire(sourceA.trigger)
 
@@ -230,7 +248,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     val expected = List("ABC", "DD", "EE", "").map(_.toCharArray.toList)
     val reduceType = ReduceType.LAST
 
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     sourceA.setValue('A')
     env.graph.fire(sourceA.trigger)
 
@@ -264,7 +282,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   test("joined sources slice is data") {
     val expected = List("A", "AB", "ABC", /*slice*/ "DD", /*slice*/ "EE").map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     // link the slice to be coincident (and derived) from B
     env.addListener(sourceB.trigger, slice)
 
@@ -293,7 +311,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   test("joined sources slice is data LAST") {
     val expected = List("ABC","DD", "EE").map(_.toCharArray.toList)
     val reduceType = ReduceType.LAST
-    val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
+    val (sourceA, sourceB, slice, oldStyleInput) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     // link the slice to be coincident (and derived) from B
     env.addListener(sourceB.trigger, slice)
 

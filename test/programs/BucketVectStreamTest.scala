@@ -67,12 +67,16 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket with OutTrait[Seq[X]]{
+    private var ignoreMore = false
     var value = Seq[X]()
     env.addListener(in.trigger, this)
 //    if (in.initialised) {
 //      env.fireAfterChangingListeners(this) // do my initialisation
 //    }
     override def calculate(): Boolean = {
+      if (ignoreMore) {
+        println("Ooops, NODEPLOY, what happens here? Why the event?")
+      }
       if (env.hasChanged(in.trigger)) {
         append(in.value)
         true
@@ -85,6 +89,14 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
 
     override def open(): Unit = value = Nil
 
+    /**
+     * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
+     * NODEPLOY - rename to Close
+     */
+    override def complete(): Unit = {
+      ignoreMore = true
+      env.removeListener(in.trigger, this)
+    }
   }
 
   class BindableAppendFunc[X] extends Bucket with OutTrait[Seq[X]]{
