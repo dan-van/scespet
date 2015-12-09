@@ -35,6 +35,7 @@ import scespet.core.types.MFunc
 class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :CellSliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
+  private var closedReduce : Y = _
   private var hasExposedValueForNextReduce = false
   private var hasExposedValueForClosedReduce = false
 
@@ -70,6 +71,11 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
       }
       val doneSlice = env.hasChanged(sliceHandler)
 
+      if (addedValueToBucket && doneSlice) {
+        if (cellIsFunction && env.hasChanged(nextReduce)) {
+          throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
+        }
+      }
       val fireBucketCell = addedValueToBucket || doneSlice
       // the rendezvous fires the nextReduce value to notify it of additions
       fireBucketCell
@@ -80,15 +86,9 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     val newCell = cellLifecycle.newCell()
     // tweak the listeners:
     if (cellIsFunction) {
-      if (nextReduce != null && env.hasChanged(nextReduce)) {
-        throw new UnsupportedOperationException("We are allocating a new bucket, but that bucket looks like it has just fired, i.e. the bucket generated its own event which is causally 'before' the slice event. This is a requirements contradiction. Either use a SliceAfter, or make the source of events bind to a mutable method on the bucket (which allows us to identify the event source, and ensure that the sice events are ordered after the data events");
-      }
-      if (nextReduce != null) {
-        env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        // listen to it so that we propagate value updates to the bucket
-        env.removeListener(nextReduce, this)
-      }
-
+      // assigning newReduce is triggered by the slice listener, which comes before the actual SliceBeforeSimpleCell instance.
+      // listener removal will be done in the main calculate block so that we can cross-check than no unexpected events have fired
+      closedReduce = nextReduce
       nextReduce = newCell
       // join values trigger the bucket
       env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
@@ -187,6 +187,20 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
   var cyclicFireWaiting = false
   def calculate():Boolean = {
     justClosedBucket = env.hasChanged(sliceHandler)
+
+    if (closedReduce != null && env.hasChanged(closedReduce)) {
+      throw new UnsupportedOperationException("We are allocating a new bucket, but the old bucket has just fired after we tried to snap its value." +
+        " I don't know whether the snapped value is immutable, so this is potentially wrong. " +
+        "You could try switching to SliceAlign.AFTER to make the slice come after the event?" +
+        "Alternatively, if you prevent the reducing cell from doing its own subscriptions, and instead use the 'bind' method onto a mutable method of the reducer, then I will manage this for you");
+    }
+    if (closedReduce != null) {
+      env.removeListener(joinValueRendezvous, closedReduce.asInstanceOf[MFunc])
+      // listen to it so that we propagate value updates to the bucket
+      env.removeListener(closedReduce, this)
+      closedReduce = null.asInstanceOf[Y]
+    }
+
 
     val cellFired = cellIsFunction && env.hasChanged(nextReduce)
     val addedValueToCell = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket
