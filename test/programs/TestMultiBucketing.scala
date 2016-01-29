@@ -97,8 +97,21 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
       true
     }
     def add(x:Int) = addX(x)
-    def addX(x:Int) = {xChanged += 1; lastX = x; if (firstX == -1) firstX = x}
-    def addY(x:Int) = yChanged += 1
+    def addX(x:Int) = {
+      xChanged += 1; lastX = x;
+      if (firstX == -1) firstX = x
+//      if (env.hasChanged(this)) {
+//        throw new AssertionError("Calculate should always be *after* mutation from bindings")
+//      }
+      // NODEPLOY calculate should only be called if asked for
+//      env.wakeupThisCycle(this)
+    }
+    def addY(x:Int) = {
+      yChanged += 1
+//      if (env.hasChanged(this)) {
+//        throw new AssertionError("Calculate should always be *after* mutation from bindings")
+//      }
+    }
 
     override def toString: String = s"firstX:$firstX x:$lastX nx:$countX, ny:$countY, nboth:$countBoth, done:$done"
 

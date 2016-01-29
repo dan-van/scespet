@@ -1,5 +1,8 @@
 package scespet.core
 
+import gsa.esg.mekon.core.EventGraphObject
+import scespet.core.types.MFunc
+
 import scala.reflect.ClassTag
 
 /**
@@ -124,8 +127,21 @@ trait SliceCellLifecycle[C] {
 
 object SliceCellLifecycle {
   class CellSliceCellLifecycle[A](newCellF: () => A)(implicit val C_type:ClassTag[A]) extends SliceCellLifecycle[A]{
+    // NODEPLOY make this aother variant rather than using if blocks
+    val doClose =
+      if (classOf[MFunc].isAssignableFrom(C_type.runtimeClass)) {
+        // it must also be closeable:
+        if (!classOf[AutoCloseable].isAssignableFrom(C_type.runtimeClass)) {
+          throw new IllegalArgumentException(C_type.runtimeClass + " Must be 'Function with AutoCloseable' ")
+        }
+        true
+      } else {
+        false
+      }
     override def newCell(): A = newCellF()
-    override def closeCell(c: A): Unit = {}
+    override def closeCell(c: A): Unit = {if (doClose) {
+      c.asInstanceOf[AutoCloseable].close()
+    }}
   }
 
 

@@ -1,5 +1,7 @@
 package programs
 
+import java.util.logging.Logger
+
 import gsa.esg.mekon.core.EventGraphObject
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
@@ -15,6 +17,8 @@ import scespet.util.{SliceAlign, ScespetTestBase}
  * these are direct tests of a single instance of the SliceAfterBucket component (with correct associated graph wiring)
  */
 class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
+  val logger = Logger.getLogger(classOf[SliceTests].getName)
+
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
   /**
@@ -28,7 +32,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     super.beforeEach()
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
-//    sourceAIsOldStyle = true  // NODEPLOY this should be false, but is handy for testing TestOldStyle in debug
+//    sourceAIsOldStyle = false
   }
 
   /**
@@ -62,25 +66,13 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
       otherBindings :+= sourceA -> ((y: Y) => (c: Char) => y.append(c))
     }
     otherBindings :+= sourceB -> ((y:Y) => (c:Char) => y.append(c))
-
-    val sliceBucket = triggerAlign match {
-      case SliceAlign.AFTER if doMutable => {
-        val lifecycle = new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
-        new SliceAfterBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
+    val lifecycle = if (doMutable) {
+        new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
+      } else {
+        new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
       }
-      case SliceAlign.AFTER if !doMutable => {
-        val lifecycle = new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
-        new SliceAfterBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
-      }
-      case SliceAlign.BEFORE if doMutable => {
-        val lifecycle = new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
-        new SliceBeforeBucket[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
-      }
-      case SliceAlign.BEFORE if !doMutable => {
-        val lifecycle = new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
-        new SliceBeforeSimpleCell[S, Y, OUT](aggOut, slice, lifecycle, reduceType, otherBindings, env, sliceSpec, exposeInitialValue = false)
-      }
-    }
+    val groupBuilder = new UncollapsedGroupWithTrigger(null, slice, triggerAlign, env, sliceSpec)
+    val sliceBucket = groupBuilder.newBucket(reduceType, lifecycle, aggOut, otherBindings)
 
     env.addListener(sliceBucket, new MFunc() {
       var i = 0
@@ -108,16 +100,18 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     sourceA.setValue('B')
     env.graph.fire(sourceA.trigger)
 
+    //SLICE concurrent with sourceA firing C. sourceA.setValue has queued up a 'wakeup' so is concurrent with slice
+    // . SliceAfter means C is added before the slice takes effect.
     sourceA.setValue('C')
-    env.graph.fire(sourceA.trigger)
-    //SLICE concurrent with sourceA firing C. SliceAfter means C is added before the slice takes effect.
     env.graph.fire(slice)
 
     sourceA.setValue('D')
     env.graph.fire(sourceA.trigger)
+
+    // a slice won't change anything, because we have exposed D already
     env.graph.fire(slice)
 
-    //SLICE
+    //this is now an empty slice, so we'll see it
     env.graph.fire(slice)
   }
 
@@ -146,7 +140,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceBefore CUMULATIVE") {
-    val expected = List("A", "AB", "ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
+    val expected = List("A", "AB", "ABC", /*slice - noop*/ "D" , /*slice*/ "E",/*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
@@ -162,12 +156,15 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     //SLICE (this should not fire an event, as the bucket close adds no information to CUMULATIVE)
     env.graph.fire(slice)
 
+    // get 'D' into a bucket
     sourceA.setValue('D')
     env.graph.fire(sourceA.trigger)
 
+    // now firing 'E' and slice concurrently, should result in emptying the bucket first, then firing just an E
+    sourceA.setValue('E')
     env.graph.fire(slice)
 
-    //SLICE
+    //SLICE - should generate an empty bucket
     env.graph.fire(slice)
   }
 
@@ -227,20 +224,15 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     // the bucket to close with just an A
     sourceA.setValue('B')
     sliceAndSourceA.doSlice = true
-    if (sourceAIsOldStyle) {
-      intercept[UnsupportedOperationException] {
-        env.graph.fire(sliceAndSourceA)
-      }
-    } else {
-      env.graph.fire(sliceAndSourceA)
 
-      sourceA.setValue('C')
-      env.graph.fire(sourceA.trigger)
+    env.graph.fire(sliceAndSourceA)
 
-      //SLICE will now expose BC
-      sliceAndSourceA.doSlice = true
-       env.graph.fire(slice)
-    }
+    sourceA.setValue('C')
+    env.graph.fire(sourceA.trigger)
+
+    //SLICE will now expose BC
+    sliceAndSourceA.doSlice = true
+    env.graph.fire(slice)
   }
 
   test("Concept joined sources") {
@@ -372,14 +364,20 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
 
-  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
+  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket with AutoCloseable {
     var value = Seq[X]()
     env.addListener(in.trigger, this)
+    // see scespet.core.SlowGraphWalk.feature_correctForMissedFireOnNewEdge
+//    if (env.hasChanged(in.trigger)) {
+//      logger.warning("NODEPLOY experimental - should I be responsible for self-wake if already fired?")
+//      env.wakeupThisCycle(this)
+//    }
+    private var closed = false
     //    if (in.initialised) {
     //      env.fireAfterChangingListeners(this) // do my initialisation
     //    }
     override def calculate(): Boolean = {
-      if (env.hasChanged(in.trigger)) {
+      if (!closed && env.hasChanged(in.trigger)) {
         append(in.value)
         true
       } else false
@@ -390,6 +388,9 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     }
 
     override def open(): Unit = value = Nil
+
+
+    override def close(): Unit = {complete() ; closed = true          }
 
     /**
      * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point

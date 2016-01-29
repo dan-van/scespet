@@ -74,7 +74,9 @@ public interface VectorStream<K, V> {
 
         public void newColumnAdded(int i) {
             if (newColumnHasValue_pending.isEmpty()) {
-                env.wakeupThisCycle(this);
+                if (!env.isFiring(this)) {
+                    env.wakeupThisCycle(this);
+                }
             }
             newColumnHasValue_pending.put(i, true);
         }

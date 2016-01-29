@@ -25,6 +25,8 @@ import java.util.logging.Logger;
 public class SlowGraphWalk {
     private static final Logger logger = Logger.getLogger(SlowGraphWalk.class.getName());
 
+    private boolean feature_correctForMissedFireOnNewEdge = true; // I had a suspicion I wanted to make this false, but may break tests
+
     EventTrace eventLogger = new EventTrace(this);
     private Node currentFiringNode = null;
 
@@ -166,29 +168,73 @@ public class SlowGraphWalk {
         eventLogger.addListener(sourceNode, targetNode);
 
         if (hasCalculated(sourceNode) && !hasCalculated(targetNode)) {
-            // Oops, this new link would not be activated, it missed the source firing. Catch up
-            wakeup(target);
+            if (feature_correctForMissedFireOnNewEdge) {
+                // Oops, this new link would not be activated, it missed the source firing. Catch up
+                wakeup(target);
+            } else {
+                logger.warning("NODEPLOY - I'm hoping I don't need this? see feature_correctForMissedFireOnNewEdge");
+            }
         }
     }
 
     public void removeTrigger(final EventGraphObject source, final Function target) {
         Node sourceNode = getNode(source);
         Node targetNode = getNode(target);
-        // I think we should always apply remove after fire propagation. to dodge tricky questions of removing a link that has already fired (or maybe not fired)
         if (isFiring) {
-            deferredChanges.add(new Runnable() {
-                public void run() {
-                    removeTrigger(source, target);
-                }
-            });
+            if (isDefiniteOrdering(currentFiringNode, targetNode)) {
+                // target has already calculated, safe to apply instantly
+                reallyRemoveTrigger(sourceNode, targetNode);
+                return;
+            } else {
+//                deferredChanges.add(new Runnable() {
+//                    public void run() {
+//                        removeTrigger(source, target);
+//                    }
+//                });
+                throw new UnsupportedOperationException("Do I have to implement this? I think that you shouldn't be removing graph edges on something you have no causal link with!: currentNode: "+currentFiringNode+" removing link from "+sourceNode+" -> "+targetNode);
+            }
         } else {
             if (currentFiringNode != sourceNode && hasCalculated(sourceNode) && hasChanged(sourceNode) && !hasCalculated(targetNode)) {
                 throw new UnsupportedOperationException("NODEPLOY - I don't think I want to support this - removing listener edge before a fire can propagate, this would be rather non-deterministic I think");
             }
-            eventLogger.removeListener(sourceNode, targetNode);
-            sourceNode.removeOut(targetNode);
-            targetNode.removeIn(sourceNode);
+            reallyRemoveTrigger(sourceNode, targetNode);
         }
+    }
+
+    private boolean isDefiniteOrdering(Node a, Node b) {
+        if (a == b) return true;
+        if (a.order == b.order) return false; // same order, these must be concurrent
+        // iterate up from deeper node to find out if the shallower is a parent.
+        Node deeper;
+        Node shallower;
+        if (a.order < b.order) {
+            deeper = b;
+            shallower = a;
+        } else {
+            deeper = a;
+            shallower = b;
+        }
+        for (Node parent : deeper.in) {
+            if (parent.order >= shallower.order) {
+                if (isDefiniteOrdering(parent, shallower)) {
+                    return true;
+                }
+            }
+        }
+        for (Node parent : deeper.in_orderingOnly) {
+            if (parent.order >= shallower.order) {
+                if (isDefiniteOrdering(parent, shallower)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void reallyRemoveTrigger(Node sourceNode, Node targetNode) {
+        eventLogger.removeListener(sourceNode, targetNode);
+        sourceNode.removeOut(targetNode);
+        targetNode.removeIn(sourceNode);
     }
 
     public void addWakeupDependency(final EventGraphObject source, final Function target) {
@@ -198,7 +244,6 @@ public class SlowGraphWalk {
         targetNode.addIn_Ordering(sourceNode);
         propagationSweep++;
         propagateOrder(targetNode, sourceNode.order);
-
     }
 
     public boolean hasChanged(EventGraphObject obj) {
@@ -207,7 +252,8 @@ public class SlowGraphWalk {
     }
 
     private boolean hasChanged(Node node) {
-        return node.lastFired >= cycleCount; // note that cycleCount can go backwards in the applyChanges initialisation block!
+        if (currentFiringNode == null) return false;
+        return node.lastFired > currentFiringNode.lastCalculated;
     }
 
     private boolean hasCalculated(Node node) {
@@ -226,6 +272,10 @@ public class SlowGraphWalk {
 
     private boolean isInitialised(Node node) {
         return node.lastCalculated >= 0;
+    }
+
+    public boolean isFiring(EventGraphObject object) {
+        return currentFiringNode != null && currentFiringNode.getGraphObject() == object;
     }
 
     public Iterable<EventGraphObject> getTriggers(EventGraphObject obj) {
@@ -294,7 +344,9 @@ public class SlowGraphWalk {
                 // NOTE: actually it is probably better to prioritise "deeper" cycles first.
                 // i.e. the ordering should be opposite to joinNodes.
                 // I don't think i'm really hitting this at the moment.
-                if (cyclicFires.size() > 1) throw new UnsupportedOperationException("NODEPLOY I need to do some work to reorder the consumption of this queue in correct order");
+                if (cyclicFires.size() > 1) {
+                    throw new UnsupportedOperationException("NODEPLOY I need to do some work to reorder the consumption of this queue in correct order");
+                }
                 joinNodes.addAll(cyclicFires);
                 cyclicFires.clear();
             }
@@ -387,7 +439,7 @@ public class SlowGraphWalk {
 
     public void wakeup(EventGraphObject graphObject) {
         if (currentFiringNode != null && currentFiringNode.graphObject == graphObject) {
-            if (currentFiringNode.foundCyclicCallAt < cycleCount) {
+            if (currentFiringNode.foundCyclicCallAt < cycleCount) {  // only add it to cyclic fires once per cycle
                 // a self-wakeup, punt it as a cycle
                 cyclicFires.add(currentFiringNode);
                 currentFiringNode.foundCyclicCallAt = cycleCount;

@@ -90,8 +90,8 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
       // listener removal will be done in the main calculate block so that we can cross-check than no unexpected events have fired
       closedReduce = nextReduce
       nextReduce = newCell
-      // join values trigger the bucket
-      env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+      // join values should be come before the reduce can fire
+      env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
       // listen to it so that we propagate value updates to the bucket
       env.addListener(nextReduce, this)
     } else {
@@ -187,12 +187,21 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
   var cyclicFireWaiting = false
   def calculate():Boolean = {
     justClosedBucket = env.hasChanged(sliceHandler)
+    val fireForClosedBucket = justClosedBucket && !hasExposedValueForClosedReduce
 
     if (closedReduce != null && env.hasChanged(closedReduce)) {
-      throw new UnsupportedOperationException("We are allocating a new bucket, but the old bucket has just fired after we tried to snap its value." +
-        " I don't know whether the snapped value is immutable, so this is potentially wrong. " +
-        "You could try switching to SliceAlign.AFTER to make the slice come after the event?" +
-        "Alternatively, if you prevent the reducing cell from doing its own subscriptions, and instead use the 'bind' method onto a mutable method of the reducer, then I will manage this for you");
+      val postCloseValue = cellOut.out(closedReduce)
+      if (completedReduce == postCloseValue) {
+        throw new UnsupportedOperationException("We are allocating a new Reduce, but the old Reduce fired after we tried to snap its value.\n" +
+          "PONDER: why do I think that a Reduce that is a Function should stop ticking after the slicer completes it?\n" +
+          "If we allow it to continue ticking, then it means we need to be confident that its snapped value (from CellOut) is immutable\n" +
+          s"Current snapped value: ${completedReduce}\n" +
+          "Since I can't be sure that the equivalence of these two values isn't just down to mutability, I'm saying this is unsupported.\n" +
+          "You could try switching to SliceAlign.AFTER to make the slice come after the mutation event?" +
+          "Alternatively, if the reducing cell isn't a Function, then it can't raise spurious events");
+      } else {
+        logger.warning(s"Closed reduce fired after closing. Snapped value at close: ${completedReduce}, ignored value: ${postCloseValue}")
+      }
     }
     if (closedReduce != null) {
       env.removeListener(joinValueRendezvous, closedReduce.asInstanceOf[MFunc])
@@ -212,9 +221,13 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     }
 
     cyclicFireWaiting = false
-    if (justClosedBucket && addedValueToCell && emitType == ReduceType.CUMULATIVE) {
+    if (fireForClosedBucket && addedValueToCell && emitType == ReduceType.CUMULATIVE) {
       // we just closed a bucket, but we added a value to the next bucket, in CUMULATIVE fire mode, we will need to expose that state
       // do a cyclic fire to process the next state
+      var boom = false
+      if (emitType == ReduceType.CUMULATIVE) {
+        if (boom) ??? // I dont think I 've got a test covering cumulativ mode, and I think that we double fire the prevoius event
+      }
       cyclicFireWaiting = true
       env.wakeupThisCycle(this)
     }
@@ -224,9 +237,9 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     }
 
     val fire = if (emitType == ReduceType.CUMULATIVE) {
-      fireForCellChange || (justClosedBucket && !hasExposedValueForClosedReduce)
+      fireForCellChange || fireForClosedBucket
     } else {
-      justClosedBucket
+      fireForClosedBucket
     }
     if (fire) {
       initialised = true // belt and braces initialiser // NODEPLOY - is initialised now dead as a concept?

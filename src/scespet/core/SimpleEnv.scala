@@ -138,6 +138,8 @@ class SimpleEnv() extends Environment {
 
   def isInitialised(trigger: EventGraphObject) = graph.isInitialised(trigger)
 
+  def isFiring(trigger: EventGraphObject) = graph.isFiring(trigger)
+
   def getTriggers(function: scala.Any): Iterable[EventGraphObject] = {
     graph.getTriggers(function.asInstanceOf[EventGraphObject])
   }

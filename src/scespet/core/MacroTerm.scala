@@ -306,23 +306,25 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[_], sliceSpec:S, trigger
     // map oprerations should be a applied to an empty input value?
 
     // NODEPLOY clean up the instanceof hacks
-    val cell = triggerAlign match {
-      case BEFORE if lifecycle.isInstanceOf[CellSliceCellLifecycle[B]] => {
-        new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
-      }
-      case BEFORE if lifecycle.isInstanceOf[MutableBucketLifecycle[B]] => {
-        new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
-      }
-      case AFTER if lifecycle.isInstanceOf[CellSliceCellLifecycle[B]] => {
-        ??? // copy SliceAfterBucket and make a variant that doesn't try to cater for mutation.
-//        new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
-      }
-      case AFTER if lifecycle.isInstanceOf[MutableBucketLifecycle[B]] => {
+    val doMutable = lifecycle.isInstanceOf[MutableBucketLifecycle[_]]
+
+    val sliceBucket = triggerAlign match {
+      case SliceAlign.AFTER if doMutable => {
         new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
       }
-      case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
+      case SliceAlign.AFTER if !doMutable => {
+        new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
+        // hmm, why don't I need a SliceAfterSimpleCell to be symmetric with SliceBeforeSimpleCell?
+      }
+      case SliceAlign.BEFORE if doMutable => {
+        new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
+      }
+      case SliceAlign.BEFORE if !doMutable => {
+        new SliceBeforeSimpleCell[S, B, OUT](cellOut, sliceSpec, lifecycle.asInstanceOf[CellSliceCellLifecycle[B]], reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
+      }
     }
-    cell
+
+    sliceBucket
   }
 
 }
