@@ -9,6 +9,7 @@ package gsa.esg.mekon.core;
  */
 public interface Environment {
     public Iterable<EventGraphObject> getTriggers(Object function);
+    public boolean isFiring(EventGraphObject trigger);
     public boolean hasChanged(Object trigger);
     public boolean isInitialised(EventGraphObject trigger);
     public void registerEventSource(EventSource source);
