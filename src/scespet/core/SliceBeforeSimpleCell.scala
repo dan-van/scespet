@@ -187,7 +187,15 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
   var cyclicFireWaiting = false
   def calculate():Boolean = {
     justClosedBucket = env.hasChanged(sliceHandler)
-    val fireForClosedBucket = justClosedBucket && !hasExposedValueForClosedReduce
+    val fireForClosedBucket = if (emitType == ReduceType.CUMULATIVE) {
+      // in CUMULATIVE mode, the last value of the bucket before it is closed will have already been exposed.
+      // so now we want to fire to expose the state of the new bucket
+      justClosedBucket && !hasExposedValueForNextReduce
+    } else {
+      // in LAST mode, we won't have seen the last state of the bucket before the slice,
+      // so we need to check for this and expose it
+      justClosedBucket && !hasExposedValueForClosedReduce
+    }
 
     if (closedReduce != null && env.hasChanged(closedReduce)) {
       val postCloseValue = cellOut.out(closedReduce)

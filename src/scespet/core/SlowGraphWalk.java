@@ -191,7 +191,7 @@ public class SlowGraphWalk {
 //                        removeTrigger(source, target);
 //                    }
 //                });
-                throw new UnsupportedOperationException("Do I have to implement this? I think that you shouldn't be removing graph edges on something you have no causal link with!: currentNode: "+currentFiringNode+" removing link from "+sourceNode+" -> "+targetNode);
+                throw new UnsupportedOperationException("Do I have to implement this? I think that you shouldn't be removing graph edges on something you have no causal link with!: currentNode: "+currentFiringNode+" removing link from "+sourceNode.getGraphObject()+" -> "+targetNode.getGraphObject());
             }
         } else {
             if (currentFiringNode != sourceNode && hasCalculated(sourceNode) && hasChanged(sourceNode) && !hasCalculated(targetNode)) {
@@ -253,11 +253,11 @@ public class SlowGraphWalk {
 
     private boolean hasChanged(Node node) {
         if (currentFiringNode == null) return false;
-        return node.lastFired > currentFiringNode.lastCalculated;
+        return node.lastFired >= currentFiringNode.lastCalculated;
     }
 
     private boolean hasCalculated(Node node) {
-        return node.lastCalculated >= cycleCount;
+        return node.lastCalculated >= cycleCount;// NODEPLOY what about currentFiringNode.lastCalculated ?
     }
 
     /**

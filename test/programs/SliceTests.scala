@@ -35,6 +35,10 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 //    sourceAIsOldStyle = false
   }
 
+  override protected def afterEach(): Unit = {
+    env.shutDown("End", null)
+    super.afterEach()
+  }
   /**
    * sourceA is bound via old-style mekon graph wiring,
    * sourceB is bound via a binding a datasource onto a mutable method of the OldStyleFundAppend
@@ -83,6 +87,10 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
         println(s"sliceAfter: Observed event: $i \t $observed as expected")
         i += 1
         true
+      }
+
+      addPostCheck("Didn't observe all expected:"){
+        assert(i == expected.length, s"from $expected")
       }
     })
     (sourceA, sourceB, slice)
@@ -140,7 +148,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceBefore CUMULATIVE") {
-    val expected = List("A", "AB", "ABC", /*slice - noop*/ "D" , /*slice*/ "E",/*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
+    val expected = List("A", "AB", "ABC", /*slice*/ "", "D" , /*slice and add atomically*/ "E", /*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
@@ -153,7 +161,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     sourceA.setValue('C')
     env.graph.fire(sourceA.trigger)
 
-    //SLICE (this should not fire an event, as the bucket close adds no information to CUMULATIVE)
+    // SLICE this should fire an event - we have already seen 'C', and now we have a fresh new bucket (e.g. imagine an ACCVOL
+    // reset at end of day
     env.graph.fire(slice)
 
     // get 'D' into a bucket
@@ -166,6 +175,9 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
     //SLICE - should generate an empty bucket
     env.graph.fire(slice)
+    env.graph.fire(slice)
+    env.graph.fire(slice)
+    // NODEPLOy !!!! TOO MANY FIRES needed. INVESTIGATE
   }
 
 

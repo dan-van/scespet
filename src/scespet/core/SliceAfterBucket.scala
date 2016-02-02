@@ -96,6 +96,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     env.addListener(joinValueRendezvous, this)
     override def calculate(): Boolean = true
   }
+  env.addWakeupOrdering(eventCountInput, this) // this is so that we know we are deterministically after event count input, and
 
 
   def assignNewReduce() :Unit = {
@@ -106,10 +107,10 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       if (newCell != nextReduce) {
         if (nextReduce != null) {
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-          // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, SliceAfterBucket.this)
           // eventCountInput hasn't yet got its event (from nextReduce). so we can't yet remove the listener
           env.removeListener(nextReduce, eventCountInput)
+          // listen to it so that we propagate value updates to the bucket
+          env.removeListener(nextReduce, SliceAfterBucket.this)
         }
 
         nextReduce = newCell
