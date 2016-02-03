@@ -189,8 +189,11 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     justClosedBucket = env.hasChanged(sliceHandler)
     val fireForClosedBucket = if (emitType == ReduceType.CUMULATIVE) {
       // in CUMULATIVE mode, the last value of the bucket before it is closed will have already been exposed.
-      // so now we want to fire to expose the state of the new bucket
-      justClosedBucket && !hasExposedValueForNextReduce
+      // just closing a bucket means we have just started a new one and need to expose its initial value (whether it is empty, or if a value is added
+      if (justClosedBucket && !hasExposedValueForClosedReduce) {
+        ??? // I don't really understand how this would have happened - investigate
+      }
+      false
     } else {
       // in LAST mode, we won't have seen the last state of the bucket before the slice,
       // so we need to check for this and expose it
@@ -223,16 +226,16 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     val addedValueToCell = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket
 
     val fireForCellChange = if (emitType == ReduceType.CUMULATIVE) {
-      addedValueToCell || cellFired || cyclicFireWaiting
+      addedValueToCell || cellFired || justClosedBucket || cyclicFireWaiting
     } else {
       false
     }
 
     cyclicFireWaiting = false
-    if (fireForClosedBucket && addedValueToCell && emitType == ReduceType.CUMULATIVE) {
+    if (false && fireForClosedBucket && addedValueToCell && emitType == ReduceType.CUMULATIVE) {
       // we just closed a bucket, but we added a value to the next bucket, in CUMULATIVE fire mode, we will need to expose that state
       // do a cyclic fire to process the next state
-      var boom = false
+      var boom = true
       if (emitType == ReduceType.CUMULATIVE) {
         if (boom) ??? // I dont think I 've got a test covering cumulativ mode, and I think that we double fire the prevoius event
       }
@@ -245,7 +248,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     }
 
     val fire = if (emitType == ReduceType.CUMULATIVE) {
-      fireForCellChange || fireForClosedBucket
+      fireForCellChange
     } else {
       fireForClosedBucket
     }

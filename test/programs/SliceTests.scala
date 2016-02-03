@@ -175,9 +175,9 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
     //SLICE - should generate an empty bucket
     env.graph.fire(slice)
+
+    //SLICE - should generate another empty bucket
     env.graph.fire(slice)
-    env.graph.fire(slice)
-    // NODEPLOy !!!! TOO MANY FIRES needed. INVESTIGATE
   }
 
 

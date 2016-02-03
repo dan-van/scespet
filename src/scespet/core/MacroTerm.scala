@@ -313,8 +313,7 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[_], sliceSpec:S, trigger
         new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
       }
       case SliceAlign.AFTER if !doMutable => {
-        new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
-        // hmm, why don't I need a SliceAfterSimpleCell to be symmetric with SliceBeforeSimpleCell?
+        new SliceAfterSimpleCell[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
       }
       case SliceAlign.BEFORE if doMutable => {
         new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = false)
