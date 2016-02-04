@@ -17,6 +17,7 @@ public interface Environment {
     public <T> void addListener(Object source, EventGraphObject sink);
     public <T> void removeListener(Object source, EventGraphObject sink);
     public <T> void addWakeupOrdering(Object source, EventGraphObject wakeupTarget);
+    public <T> void removeWakeupOrdering(Object source, EventGraphObject wakeupTarget);
     public void wakeupThisCycle(Function target);
     public void fireAfterChangingListeners(Function target);
     public long getEventTime();

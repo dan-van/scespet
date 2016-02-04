@@ -78,6 +78,13 @@ public class SlowGraphWalk {
             in_orderingOnly.add(afterNode);
         }
 
+        public void removeOut_Ordering(Node afterNode) {
+            out_orderingOnly.remove(afterNode);
+        }
+        public void removeIn_Ordering(Node afterNode) {
+            in_orderingOnly.remove(afterNode);
+        }
+
         public void removeOut(Node targetNode) {
             out.remove(targetNode);
         }
@@ -244,6 +251,13 @@ public class SlowGraphWalk {
         targetNode.addIn_Ordering(sourceNode);
         propagationSweep++;
         propagateOrder(targetNode, sourceNode.order);
+    }
+
+    public void removeWakeupDependency(final EventGraphObject source, final Function target) {
+        Node sourceNode = getNode(source);
+        Node targetNode = getNode(target);
+        sourceNode.removeOut_Ordering(targetNode);
+        targetNode.removeIn_Ordering(sourceNode);
     }
 
     public boolean hasChanged(EventGraphObject obj) {

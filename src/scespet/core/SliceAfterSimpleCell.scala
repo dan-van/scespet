@@ -29,7 +29,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   private var nextReduce : Y = _
   private var completedReduceValue : OUT = _
 
-  var awaitingNextEventAfterReset = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
+  var nextReduceIsEmpty = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
   var queuedNewAssignment = false
 
   // most of the work is actually handled in this 'rendezvous' class
@@ -75,9 +75,8 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       }
 
       if (cellIsFunction & newBucketBuilt) {
-        // wire up the bucket to this rendezvous so that it gets a calculate whenever we have mutated it
-        // PONDER - should I have an API to allow deferred event wiring and put this statement in with the newReduce assignment
-        env.addListener(this, nextReduce.asInstanceOf[MFunc])
+        // wire up the bucket to this rendezvous so that it is strictly 'after' any mutations that the joinValueRendezvous may apply
+        env.addWakeupOrdering(this, nextReduce.asInstanceOf[MFunc])
         newBucketBuilt = false
       }
 
@@ -104,6 +103,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       if (newCell != nextReduce) {
         if (nextReduce != null) {
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          env.removeWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // eventCountInput hasn't yet got its event (from nextReduce). so we can't yet remove the listener
           env.removeListener(nextReduce, eventCountInput)
           // listen to it so that we propagate value updates to the bucket
@@ -133,8 +133,12 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   assignNewReduce()
 
 
-  // if awaitingNextEventAfterReset then the nextReduce has been reset, and we should be exposing the last snap (even if we're in CUMULATIVE mode)
-  def value :OUT = if (emitType == ReduceType.LAST || awaitingNextEventAfterReset) completedReduceValue else cellOut.out(nextReduce)
+  def value:OUT = {
+    if (emitType == ReduceType.LAST)
+      completedReduceValue
+    else
+      cellOut.out(nextReduce)
+  }
 
   if (emitType == ReduceType.LAST) {
     initialised = false
@@ -176,12 +180,14 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   }
 
   def calculate():Boolean = {
+    var assignedNewReduce = false
     if (queuedNewAssignment) {
       queuedNewAssignment = false
       assignNewReduce()
+      assignedNewReduce = true
     }
     val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
-      env.hasChanged(joinValueRendezvous) || cellIsFunction && env.hasChanged(nextReduce)
+      env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce)
     } else {
       false
     }
@@ -189,22 +195,31 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       // for a cumulative reduce (i.e. scan), after a bucket reset we need to wait for the next event entering the bucket until we expose the
       // contents of the new bucket.
       // this boolean achieves that
-      awaitingNextEventAfterReset = false
+      nextReduceIsEmpty = false
     }
 
-    val hasNoBucketEvents = awaitingNextEventAfterReset // snap it - this field can mutate in resetCurrentReduce
+    val hasNoBucketEvents = nextReduceIsEmpty // snap it - this field can mutate in resetCurrentReduce
 //    if this is the first fire during construction dont reset it?
     val sliceFire = if (sliceTriggered()) {
       if (env.isInitialised(this)) {
         if (nextReduce != null) {
           cellLifecycle.closeCell(nextReduce)
           completedReduceValue = cellOut.out(nextReduce)
-          // don't assign a new one right away, we want to consume this value before we do the next assign
-          // fire a cyclic call to ensure that the assignment occurs after we have processed the value of the closed bucket
-          queuedNewAssignment = true
-          env.wakeupThisCycle(joinValueRendezvous)
+          if (true || emitType == ReduceType.CUMULATIVE && bucketFire) {
+            // we need to propagate the fire for the current bucket, before we can put a new one in place.
+            queuedNewAssignment = true
+            env.wakeupThisCycle(this) // queue up a cyclic fire
+          } else {
+            assignNewReduce()
+            assignedNewReduce = true
+          }
+
+//          // don't assign a new one right away, we want to consume this value before we do the next assign
+//          // fire a cyclic call to ensure that the assignment occurs after we have processed the value of the closed bucket
+//          queuedNewAssignment = true
+//          env.wakeupThisCycle(joinValueRendezvous)
         }
-        awaitingNextEventAfterReset = true
+        nextReduceIsEmpty = true
       } else {
         logger.info("NODEPLOY: this was the first calc ever, I'm not going to reset the bucket!")
       }
@@ -215,7 +230,10 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
 
     // PONDER: if the slice fires, and calls 'complete' then a new event / state change should maybe be generated
     // PONDER: hmm, maybe some reductions are undefined until complete has been called, in which case, doing a scan would be meaningless
-    val fire = if (emitType == ReduceType.CUMULATIVE) bucketFire || (sliceFire && hasNoBucketEvents) else sliceFire
+    if (sliceFire && hasNoBucketEvents) {
+      logger.info("this was interesting at one point")
+    }
+    val fire = if (emitType == ReduceType.CUMULATIVE) (bucketFire || assignedNewReduce) else sliceFire
     if (fire) {
       initialised = true // belt and braces initialiser
     }

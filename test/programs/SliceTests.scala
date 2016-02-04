@@ -32,7 +32,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     super.beforeEach()
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
-//    sourceAIsOldStyle = false
+//    sourceAIsOldStyle = true    //Uncomment me to effectively do "TestOldStyle" (handy for debugging a failed test)
   }
 
   override protected def afterEach(): Unit = {
@@ -82,6 +82,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
       var i = 0
       override def calculate(): Boolean = {
         val observed = sliceBucket.value.value
+        if (i>=expected.length) throw new AssertionError("Too many events! Got "+observed)
         val expect = expected(i)
         expectResult(expect, s"sliceAfter: Event $i was not expected")(observed)
         println(s"sliceAfter: Observed event: $i \t $observed as expected")
@@ -97,7 +98,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceAfter CUMULATIVE") {
-    val expected = List("A", "AB", "ABC"/*slice*/, "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
+    val expected = List("A", "AB", "ABC", /*slice*/"", "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
 
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
@@ -116,10 +117,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     sourceA.setValue('D')
     env.graph.fire(sourceA.trigger)
 
-    // a slice won't change anything, because we have exposed D already
-    env.graph.fire(slice)
-
-    //this is now an empty slice, so we'll see it
+    // a slice will expose and empty bucket
     env.graph.fire(slice)
   }
 
@@ -248,7 +246,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept joined sources") {
-    val expected = List("A", "AB", "ABC", /*slice*/ "DD", /*slice*/ "EE", /*slice*/ "").map(_.toCharArray.toList)
+    val expected = List("A", "AB", "ABC",  /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/ "", /*slice*/ "").map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
 
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
@@ -276,8 +274,9 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     sourceA.setValue('E')
     sourceB.setValue('E')
     env.graph.fire(slice)
+    // that will emit "EE", and then an empty bucket
 
-    // empty slice
+    // fire another empty slice
     env.graph.fire(slice)
 
   }
@@ -318,7 +317,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("joined sources slice is data") {
-    val expected = List("A", "AB", "ABC", /*slice*/ "DD", /*slice*/ "EE").map(_.toCharArray.toList)
+    val expected = List("A", "AB", "ABC", /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/"").map(_.toCharArray.toList)
     val reduceType = ReduceType.CUMULATIVE
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     // link the slice to be coincident (and derived) from B

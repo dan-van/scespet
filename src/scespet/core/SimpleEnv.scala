@@ -130,6 +130,10 @@ class SimpleEnv() extends Environment {
     graph.addWakeupDependency(source.asInstanceOf[types.EventGraphObject], wakeupTarget.asInstanceOf[types.MFunc])
   }
 
+  def removeWakeupOrdering[T](source: scala.Any, wakeupTarget: types.EventGraphObject): Unit = {
+    graph.removeWakeupDependency(source.asInstanceOf[types.EventGraphObject], wakeupTarget.asInstanceOf[types.MFunc])
+  }
+
   def hasChanged(trigger: Any):Boolean = {
     graph.hasChanged(trigger.asInstanceOf[EventGraphObject])
   }
