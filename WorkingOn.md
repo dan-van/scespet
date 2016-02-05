@@ -1,4 +1,2 @@
-cleanup Bucket and Agg, unify code paths.
-Making most usages of Bucket to drop down to HasValue
-removing support of "bind" method for arbitrary streams, and only allow binding to an aggregator after a group or window term.
-fix tests (e.g. TestMultiBucketing)
+todo: adding exposeEmpty support to define whether a 'scan(new Sum)' exposes the intial empty state (e.g. do you observer an accVol=0 reset at the start of the day?)
+Current implementation is exposeEmpty=true

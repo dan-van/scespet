@@ -76,7 +76,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
         new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
       }
     val groupBuilder = new UncollapsedGroupWithTrigger(null, slice, triggerAlign, env, sliceSpec)
-    val sliceBucket = groupBuilder.newBucket(reduceType, lifecycle, aggOut, otherBindings)
+    val sliceBucket = groupBuilder.newBucket(reduceType, lifecycle, aggOut, otherBindings, exposeEmpty = false)
 
     env.addListener(sliceBucket, new MFunc() {
       var i = 0

@@ -283,7 +283,7 @@ object SimpleSpreadStats extends RealTradeTests {
     override def toString: String = s"Spread:n=$n, mode=$mode"
   }
   import scespet.core.types._
-  val spreadCounters = universe.keyToStream(k => impl.bucketStream(new SpreadStats(k)).reset(100.events).all) //all()
+  val spreadCounters = universe.keyToStream(k => impl.bucketStream(new SpreadStats(k)).reset(100.events).all()) //all()
   out("ModeSpread")(spreadCounters)
   env.run()
 }
