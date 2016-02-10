@@ -29,7 +29,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   private var nextReduce : Y = _
   private var completedReduceValue : OUT = _
 
-  var nextReduceIsEmpty = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
+  var bucketHasValue = false   // start as false so that initialisation is looking at nextReduce.value. May need more thought
   var queuedNewAssignment = false
 
   // most of the work is actually handled in this 'rendezvous' class
@@ -43,10 +43,22 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       // hmm, I should probably provide a dumb implementation of this API call in case we have many inputs...
       import collection.JavaConversions.iterableAsScalaIterable
 
-      // NODEPLOY, should this come later?
       if (queuedNewAssignment) {
         queuedNewAssignment = false
         assignNewReduce()
+        ??? // I think I can delete this path
+      }
+
+      if (firstBucket && exposeInitialValue && emitType == ReduceType.CUMULATIVE) {
+        for (bind <- bindings) {
+          val bindingInput = bind._1
+          if (env.hasChanged(bindingInput.getTrigger)) {
+            logger.info("Capturing deferred event from "+bindingInput)
+            pendingInitialValue :+= bindingInput
+          }
+        }
+        env.wakeupThisCycle(this)
+        return true
       }
 
       addedValueToBucket = false
@@ -118,6 +130,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         // to get a load of events that weren't intended for it. Hence we only add an ordering here, then later promote to a full trigger
         env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
         joinValueRendezvous.newBucketBuilt = true
+        bucketHasValue = false
 
         // listen to it so that we fire value events whenever the nextReduce fires
         env.addListener(nextReduce, SliceAfterSimpleCell.this)
@@ -131,6 +144,8 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   //    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
   //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
   assignNewReduce()
+  var firstBucket = true
+  if (exposeInitialValue && emitType == ReduceType.CUMULATIVE) env.wakeupThisCycle(joinValueRendezvous)
 
 
   def value:OUT = {
@@ -180,46 +195,41 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   }
 
   def calculate():Boolean = {
-    var assignedNewReduce = false
-    if (queuedNewAssignment) {
+    val assignedNewReduce = if (queuedNewAssignment) {
       queuedNewAssignment = false
       assignNewReduce()
-      assignedNewReduce = true
-    }
-    val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
-      env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce)
+      firstBucket = false
+      true
     } else {
-      false
+      if (firstBucket) {
+        if (cellIsFunction && env.hasChanged(nextReduce)) {
+          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
+        }
+        firstBucket = false
+        true
+      } else {
+        false
+      }
     }
-    if (bucketFire) {
+
+    val bucketChange = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce)
+    if (bucketChange) {
       // for a cumulative reduce (i.e. scan), after a bucket reset we need to wait for the next event entering the bucket until we expose the
       // contents of the new bucket.
       // this boolean achieves that
-      nextReduceIsEmpty = false
+      bucketHasValue = true
     }
 
-    val hasNoBucketEvents = nextReduceIsEmpty // snap it - this field can mutate in resetCurrentReduce
 //    if this is the first fire during construction dont reset it?
     val sliceFire = if (sliceTriggered()) {
       if (env.isInitialised(this)) {
         if (nextReduce != null) {
           cellLifecycle.closeCell(nextReduce)
           completedReduceValue = cellOut.out(nextReduce)
-          if (true || emitType == ReduceType.CUMULATIVE && bucketFire) {
-            // we need to propagate the fire for the current bucket, before we can put a new one in place.
-            queuedNewAssignment = true
-            env.wakeupThisCycle(this) // queue up a cyclic fire
-          } else {
-            assignNewReduce()
-            assignedNewReduce = true
-          }
-
-//          // don't assign a new one right away, we want to consume this value before we do the next assign
-//          // fire a cyclic call to ensure that the assignment occurs after we have processed the value of the closed bucket
-//          queuedNewAssignment = true
-//          env.wakeupThisCycle(joinValueRendezvous)
+          // we need to propagate the fire for the current bucket, before we can put a new one in place.
+          queuedNewAssignment = true
+          env.wakeupThisCycle(this) // queue up a cyclic fire
         }
-        nextReduceIsEmpty = true
       } else {
         logger.info("NODEPLOY: this was the first calc ever, I'm not going to reset the bucket!")
       }
@@ -228,14 +238,10 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       false
     }
 
-    // PONDER: if the slice fires, and calls 'complete' then a new event / state change should maybe be generated
-    // PONDER: hmm, maybe some reductions are undefined until complete has been called, in which case, doing a scan would be meaningless
-    if (sliceFire && hasNoBucketEvents) {
-      logger.info("this was interesting at one point")
-    }
-    val fire = if (emitType == ReduceType.CUMULATIVE) (bucketFire || assignedNewReduce) else sliceFire
+    val fire = if (emitType == ReduceType.CUMULATIVE) bucketChange || (exposeInitialValue && assignedNewReduce) else sliceFire && (bucketHasValue || exposeInitialValue)
     if (fire) {
       initialised = true // belt and braces initialiser
+//      firedForBucket = true
     }
     return fire
   }

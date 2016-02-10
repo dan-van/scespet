@@ -27,12 +27,14 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * tricky.
    */
   var sourceAIsOldStyle = false
+  var exposeEmpty = false
 
   override protected def beforeEach() {
     super.beforeEach()
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
 //    sourceAIsOldStyle = true    //Uncomment me to effectively do "TestOldStyle" (handy for debugging a failed test)
+//    exposeEmpty = true
   }
 
   override protected def afterEach(): Unit = {
@@ -62,43 +64,57 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
       new ValueFunc[Char](env) // just bind it to a no-op
     }
 
-    val aggOut = implicitly[AggOut[Y, OUT]]
-    val sliceSpec = implicitly[SliceTriggerSpec[S]]
 
-    var otherBindings = List[(HasVal[_], (Y => _ => Unit))]()
-    if (!sourceAIsOldStyle) {
-      otherBindings :+= sourceA -> ((y: Y) => (c: Char) => y.append(c))
-    }
-    otherBindings :+= sourceB -> ((y:Y) => (c:Char) => y.append(c))
-    val lifecycle = if (doMutable) {
+    if (exposeEmpty && reduceType == ReduceType.LAST) {
+      logger.info("I'm not bothering with exposeEmpty==true for reduce=LAST right now. Skipping test body")
+    } else  if (exposeEmpty && reduceType == ReduceType.CUMULATIVE && sourceAIsOldStyle) {
+      logger.info("I'm not bothering with exposeEmpty==true for reduce=CUMULATIVE when using sourceAIsOldStyle. Skipping test body")
+    } else {
+      val aggOut = implicitly[AggOut[Y, OUT]]
+      val sliceSpec = implicitly[SliceTriggerSpec[S]]
+
+      var otherBindings = List[(HasVal[_], (Y => _ => Unit))]()
+      if (!sourceAIsOldStyle) {
+        otherBindings :+= sourceA -> ((y: Y) => (c: Char) => y.append(c))
+      }
+      otherBindings :+= sourceB -> ((y:Y) => (c:Char) => y.append(c))
+      val lifecycle = if (doMutable) {
         new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
       } else {
         new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
       }
-    val groupBuilder = new UncollapsedGroupWithTrigger(null, slice, triggerAlign, env, sliceSpec)
-    val sliceBucket = groupBuilder.newBucket(reduceType, lifecycle, aggOut, otherBindings, exposeEmpty = false)
+      val groupBuilder = new UncollapsedGroupWithTrigger(null, slice, triggerAlign, env, sliceSpec)
 
-    env.addListener(sliceBucket, new MFunc() {
-      var i = 0
-      override def calculate(): Boolean = {
-        val observed = sliceBucket.value.value
-        if (i>=expected.length) throw new AssertionError("Too many events! Got "+observed)
-        val expect = expected(i)
-        expectResult(expect, s"sliceAfter: Event $i was not expected")(observed)
-        println(s"sliceAfter: Observed event: $i \t $observed as expected")
-        i += 1
-        true
-      }
+      val sliceBucket = groupBuilder.newBucket(reduceType, lifecycle, aggOut, otherBindings, exposeEmpty)
 
-      addPostCheck("Didn't observe all expected:"){
-        assert(i == expected.length, s"from $expected")
-      }
-    })
+      env.addListener(sliceBucket, new MFunc() {
+        var i = 0
+
+        override def calculate(): Boolean = {
+          val observed = sliceBucket.value.value
+          if (i >= expected.length) throw new AssertionError("Too many events! Got " + observed)
+          val expect = expected(i)
+          expectResult(expect, s"sliceAfter: Event $i was not expected")(observed)
+          println(s"sliceAfter: Observed event: $i \t $observed as expected")
+          i += 1
+          true
+        }
+
+        addPostCheck("Didn't observe all expected:") {
+          assert(i == expected.length, s"from $expected")
+        }
+      })
+    }
     (sourceA, sourceB, slice)
   }
 
   test("Concept sliceAfter CUMULATIVE") {
-    val expected = List("A", "AB", "ABC", /*slice*/"", "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      // NOTE: exposeEmpty doesn't currently expose the initial bucket value. This is asymmetric, but a pain in the ass
+      List("", "A", "AB", "ABC", /*slice*/"", "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
+    } else {
+      List("A", "AB", "ABC", "D").map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.CUMULATIVE
 
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
@@ -122,7 +138,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceAfter LAST") {
-    val expected = List("ABC"/*slice*/, "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
+    val expected = List("ABC" /*slice*/ , "D" /*slice*/).map(_.toCharArray.toList)
     val reduceType = ReduceType.LAST
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
 
@@ -246,7 +262,11 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept joined sources") {
-    val expected = List("A", "AB", "ABC",  /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/ "", /*slice*/ "").map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      List("", "A", "AB", "ABC",  /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/ "", /*slice*/ "").map(_.toCharArray.toList)
+    } else {
+      List("A", "AB", "ABC",  /*slice*/ "DD", /*slice*/ "EE").map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.CUMULATIVE
 
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
@@ -282,7 +302,11 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept joined sources LAST") {
-    val expected = List("ABC", "DD", "EE", "").map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      List("ABC", "DD", "EE", "").map(_.toCharArray.toList)
+    } else {
+      List("ABC", "DD", "EE").map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.LAST
 
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
@@ -317,7 +341,11 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("joined sources slice is data") {
-    val expected = List("A", "AB", "ABC", /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/"").map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      List("", "A", "AB", "ABC", /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/"").map(_.toCharArray.toList)
+    } else {
+      List("A", "AB", "ABC", "DD", "EE").map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.CUMULATIVE
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     // link the slice to be coincident (and derived) from B
@@ -420,10 +448,20 @@ class  TestOldStyle extends SliceTests {
     super.beforeEach()
     sourceAIsOldStyle = true
   }
+}
 
+class  TestExposeEmpty extends SliceTests {
+  override protected def beforeEach(): Unit = {
+    super.beforeEach()
+    sourceAIsOldStyle = false
+    exposeEmpty = true
+  }
+}
 
-  test("mutable bucket cant concurrent sliceBefore") {
-    // mutable buckets can't do 'slice before' concurrently with a value being added
-    println("Yay")
+class TestExposeEmptyOldStyle extends SliceTests {
+  override protected def beforeEach(): Unit = {
+    super.beforeEach()
+    sourceAIsOldStyle = true
+    exposeEmpty = true
   }
 }
