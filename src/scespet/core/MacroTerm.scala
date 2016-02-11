@@ -341,7 +341,6 @@ class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGro
   }
 
   def scan[Y, O](newBFunc: => Y, exposeEmpty :Boolean = false)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    val exposeEmpty = true
     val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
     _collapse[Y,O](lifecycle, adder, yOut).all(exposeEmpty)
   }

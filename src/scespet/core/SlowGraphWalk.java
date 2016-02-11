@@ -359,7 +359,11 @@ public class SlowGraphWalk {
                 // i.e. the ordering should be opposite to joinNodes.
                 // I don't think i'm really hitting this at the moment.
                 if (cyclicFires.size() > 1) {
-                    throw new UnsupportedOperationException("NODEPLOY I need to do some work to reorder the consumption of this queue in correct order");
+                    int order = cyclicFires.peek().order;
+                    // Yeh - I don't care about performance at this point. This class is called "slow graph walk" after all!
+                    if (!cyclicFires.stream().allMatch(node -> node.order == order)) {
+                        throw new UnsupportedOperationException("NODEPLOY I need to do some work to reorder the consumption of this queue in correct order");
+                    }
                 }
                 joinNodes.addAll(cyclicFires);
                 cyclicFires.clear();
