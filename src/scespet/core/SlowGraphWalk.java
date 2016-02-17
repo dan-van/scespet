@@ -7,6 +7,7 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 
 /**
@@ -34,7 +35,7 @@ public class SlowGraphWalk {
         private int lastFired = -1; // note that currentCycle is initialised to 0, ensuring that a newly built node never looks like it has fired.
         private int lastCalculated = -1;
         private Set<Node> in = new HashSet<Node>(2);
-        private Set<Node> out = new HashSet<Node>(2);
+        private List<Node> out = new CopyOnWriteArrayList<>();// note this behaves like a set, but gives me iteration while allowin mutation
         private Set<Node> in_orderingOnly = new HashSet<Node>(2); // used for non-triggering dependencies - as I've said this implementation is for testing rather than a nicely tuned efficient impl.
         private Set<Node> out_orderingOnly = new HashSet<Node>(2); // used for non-triggering dependencies - as I've said this implementation is for testing rather than a nicely tuned efficient impl.
         private EventGraphObject graphObject;
@@ -68,7 +69,9 @@ public class SlowGraphWalk {
         }
 
         public void addOut(Node targetNode) {
-            out.add(targetNode);
+            if (!out.contains(targetNode)) {    // expect this to be infrequent, and small list
+                out.add(targetNode);
+            }
         }
 
         public void addOut_Ordering(Node afterNode) {

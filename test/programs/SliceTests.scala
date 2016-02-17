@@ -403,7 +403,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
 
-  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket with AutoCloseable {
+  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
     var value = Seq[X]()
     env.addListener(in.trigger, this)
     // see scespet.core.SlowGraphWalk.feature_correctForMissedFireOnNewEdge
@@ -428,14 +428,12 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
     override def open(): Unit = value = Nil
 
-
-    override def close(): Unit = {complete() ; closed = true          }
-
     /**
      * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
      * NODEPLOY - rename to Close
      */
     override def complete(): Unit = {
+      closed = true
       if (sourceAIsOldStyle) {
         env.removeListener(in.trigger, this)
       }
