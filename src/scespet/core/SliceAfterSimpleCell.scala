@@ -1,5 +1,6 @@
 package scespet.core
 
+import gsa.esg.mekon.core.EventGraphObject
 import scespet.core.SlicedBucket.JoinValueRendezvous
 import scespet.core.types.MFunc
 
@@ -88,7 +89,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
 
       if (cellIsFunction & newBucketBuilt) {
         // wire up the bucket to this rendezvous so that it is strictly 'after' any mutations that the joinValueRendezvous may apply
-        env.addWakeupOrdering(this, nextReduce.asInstanceOf[MFunc])
+        env.addWakeupReceiver(this, nextReduce.asInstanceOf[MFunc])
         newBucketBuilt = false
       }
 
@@ -104,7 +105,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
     env.addListener(joinValueRendezvous, this)
     override def calculate(): Boolean = true
   }
-  env.addWakeupOrdering(eventCountInput, this) // this is so that we know we are deterministically after event count input, and
+  env.addWakeupReceiver(eventCountInput, this) // this is so that we know we are deterministically after event count input, and
 
 
   def assignNewReduce() :Unit = {
@@ -115,11 +116,11 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       if (newCell != nextReduce) {
         if (nextReduce != null) {
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-          env.removeWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          env.removeWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // eventCountInput hasn't yet got its event (from nextReduce). so we can't yet remove the listener
-          env.removeListener(nextReduce, eventCountInput)
+          env.removeListener(nextReduce.asInstanceOf[EventGraphObject], eventCountInput)
           // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, SliceAfterSimpleCell.this)
+          env.removeListener(nextReduce.asInstanceOf[EventGraphObject], SliceAfterSimpleCell.this)
         }
 
         nextReduce = newCell
@@ -128,13 +129,13 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         // this ensures that we get a chance to call the bucket adders before a cell gets to have its calculate func called.
         // however the joinValueRendezvous may have just fired along with the bucket slice, that would cause this new reduce
         // to get a load of events that weren't intended for it. Hence we only add an ordering here, then later promote to a full trigger
-        env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        env.addWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
         joinValueRendezvous.newBucketBuilt = true
         bucketHasValue = false
 
         // listen to it so that we fire value events whenever the nextReduce fires
-        env.addListener(nextReduce, SliceAfterSimpleCell.this)
-        env.addListener(nextReduce, eventCountInput)
+        env.addListener(nextReduce.asInstanceOf[EventGraphObject], SliceAfterSimpleCell.this)
+        env.addListener(nextReduce.asInstanceOf[EventGraphObject], eventCountInput)
       }
     } else {
       nextReduce = newCell
@@ -202,7 +203,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       true
     } else {
       if (firstBucket) {
-        if (cellIsFunction && env.hasChanged(nextReduce)) {
+        if (cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
           throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
         }
         firstBucket = false
@@ -212,7 +213,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       }
     }
 
-    val bucketChange = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce)
+    val bucketChange = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     if (bucketChange) {
       // for a cumulative reduce (i.e. scan), after a bucket reset we need to wait for the next event entering the bucket until we expose the
       // contents of the new bucket.

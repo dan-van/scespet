@@ -36,7 +36,7 @@ class VectorToStream[K,V](in:VectorStream[K,V], env:types.Env) extends HasVal[(K
       lastCellAdded = i
     }
   }
-  env.addWakeupOrdering(cellAdder, this)
+  env.addWakeupReceiver(cellAdder, this)
 
   override def value: (K, V) = _value
   override def calculate(): Boolean = {

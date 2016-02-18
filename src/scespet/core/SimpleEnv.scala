@@ -1,5 +1,7 @@
 package scespet.core
 
+import scespet.core.types.MFunc
+
 import collection.mutable
 import gsa.esg.mekon.core._
 import java.util.TimeZone
@@ -112,6 +114,8 @@ class SimpleEnv() extends Environment {
   def getEventTime = eventTime
 
 
+  override def getRootTriggers = ???
+
   def getTerminationEvent: EventGraphObject = terminationEvent
 
   def addListener[T](source: Any, sink: types.EventGraphObject) {
@@ -122,15 +126,18 @@ class SimpleEnv() extends Environment {
     graph.addTrigger(source.asInstanceOf[types.EventGraphObject], sink.asInstanceOf[types.MFunc])
   }
 
-  def removeListener[T](source: Any, sink: types.EventGraphObject) {
+
+  override def removeListener(source: EventGraphObject, sink: Function) = {
     graph.removeTrigger(source.asInstanceOf[types.EventGraphObject], sink.asInstanceOf[types.MFunc])
   }
 
-  def addWakeupOrdering[T](source: scala.Any, wakeupTarget: types.EventGraphObject): Unit = {
+
+  override def addWakeupReceiver[T <: EventGraphObject](source: T, wakeupTarget: Function) :T = {
     graph.addWakeupDependency(source.asInstanceOf[types.EventGraphObject], wakeupTarget.asInstanceOf[types.MFunc])
+    source
   }
 
-  def removeWakeupOrdering[T](source: scala.Any, wakeupTarget: types.EventGraphObject): Unit = {
+  override def removeWakeupReceiver(source: EventGraphObject, wakeupTarget: Function) = {
     graph.removeWakeupDependency(source.asInstanceOf[types.EventGraphObject], wakeupTarget.asInstanceOf[types.MFunc])
   }
 
@@ -144,7 +151,9 @@ class SimpleEnv() extends Environment {
 
   def isFiring(trigger: EventGraphObject) = graph.isFiring(trigger)
 
-  def getTriggers(function: scala.Any): Iterable[EventGraphObject] = {
+  def getTriggers(function: scala.Any): Iterable[EventGraphObject] = getTriggers(function.asInstanceOf[MFunc])
+
+  def getTriggers(function: Function): Iterable[EventGraphObject] = {
     graph.getTriggers(function.asInstanceOf[EventGraphObject])
   }
 
@@ -156,10 +165,6 @@ class SimpleEnv() extends Environment {
 
   def getClockDate(tz: TimeZone) = ???
 
-  def addWakeupReceiver[T](provider: T, consumer: Function) = ???
-
-  def removeWakeupReceiver(provider: Any, consumer: Function) {}
-
   def addListener[T](provider: T, consumer: Function) :T = {
     addListener(provider.asInstanceOf[Any], consumer.asInstanceOf[types.EventGraphObject]);
     provider
@@ -167,11 +172,9 @@ class SimpleEnv() extends Environment {
 
   def removeListener(provider: Any, consumer: Function) {}
 
-  def addOrdering[T](provider: T, consumer: EventGraphObject) = ???
+  def addOrdering[T <: EventGraphObject](provider: T, consumer: EventGraphObject) = ???
 
-  def removeOrdering(provider: Any, consumer: EventGraphObject) {}
-
-  def getTriggers(consumer: Function) = ???
+  def removeOrdering(provider: EventGraphObject, consumer: EventGraphObject) {}
 
   def registerService(service: Service) {}
 

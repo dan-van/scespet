@@ -2,7 +2,6 @@ package programs
 
 import java.util.logging.Logger
 
-import gsa.esg.mekon.core.EventGraphObject
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
 import scespet.EnvTermBuilder
@@ -19,7 +18,8 @@ import scespet.util.{SliceAlign, ScespetTestBase}
 class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstancePerTest with AssertionsForJUnit with ShouldMatchersForJUnit {
   val logger = Logger.getLogger(classOf[SliceTests].getName)
 
-  var env:SimpleEnv = _
+  var env:Env = _
+  var graph :{ def fire (graphObject: EventGraphObject):Unit } = _
   var impl:EnvTermBuilder = _
   /**
    * with 'old style' the bucket itself is a Function, and makes its own calls to env.addListener
@@ -32,6 +32,14 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   override protected def beforeEach() {
     super.beforeEach()
     env = new SimpleEnv
+    graph = env.asInstanceOf[SimpleEnv].graph
+
+//    val mekon = new Mekon(SystemMode.TEST)
+//    mekon.consumeAllEvents(true)
+//    val runner = mekon.newRunner()
+//    env = runner.getEnvironment
+//    graph = env.asInstanceOf[DefaultEnvironment].getEventGraph
+
     impl = EnvTermBuilder(env)
 //    sourceAIsOldStyle = true    //Uncomment me to effectively do "TestOldStyle" (handy for debugging a failed test)
 //    exposeEmpty = true
@@ -44,7 +52,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   /**
    * sourceA is bound via old-style mekon graph wiring,
    * sourceB is bound via a binding a datasource onto a mutable method of the OldStyleFundAppend
-   * @param reduceType
+    *
+    * @param reduceType
    * @param expected
    * @param triggerAlign
    * @return (sourceA, sourceB, slice)
@@ -120,21 +129,21 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
 
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('B')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE concurrent with sourceA firing C. sourceA.setValue has queued up a 'wakeup' so is concurrent with slice
     // . SliceAfter means C is added before the slice takes effect.
     sourceA.setValue('C')
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     sourceA.setValue('D')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     // a slice will expose and empty bucket
-    env.graph.fire(slice)
+    graph.fire(slice)
   }
 
   test("Concept sliceAfter LAST") {
@@ -143,22 +152,22 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
 
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('B')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('C')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
     //SLICE concurrent with sourceA firing C. SliceAfter means C is added before the slice takes effect.
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     sourceA.setValue('D')
-    env.graph.fire(sourceA.trigger)
-    env.graph.fire(slice)
+    graph.fire(sourceA.trigger)
+    graph.fire(slice)
 
     //SLICE
-    env.graph.fire(slice)
+    graph.fire(slice)
   }
 
   test("Concept sliceBefore CUMULATIVE") {
@@ -167,31 +176,31 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('B')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('C')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     // SLICE this should fire an event - we have already seen 'C', and now we have a fresh new bucket (e.g. imagine an ACCVOL
     // reset at end of day
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     // get 'D' into a bucket
     sourceA.setValue('D')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     // now firing 'E' and slice concurrently, should result in emptying the bucket first, then firing just an E
     sourceA.setValue('E')
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     //SLICE - should generate an empty bucket
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     //SLICE - should generate another empty bucket
-    env.graph.fire(slice)
+    graph.fire(slice)
   }
 
 
@@ -201,24 +210,24 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('B')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('C')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     sourceA.setValue('D')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     //SLICE
-    env.graph.fire(slice)
+    graph.fire(slice)
   }
 
   /**
@@ -244,21 +253,21 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     env.addListener(sliceAndSourceA, slice)
 
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE concurrent with sourceA firing 'B' - in this test, Slice preceeds new values, so we expect
     // the bucket to close with just an A
     sourceA.setValue('B')
     sliceAndSourceA.doSlice = true
 
-    env.graph.fire(sliceAndSourceA)
+    graph.fire(sliceAndSourceA)
 
     sourceA.setValue('C')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE will now expose BC
     sliceAndSourceA.doSlice = true
-    env.graph.fire(slice)
+    graph.fire(slice)
   }
 
   test("Concept joined sources") {
@@ -271,33 +280,33 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceB.setValue('B')
-    env.graph.fire(sourceB.trigger)
+    graph.fire(sourceB.trigger)
 
     sourceA.setValue('C')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     // fire concurrently both inputs
     sourceA.setValue('D')
     sourceB.setValue('D')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     // fire concurrently both inputs, and the slice event
     sourceA.setValue('E')
     sourceB.setValue('E')
-    env.graph.fire(slice)
+    graph.fire(slice)
     // that will emit "EE", and then an empty bucket
 
     // fire another empty slice
-    env.graph.fire(slice)
+    graph.fire(slice)
 
   }
 
@@ -311,32 +320,32 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.AFTER)
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceB.setValue('B')
-    env.graph.fire(sourceB.trigger)
+    graph.fire(sourceB.trigger)
 
     sourceA.setValue('C')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     // fire concurrently both inputs
     sourceA.setValue('D')
     sourceB.setValue('D')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //SLICE
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     // fire concurrently both inputs, and the slice event
     sourceA.setValue('E')
     sourceB.setValue('E')
-    env.graph.fire(slice)
+    graph.fire(slice)
 
     // empty slice
-    env.graph.fire(slice)
+    graph.fire(slice)
 
   }
 
@@ -352,24 +361,24 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     env.addListener(sourceB.trigger, slice)
 
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('B')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //Data & SLICE. i.e. 'C' should be integrated into the bucket, and the 'slice' effect should come after
     sourceB.setValue('C')
-    env.graph.fire(sourceB.trigger)
+    graph.fire(sourceB.trigger)
 
     // fire concurrently both inputs and the slice
     sourceA.setValue('D')
     sourceB.setValue('D')
-    env.graph.fire(sourceB.trigger)
+    graph.fire(sourceB.trigger)
 
     // fire concurrently both inputs, and the slice event
     sourceA.setValue('E')
     sourceB.setValue('E')
-    env.graph.fire(sourceB)
+    graph.fire(sourceB)
 
   }
 
@@ -381,24 +390,24 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     env.addListener(sourceB.trigger, slice)
 
     sourceA.setValue('A')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     sourceA.setValue('B')
-    env.graph.fire(sourceA.trigger)
+    graph.fire(sourceA.trigger)
 
     //Data & SLICE. i.e. 'C' should be integrated into the bucket, and the 'slice' effect should come after
     sourceB.setValue('C')
-    env.graph.fire(sourceB.trigger)
+    graph.fire(sourceB.trigger)
 
     // fire concurrently both inputs and the slice
     sourceA.setValue('D')
     sourceB.setValue('D')
-    env.graph.fire(sourceB.trigger)
+    graph.fire(sourceB.trigger)
 
     // fire concurrently both inputs, and the slice event
     sourceA.setValue('E')
     sourceB.setValue('E')
-    env.graph.fire(sourceB)
+    graph.fire(sourceB)
 
   }
 

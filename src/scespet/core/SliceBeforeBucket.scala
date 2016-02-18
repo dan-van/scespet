@@ -88,7 +88,7 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
     val newCell = cellLifecycle.newCell()
     // tweak the listeners:
     if (cellIsFunction) {
-      if (nextReduce != null && env.hasChanged(nextReduce)) {
+      if (nextReduce != null && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
         throw new UnsupportedOperationException("We are allocating a new bucket, but that bucket looks like it has just fired, i.e. the bucket generated its own event which is causally 'before' the slice event. This is a requirements contradiction. Either use a SliceAfter, or make the source of events bind to a mutable method on the bucket (which allows us to identify the event source, and ensure that the sice events are ordered after the data events");
       }
       // watch out for the optimisation where the lifecycle re-uses the current cell
@@ -96,14 +96,14 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
         if (nextReduce != null) {
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, this)
+          env.removeListener(nextReduce.asInstanceOf[EventGraphObject], this)
         }
 
         nextReduce = newCell
         // join values trigger the bucket
         env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
         // listen to it so that we propagate value updates to the bucket
-        env.addListener(nextReduce, this)
+        env.addListener(nextReduce.asInstanceOf[EventGraphObject], this)
       }
     } else {
       nextReduce = newCell
@@ -146,7 +146,7 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
 
 
   private def closeCurrentBucket() {
-    if (cellIsFunction && env.hasChanged(nextReduce)) {
+    if (cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
       throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
     }
     cellLifecycle.closeCell(nextReduce)
@@ -189,7 +189,7 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
 
   def calculate():Boolean = {
     val sliceFire = env.hasChanged(sliceHandler)
-    val reduceFired = cellIsFunction && env.hasChanged(nextReduce)
+    val reduceFired = cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     if (sliceFire && reduceFired) {
       throw new UnsupportedOperationException("We are allocating a new bucket, but that bucket looks like it has just fired, i.e. the bucket generated its own event which is causally 'before' the slice event. This is a requirements contradiction. Either use a SliceAfter, or make the source of events bind to a mutable method on the bucket (which allows us to identify the event source, and ensure that the sice events are ordered after the data events");
     }

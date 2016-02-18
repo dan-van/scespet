@@ -31,7 +31,8 @@ class SlicedReduce[S, X, Y, OUT](val dataEvents :HasValue[X], val cellValueAdd:Y
   def value = if (emitType == ReduceType.CUMULATIVE) cellOut.out(nextReduce) else completedReduceValue
 
 
-  override def init(initialisedInputs: util.Collection[EventGraphObject]): Boolean = {
+//  override def init(initialisedInputs: util.Collection[EventGraphObject]): Boolean = {
+  override def init(): Unit = {
 //    if (dataEvents.initialised()) {
 //      initialised = true
 //      val newValue = dataEvents.value

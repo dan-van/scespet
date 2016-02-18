@@ -411,9 +411,10 @@ public class SlowGraphWalk {
                         if (!initialisedInputs.isEmpty()) {
                             boolean inited = false;
                             if (graphObject instanceof EventGraphObject.Lifecycle) {
-                                inited = ((EventGraphObject.Lifecycle) graphObject).init(initialisedInputs);
-//                            } else if (graphObject instanceof Function) {
-//                                inited = ((Function) graphObject).calculate();
+                                // NODEPLOY delete this?
+                                ((EventGraphObject.Lifecycle) graphObject).init();
+                                inited = true;
+//                                inited = ((EventGraphObject.Lifecycle) graphObject).init(initialisedInputs);
                             }
                             if (inited) {
                                 node.lastFired = currentCycle;

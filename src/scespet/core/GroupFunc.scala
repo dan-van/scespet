@@ -24,7 +24,7 @@ class GroupFunc[K,V](source:HasVal[V], keyFunc:V => K, env:types.Env) extends Ab
 
   def newCell(i: Int, key: K) = {
     val cell = new ValueFunc[V](env)
-    env.addWakeupOrdering(this, cell) //
+    env.addWakeupReceiver(this, cell) //
     // cell value will get initialised by the subsequent call to "setValue" in this class's calculate method
     cell
   }

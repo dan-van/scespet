@@ -96,7 +96,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     env.addListener(joinValueRendezvous, this)
     override def calculate(): Boolean = true
   }
-  env.addWakeupOrdering(eventCountInput, this) // this is so that we know we are deterministically after event count input, and
+  env.addWakeupReceiver(eventCountInput, this) // this is so that we know we are deterministically after event count input, and
 
 
   def assignNewReduce() :Unit = {
@@ -108,9 +108,9 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
         if (nextReduce != null) {
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // eventCountInput hasn't yet got its event (from nextReduce). so we can't yet remove the listener
-          env.removeListener(nextReduce, eventCountInput)
+          env.removeListener(nextReduce.asInstanceOf[EventGraphObject], eventCountInput)
           // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, SliceAfterBucket.this)
+          env.removeListener(nextReduce.asInstanceOf[EventGraphObject], SliceAfterBucket.this)
         }
 
         nextReduce = newCell
@@ -119,12 +119,12 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
         // this ensures that we get a chance to call the bucket adders before a cell gets to have its calculate func called.
         // however the joinValueRendezvous may have just fired along with the bucket slice, that would cause this new reduce
         // to get a load of events that weren't intended for it. Hence we only add an ordering here, then later promote to a full trigger
-        env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+        env.addWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
         joinValueRendezvous.newBucketBuilt = true
 
         // listen to it so that we fire value events whenever the nextReduce fires
-        env.addListener(nextReduce, SliceAfterBucket.this)
-        env.addListener(nextReduce, eventCountInput)
+        env.addListener(nextReduce.asInstanceOf[EventGraphObject], SliceAfterBucket.this)
+        env.addListener(nextReduce.asInstanceOf[EventGraphObject], eventCountInput)
       }
     } else {
       nextReduce = newCell
@@ -184,7 +184,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       assignNewReduce()
     }
     val bucketFire = if (emitType == ReduceType.CUMULATIVE) {
-      env.hasChanged(joinValueRendezvous) || cellIsFunction && env.hasChanged(nextReduce)
+      env.hasChanged(joinValueRendezvous) || cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     } else {
       false
     }

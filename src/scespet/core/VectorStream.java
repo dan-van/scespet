@@ -62,9 +62,12 @@ public interface VectorStream<K, V> {
             return ! newColumnHasValue.isEmpty();
         }
 
-        @Override
-        public boolean init(Collection<EventGraphObject> initialisedInputs) {
-            return true;
+//        @Override
+//        public boolean init(Collection<EventGraphObject> initialisedInputs) {
+//            return true;
+//        }
+
+        public void init() {
         }
 
         @Override

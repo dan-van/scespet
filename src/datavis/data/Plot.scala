@@ -8,7 +8,7 @@ import org.jfree.data.DomainOrder
 import scespet.core._
 import org.jfree.chart.renderer.xy.{XYLineAndShapeRenderer, XYItemRendererState, XYStepRenderer, XYItemRenderer}
 import org.jfree.chart.axis.{ValueAxis, DateAxis, NumberAxis}
-import org.jfree.chart.plot.{CrosshairState, PlotRenderingInfo, XYPlot}
+import org.jfree.chart.plot.{Plot, CrosshairState, PlotRenderingInfo, XYPlot}
 import java.awt.event.{ActionEvent, ActionListener}
 import org.jfree.chart.{ChartPanel, JFreeChart}
 import java.awt.{Paint, Shape, Graphics2D, Dimension}
@@ -229,7 +229,7 @@ object Plot {
         dataset.fireupdate()
       }
     }).start()
-    val chart = new JFreeChart("Plot", plot)
+    val chart = new JFreeChart("Plot", plot.asInstanceOf[Plot])
     val chartPanel = new ChartPanel(chart)
 
     def enableShapes() {

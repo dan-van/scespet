@@ -33,14 +33,17 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
                 env.addListener(sourceVectorChanged, this);
             }
 
-            @Override
-            public boolean init(Collection<EventGraphObject> initialisedInputs) {
-                boolean init = super.init(initialisedInputs);
+            public void init() {
+//            @Override
+//            public boolean init(Collection<EventGraphObject> initialisedInputs) {
+//                boolean init = super.init(initialisedInputs);
+                super.init();
                 initialised = sourceVector.isInitialised();
                 if (initialised) {
                     calculate();
                 }
-                return initialised;
+                throw new UnsupportedOperationException("I think I want to delete this?");
+//                return initialised;
             }
 
             public boolean calculate() {

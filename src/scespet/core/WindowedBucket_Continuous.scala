@@ -116,7 +116,7 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
     if (nextReduce != null) {
       if (cellIsFunction) {
         env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        env.removeListener(nextReduce, this)
+        env.removeListener(nextReduce.asInstanceOf[MFunc], this)
       }
       cellLifecycle.closeCell(nextReduce)
     }
@@ -132,7 +132,7 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
       // join values trigger the bucket
       env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
       // listen to it so that we propagate value updates to the bucket
-      env.addListener(nextReduce, this)
+      env.addListener(nextReduce.asInstanceOf[MFunc], this)
     }
     // this is the next bucket, expose it
     valueSrc = nextReduce
@@ -153,7 +153,7 @@ class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents 
       }
     }
     // there's another option - if the cell is actually a function capable of raising its own events, we could be here.
-    if (cellIsFunction && env.hasChanged(valueSrc)) {
+    if (cellIsFunction && env.hasChanged(valueSrc.asInstanceOf[EventGraphObject])) {
       // fire value changes
       return true
     } else {

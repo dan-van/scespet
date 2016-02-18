@@ -124,7 +124,7 @@ class WindowedBucket_LastValue[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents :
     if (nextReduce != null) {
       if (cellIsFunction) {
         env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        env.removeListener(nextReduce, this)
+        env.removeListener(nextReduce.asInstanceOf[MFunc], this)
       }
       cellLifecycle.closeCell(nextReduce)
     }
@@ -138,7 +138,7 @@ class WindowedBucket_LastValue[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents :
       // join values trigger the bucket
       env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
       // listen to it so that we propagate value updates to the bucket
-      env.addListener(nextReduce, this)
+      env.addListener(nextReduce.asInstanceOf[MFunc], this)
     }
   }
 

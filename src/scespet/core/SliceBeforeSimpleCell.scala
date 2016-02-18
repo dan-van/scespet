@@ -72,7 +72,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
       val doneSlice = env.hasChanged(sliceHandler)
 
       if (addedValueToBucket && doneSlice) {
-        if (cellIsFunction && env.hasChanged(nextReduce)) {
+        if (cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
           throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
         }
       }
@@ -91,9 +91,9 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
       closedReduce = nextReduce
       nextReduce = newCell
       // join values should be come before the reduce can fire
-      env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+      env.addWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
       // listen to it so that we propagate value updates to the bucket
-      env.addListener(nextReduce, this)
+      env.addListener(nextReduce.asInstanceOf[EventGraphObject], this)
     } else {
       nextReduce = newCell
     }
@@ -140,7 +140,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
 
 
   private def closeCurrentBucket() {
-    if (cellIsFunction && env.hasChanged(nextReduce)) {
+    if (cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
       throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
     }
     cellLifecycle.closeCell(nextReduce)
@@ -200,7 +200,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
       justClosedBucket && !hasExposedValueForClosedReduce
     }
 
-    if (closedReduce != null && env.hasChanged(closedReduce)) {
+    if (closedReduce != null && env.hasChanged(closedReduce.asInstanceOf[EventGraphObject])) {
       val postCloseValue = cellOut.out(closedReduce)
       if (completedReduce == postCloseValue) {
         throw new UnsupportedOperationException("We are allocating a new Reduce, but the old Reduce fired after we tried to snap its value.\n" +
@@ -217,12 +217,12 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     if (closedReduce != null) {
       env.removeListener(joinValueRendezvous, closedReduce.asInstanceOf[MFunc])
       // listen to it so that we propagate value updates to the bucket
-      env.removeListener(closedReduce, this)
+      env.removeListener(closedReduce.asInstanceOf[EventGraphObject], this)
       closedReduce = null.asInstanceOf[Y]
     }
 
 
-    val cellFired = cellIsFunction && env.hasChanged(nextReduce)
+    val cellFired = cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     val addedValueToCell = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket
 
     val fireForCellChange = if (emitType == ReduceType.CUMULATIVE) {
