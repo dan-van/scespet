@@ -26,7 +26,7 @@ import java.util.logging.Logger;
 public class SlowGraphWalk {
     private static final Logger logger = Logger.getLogger(SlowGraphWalk.class.getName());
 
-    private boolean feature_correctForMissedFireOnNewEdge = true; // I had a suspicion I wanted to make this false, but may break tests
+    private boolean feature_correctForMissedFireOnNewEdge = false; // NODEPLOY I had a suspicion I wanted to make this false, but may break tests
 
     EventTrace eventLogger = new EventTrace(this);
     private Node currentFiringNode = null;

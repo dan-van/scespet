@@ -28,6 +28,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    */
   var sourceAIsOldStyle = false
   var exposeEmpty = false
+//  var doMutable = false
+  var doMutable = true
 
   override protected def beforeEach() {
     super.beforeEach()
@@ -49,7 +51,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * @param triggerAlign
    * @return (sourceA, sourceB, slice)
    */
-  def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign, doMutable:Boolean = false) = {
+  def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign) = {
     type S = EventGraphObject                                                                     // NODEPLOY need to set up mutable tests
     type Y = OldStyleFuncAppend[Char]
     type OUT = OldStyleFuncAppend[Char]

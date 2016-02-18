@@ -34,7 +34,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
-    var newBucketBuilt = false
+    var addListenerToNewReduce = false
     var addedValueToBucket = false
 
     override def nextReduce: Y = SliceAfterSimpleCell.this.nextReduce
@@ -86,10 +86,10 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         }
       }
 
-      if (cellIsFunction & newBucketBuilt) {
+      if (cellIsFunction & addListenerToNewReduce) {
         // wire up the bucket to this rendezvous so that it is strictly 'after' any mutations that the joinValueRendezvous may apply
         env.addWakeupOrdering(this, nextReduce.asInstanceOf[MFunc])
-        newBucketBuilt = false
+        addListenerToNewReduce = false
       }
 
       // whenever we add a value to the bucket, we need to fire, this is because the bucket and/or the SliceAfterBucket need to know when there has been a mutation
@@ -109,6 +109,8 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
 
   def assignNewReduce() :Unit = {
     val newCell = cellLifecycle.newCell()
+    bucketHasValue = false
+
     // tweak the listeners:
     if (cellIsFunction) {
       // watch out for the optimisation where the lifecycle re-uses the current cell
@@ -129,8 +131,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         // however the joinValueRendezvous may have just fired along with the bucket slice, that would cause this new reduce
         // to get a load of events that weren't intended for it. Hence we only add an ordering here, then later promote to a full trigger
         env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        joinValueRendezvous.newBucketBuilt = true
-        bucketHasValue = false
+        joinValueRendezvous.addListenerToNewReduce = true
 
         // listen to it so that we fire value events whenever the nextReduce fires
         env.addListener(nextReduce, SliceAfterSimpleCell.this)
