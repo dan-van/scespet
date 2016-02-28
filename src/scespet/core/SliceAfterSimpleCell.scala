@@ -24,7 +24,7 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
+class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeEmptyBucket:Boolean) extends SlicedBucket[Y, OUT] {
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
   private var completedReduceValue : OUT = _
@@ -49,7 +49,10 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         ??? // I think I can delete this path
       }
 
-      if (firstBucket && exposeInitialValue && emitType == ReduceType.CUMULATIVE) {
+      if (firstBucket && exposeEmptyBucket && emitType == ReduceType.CUMULATIVE) {
+        // we are forced to emit an empty bucket, but we may have inputs that want to feed into the backet.
+        // bit of a hack, as I'm not actually capturing the values from the inputs, merely assuming I can apply them in
+        // a subsequent cycle for the same effect (after we have exposed the empty state)
         for (bind <- bindings) {
           val bindingInput = bind._1
           if (env.hasChanged(bindingInput.getTrigger)) {
@@ -146,7 +149,8 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
   assignNewReduce()
   var firstBucket = true
-  if (exposeInitialValue && emitType == ReduceType.CUMULATIVE) env.wakeupThisCycle(joinValueRendezvous)
+  // in 'exposeEmptyBucket' mode, when running CUMULATIVE, we should expose the initial empty bucket for completeness
+  if (exposeEmptyBucket && emitType == ReduceType.CUMULATIVE) env.wakeupThisCycle(joinValueRendezvous)
 
 
   def value:OUT = {
@@ -169,7 +173,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
     // todo: maybe we could tweak this if Y instanceof something with initialisation state?
     // e.g. if nextReduce is a hasVal, should we try to use its initialisation state?
     // alternatively, this could be a question for the cellLifecycle?
-    initialised = exposeInitialValue
+    initialised = exposeEmptyBucket
   }
 
   def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
@@ -239,7 +243,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       false
     }
 
-    val fire = if (emitType == ReduceType.CUMULATIVE) bucketChange || (exposeInitialValue && assignedNewReduce) else sliceFire && (bucketHasValue || exposeInitialValue)
+    val fire = if (emitType == ReduceType.CUMULATIVE) bucketChange || (exposeEmptyBucket && assignedNewReduce) else sliceFire && (bucketHasValue || exposeEmptyBucket)
     if (fire) {
       initialised = true // belt and braces initialiser
 //      firedForBucket = true

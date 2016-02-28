@@ -27,9 +27,10 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * tricky.
    */
   var sourceAIsOldStyle = false
+//  var exposeEmpty = true
   var exposeEmpty = false
-//  var doMutable = false
-  var doMutable = true
+  var doMutable = false
+//  var doMutable = true
 
   override protected def beforeEach() {
     super.beforeEach()
@@ -103,7 +104,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
         }
 
         addPostCheck("Didn't observe all expected:") {
-          assert(i == expected.length, s"from $expected")
+          assert(i == expected.length, s"not enough events observed out of expected: $expected")
         }
       })
     }
@@ -112,7 +113,6 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
   test("Concept sliceAfter CUMULATIVE") {
     val expected = if (exposeEmpty) {
-      // NOTE: exposeEmpty doesn't currently expose the initial bucket value. This is asymmetric, but a pain in the ass
       List("", "A", "AB", "ABC", /*slice*/"", "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
     } else {
       List("A", "AB", "ABC", "D").map(_.toCharArray.toList)
@@ -164,7 +164,12 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceBefore CUMULATIVE") {
-    val expected = List("A", "AB", "ABC", /*slice*/ "", "D" , /*slice and add atomically*/ "E", /*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      // NOTE: exposeEmpty doesn't currently expose the initial bucket value. This is asymmetric, but a pain in the ass
+      List("", "A", "AB", "ABC", /*slice*/ "", /* then add */ "D" , /*slice and add atomically*/ "E", /*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
+    } else {
+      List("A", "AB", "ABC", /*slice then add, but skip empty*/ "D" , /*slice and add atomically*/ "E").map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.CUMULATIVE
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
@@ -198,7 +203,11 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
 
   test("Concept sliceBefore LAST") { // cumulative slice before not implemented (is that still necessary?)
-    val expected = List("ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      List("ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
+    } else {
+      List("ABC", /*slice*/ "D" /*slice, but empty bucket*/).map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.LAST
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
