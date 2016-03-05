@@ -27,17 +27,17 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * tricky.
    */
   var sourceAIsOldStyle = false
-//  var exposeEmpty = true
   var exposeEmpty = false
   var doMutable = false
-//  var doMutable = true
 
   override protected def beforeEach() {
     super.beforeEach()
     env = new SimpleEnv
     impl = EnvTermBuilder(env)
-//    sourceAIsOldStyle = true    //Uncomment me to effectively do "TestOldStyle" (handy for debugging a failed test)
-//    exposeEmpty = true
+
+//    sourceAIsOldStyle = true
+//    exposeEmpty = false
+//    doMutable = false
   }
 
   override protected def afterEach(): Unit = {
@@ -456,6 +456,7 @@ class  TestOldStyle extends SliceTests {
   override protected def beforeEach(): Unit = {
     super.beforeEach()
     sourceAIsOldStyle = true
+    exposeEmpty = false
   }
 }
 

@@ -200,22 +200,14 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   }
 
   def calculate():Boolean = {
-    val assignedNewReduce = if (queuedNewAssignment) {
+    val newBucketCreated = if (queuedNewAssignment) {
       queuedNewAssignment = false
       assignNewReduce()
-      firstBucket = false
       true
     } else {
-      if (firstBucket) {
-        if (cellIsFunction && env.hasChanged(nextReduce)) {
-          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
-        }
-        firstBucket = false
-        true
-      } else {
-        false
-      }
+      firstBucket
     }
+    firstBucket = false
 
     val bucketChange = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce)
     if (bucketChange) {
@@ -243,7 +235,14 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       false
     }
 
-    val fire = if (emitType == ReduceType.CUMULATIVE) bucketChange || (exposeEmptyBucket && assignedNewReduce) else sliceFire && (bucketHasValue || exposeEmptyBucket)
+    val fire = if (emitType == ReduceType.CUMULATIVE) {
+      if (newBucketCreated && exposeEmptyBucket && bucketChange) {
+          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event at construction. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
+      }
+      bucketChange || (exposeEmptyBucket && newBucketCreated)
+    } else {
+      sliceFire && (bucketHasValue || exposeEmptyBucket)
+    }
     if (fire) {
       initialised = true // belt and braces initialiser
 //      firedForBucket = true
