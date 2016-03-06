@@ -18,7 +18,7 @@ import scespet.core.types._
  * todo: seems so similar in concept that it feels odd to have two different classes.
  * todo: will think more on this.
  */
-class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env) extends SlicedBucket[Y, OUT] {
+class WindowedBucket_Continuous[Y, OUT](cellOut:AggOut[Y,OUT], val windowEvents :HasValue[Boolean], cellLifecycle :SliceCellLifecycle[Y], bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, exposeEmpty:Boolean) extends SlicedBucket[Y, OUT] {
   private var inWindow = if (windowEvents == null) true else windowEvents.value
 
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )

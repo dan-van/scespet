@@ -574,9 +574,9 @@ class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGr
   private var dependsOn = Set[EventGraphObject]( uncollapsed.getComesBefore.toArray :_*)
 
 
-  def last() :VectTerm[K,OUT] = sealCollapse(ReduceType.LAST)
+  def last(exposeEmpty: Boolean = false) :VectTerm[K,OUT] = sealCollapse(ReduceType.LAST, exposeEmpty)
 
-  def all() :VectTerm[K,OUT] = sealCollapse(ReduceType.CUMULATIVE)
+  def all(exposeEmpty: Boolean = false) :VectTerm[K,OUT] = sealCollapse(ReduceType.CUMULATIVE, exposeEmpty)
 
   def bind[S](stream: VectTerm[K, S])(adder: B => S => Unit): GroupedTerm2[K, B, OUT] = {
     bindings :+= (stream, adder)
@@ -585,12 +585,12 @@ class GroupedTerm2[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGr
     this
   }
 
-  private def sealCollapse(reduceType:ReduceType) :VectTerm[K,OUT] = {
+  private def sealCollapse(reduceType:ReduceType, exposeEmpty:Boolean) :VectTerm[K,OUT] = {
     val derived = new DerivedVector[K, OUT] {
       override def newCell(i: Int, k: K): UpdatingHasVal[OUT] = {
         val cellLifecycle = lifecycle.lifeCycleForKey(k)
         val bindingsForK :List[(HasVal[_], (B => _ => Unit))] = bindings.map(pair => pair._1.apply(k).input -> pair._2)
-        val cell :SlicedBucket[B,OUT] = uncollapsed.newBucket(i, k, reduceType, cellLifecycle, cellOut, bindingsForK)
+        val cell :SlicedBucket[B,OUT] = uncollapsed.newBucket(i, k, reduceType, cellLifecycle, cellOut, bindingsForK, exposeEmpty)
         cell
       }
 
@@ -700,7 +700,7 @@ trait UncollapsedVectGroup[K, IN] {
   /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
   def getComesBefore :Iterable[EventGraphObject]
 
-  def newBucket[B, OUT](i:Int, k:K, reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]) :SlicedBucket[B,OUT]
+  def newBucket[B, OUT](i:Int, k:K, reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))], exposeEmpty:Boolean) :SlicedBucket[B,OUT]
 
 }
 
@@ -715,23 +715,17 @@ class UncollapsedVectGroupWithTrigger[S, K, IN](inputVector:VectorStream[K, IN],
   /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
   override def getComesBefore: Iterable[EventGraphObject] = newCellDependencies
 
-  override def newBucket[B, OUT](i: Int, k: K, reduceType: ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]): SlicedBucket[B, OUT] = {
+  override def newBucket[B, OUT](i: Int, k: K, reduceType: ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))], exposeEmpty:Boolean): SlicedBucket[B, OUT] = {
     val sourceCell = inputVector.getValueHolder(i)
     val sliceSpecEv = ev.toTriggerSpec(k, sliceSpec)
+    val sliceBuilder = new UncollapsedGroupWithTrigger(null, sliceSpec, triggerAlign, env, sliceSpecEv)
+
     println("New sliced reduce for key: " + k + " from source: " + inputVector)
 //    val cell = if (false && classOf[MFunc].isAssignableFrom(lifecycle.C_type.runtimeClass)) {
 //      new SlicedReduce[S, IN, B, OUT](sourceCell, adder, cellOut, sliceSpec, triggerAlign == BEFORE, lifecycle, reduceType, env, sliceSpecEv, exposeInitialValue = true)
 //    } else
-  val cell = triggerAlign match {
-      case BEFORE => {
-        new SliceBeforeBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = true)
-      }
-      case AFTER => {
-        new SliceAfterBucket[S, B, OUT](cellOut, sliceSpec, lifecycle, reduceType, bindings, env, sliceSpecEv, exposeInitialValue = true)
-      }
-      case _ => throw new IllegalArgumentException(String.valueOf(triggerAlign))
-    }
-    cell
+    val bucketHandler = sliceBuilder.newBucket(reduceType, lifecycle, cellOut, bindings, exposeEmpty)
+    bucketHandler
   }
 
 }
@@ -739,7 +733,7 @@ class UncollapsedVectGroupWithWindow[K, IN](inputVector:VectorStream[K, IN], key
   /* the nodes that must occur before calls to 'newBucket' are made. Typically this will be the 'Reshape' events of any input VectorStreams*/
   override def getComesBefore: Iterable[EventGraphObject] = sliceStateDependencies
 
-  override def newBucket[B, OUT](i: Int, k: K, reduceType: ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))]): SlicedBucket[B, OUT] = {
+  override def newBucket[B, OUT](i: Int, k: K, reduceType: ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))], exposeEmpty:Boolean): SlicedBucket[B, OUT] = {
     val sourceCell = inputVector.getValueHolder(i)
     println("New window reduce for key: " + k + " from source: " + inputVector)
 //    val cell = if (false && classOf[MFunc].isAssignableFrom(lifecycle.C_type.runtimeClass)) {
@@ -750,8 +744,8 @@ class UncollapsedVectGroupWithWindow[K, IN](inputVector:VectorStream[K, IN], key
 //              val outputCell:UpdatingHasVal[OUT] = new WindowedReduce[X, A, OUT](sourceCell, adder, cellOut, windowStream, lifecycle, reduceType, env)
 
     val outputCell:SlicedBucket[B, OUT] = reduceType match {
-      case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, windowStream, lifecycle, bindings, env)
-      case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, windowStream, lifecycle, bindings, env)
+      case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, windowStream, lifecycle, bindings, env, exposeEmpty)
+      case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, windowStream, lifecycle, bindings, env, exposeEmpty)
     }
     outputCell
   }
@@ -820,19 +814,17 @@ class PartialGroupedVectBucketStream[K, S, Y, OUT](input:VectTerm[K,_],
                                                         cellOut: AggOut[Y, OUT],
                                                         bindings :List[(VectTerm[K, _], (Y => _ => Unit))],
                                                         sliceSpec:S, ev:SliceTriggerSpec[S], env:types.Env) {
-  private def buildSliced(reduceType:ReduceType) :VectTerm[K, OUT] = {
+  private def buildSliced(reduceType:ReduceType, exposeEmpty:Boolean) :VectTerm[K, OUT] = {
+    val sliceBuilder = new UncollapsedGroupWithTrigger(null, sliceSpec, triggerAlign, env, ev)
     val cellBuilder = (i:Int, k:K) => {
       val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
       val bindingsForK :List[(HasVal[_], (Y => _ => Unit))] = bindings.map(pair => pair._1.apply(k).input -> pair._2)
-      val slicer = triggerAlign match {
-        case BEFORE => new SliceBeforeBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, bindingsForK, env, ev, exposeInitialValue = true)
-        case AFTER => new SliceAfterBucket[S, Y, OUT](cellOut, sliceSpec, cellLifecycle, reduceType, bindingsForK, env, ev, exposeInitialValue = true)
-      }
-      slicer
+      val bucketHandler = sliceBuilder.newBucket(reduceType, cellLifecycle, cellOut, bindingsForK, exposeEmpty)
+      bucketHandler
     }
     input.newIsomorphicVector("PartialGroupedVectBucket", cellBuilder)
   }
 
-  def all():VectTerm[K, OUT] = buildSliced(ReduceType.CUMULATIVE)
-  def last():VectTerm[K, OUT] = buildSliced(ReduceType.LAST)
+  def all(exposeEmpty :Boolean = false):VectTerm[K, OUT] = buildSliced(ReduceType.CUMULATIVE, exposeEmpty)
+  def last(exposeEmpty :Boolean = false):VectTerm[K, OUT] = buildSliced(ReduceType.LAST, exposeEmpty)
 }

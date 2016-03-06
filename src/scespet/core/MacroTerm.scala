@@ -249,8 +249,8 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 //    } else {
 
         reduceType match {
-          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, window, lifecycle, bindings, env)
-          case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, window, lifecycle, bindings, env)
+          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, window, lifecycle, bindings, env, exposeEmpty)
+          case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, window, lifecycle, bindings, env, exposeEmpty)
         }
       }
 
