@@ -79,15 +79,19 @@ class SimpleEnv() extends Environment {
     val stopAt = eventI + n
     while (! eventSourceQueue.isEmpty && eventI < stopAt) {
       eventI += 1
-      val nextSource = eventSourceQueue.dequeue()
-//      println(s"\nFiring event $eventI from $nextSource, hasNext= ${nextSource.hasNext()}");
-      eventTime = nextSource.getNextTime
-      nextSource.advanceState()
-      graph.fire(nextSource)
-      if (nextSource.hasNext()) {
-        eventSourceQueue.enqueue( nextSource )
-      } else {
-        println(s"terminated ${nextSource}")
+      try {
+        val nextSource = eventSourceQueue.dequeue()
+        //      println(s"\nFiring event $eventI from $nextSource, hasNext= ${nextSource.hasNext()}");
+        eventTime = nextSource.getNextTime
+        nextSource.advanceState()
+        graph.fire(nextSource)
+        if (nextSource.hasNext()) {
+          eventSourceQueue.enqueue(nextSource)
+        } else {
+          println(s"terminated ${nextSource}")
+        }
+      } catch {
+        case t:Throwable => throw new RuntimeException(s"Error on event $eventI", t)
       }
     }
     graph.fire(terminationEvent)

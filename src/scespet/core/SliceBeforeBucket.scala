@@ -2,6 +2,7 @@ package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
 import scespet.core.SlicedBucket.JoinValueRendezvous
+import scespet.core.SlowGraphWalk.Wakeup
 import scespet.util.Logged
 import scespet.core.types.MFunc
 
@@ -115,12 +116,14 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
   assignNewReduce()
 
 
-  val sliceHandler = new MFunc() {
+  val sliceHandler = new MFunc() with Wakeup {
+    var fireCount = 0
     override def calculate(): Boolean = {
       if (sliceTriggered()) {
         closeCurrentBucket()
         // we can't open a new bucket just yet, as we need to expose the state of this closed bucket first.
       }
+      fireCount += 1
       true
     }
   }

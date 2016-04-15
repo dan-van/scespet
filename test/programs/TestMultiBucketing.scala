@@ -168,7 +168,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     new StreamTest("Odd", expectedOdd, oddBuckets)
   }
 
-  ignore("bucket sliced reduce post") {
+  test("bucket sliced reduce post") {
     val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).last()
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(12, 11, 4), recombinedEventCount)
