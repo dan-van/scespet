@@ -9,6 +9,7 @@ import collection.JavaConversions._
 import scespet.core.types.MFunc
 import scespet.EnvTermBuilder
 import scala.collection.mutable
+import scala.reflect.ClassTag
 
 
 /**
@@ -25,6 +26,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
   var exposeEmpty = false
+  var doMutable = true
 
   val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
@@ -64,7 +66,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
 //  class XYCollector() extends Bucket with OutTrait[XYCollector] with CellAdder[Int] {
-  class XYCollector() extends MFunc with AutoCloseable with CellAdder[Int] with Cloneable {
+  class XYCollector() extends Bucket with CellAdder[Int] with Cloneable {
     var firstX:Int = -1
     var lastX:Int = -1
     var xChanged ,yChanged = 0
@@ -85,9 +87,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     }
 
 
-    override def close(): Unit = complete()
-
-    def complete() {
+    override def complete() {
       if (done) throw new AssertionError("double call to done: "+this)
       done = true
     }
@@ -145,7 +145,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     override def clone(): XYCollector = super.clone().asInstanceOf[XYCollector]
   }
 
-  ignore("bucket sliced reduce pre") {
+  test("bucket sliced reduce pre") {
     val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last()
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(11, 11, 5), recombinedEventCount)
@@ -304,7 +304,12 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     }
     def slicedStream(align:SliceAlign):GroupedTerm2[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.group(sliceOn, align)
-      grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
+      val collapse: GroupedTerm2[String, XYCollector, XYCollector] = {
+//        grouped.collapseK(k => new XYCollector)
+        val cellGen = KeyToSliceCellLifecycle.getKeyToSliceLife[String, XYCollector]((k:String) => new XYCollector, implicitly[ClassTag[XYCollector]], forceMutableBucket = doMutable)
+        grouped._collapse[XYCollector, XYCollector](cellGen, implicitly[XYCollector => CellAdder[Int]], implicitly[AggOut[XYCollector, XYCollector]])
+      }
+      collapse.bind(div5)(_.addY)
     }
     def windowedStream():GroupedTerm2[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.window(windowStream)

@@ -209,7 +209,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
     } else {
       if (firstBucket) {
         if (cellIsFunction && env.hasChanged(nextReduce)) {
-          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
+          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?. Cell: "+nextReduce)
         }
         firstBucket = false
         true

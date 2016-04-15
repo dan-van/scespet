@@ -44,6 +44,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     env.shutDown("End", null)
     super.afterEach()
   }
+
+
   /**
    * sourceA is bound via old-style mekon graph wiring,
    * sourceB is bound via a binding a datasource onto a mutable method of the OldStyleFundAppend
@@ -53,14 +55,18 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * @return (sourceA, sourceB, slice)
    */
   def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign) = {
+    val sourceA :ValueFunc[Char] = new ValueFunc[Char](env)
+    val sourceB :ValueFunc[Char] = new ValueFunc[Char](env)
+    setupTestABSliceImpl(sourceA, sourceB, reduceType, expected, triggerAlign)
+  }
+
+  def setupTestABSliceImpl(sourceA :ValueFunc[Char], sourceB :ValueFunc[Char], reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign) = {
     type S = EventGraphObject                                                                     // NODEPLOY need to set up mutable tests
     type Y = OldStyleFuncAppend[Char]
     type OUT = OldStyleFuncAppend[Char]
     val slice = new MFunc() {
       override def calculate(): Boolean = true
     }
-    val sourceA :ValueFunc[Char] = new ValueFunc[Char](env)
-    val sourceB :ValueFunc[Char] = new ValueFunc[Char](env)
     val valueStreamForOldStyleEvents :ValueFunc[Char] = if (sourceAIsOldStyle) {
       sourceA
     } else {
@@ -413,6 +419,27 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
   }
 
+
+  test("Initialise") {
+    val expected = List("AB").map(_.toCharArray.toList)
+    val reduceType = ReduceType.LAST
+
+    val a :ValueFunc[Char] = new ValueFunc[Char](env)
+    val b :ValueFunc[Char] = new ValueFunc[Char](env)
+
+    a.setValue('A')
+
+    val (sourceA, sourceB, slice) = setupTestABSliceImpl(a, b, reduceType, expected, SliceAlign.AFTER)
+    // link the slice to be coincident (and derived) from B
+    env.addListener(sourceB.trigger, slice)
+    env.graph.fire(a.trigger)
+
+    sourceA.setValue('B')
+    env.graph.fire(sourceA.trigger)
+
+    env.graph.fire(slice)
+
+  }
 
   class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
     var value = Seq[X]()
