@@ -149,7 +149,7 @@ class TestMultiTerms extends ScespetTestBase {
     val joined = prices.join(reuters, k => k.symbol)
     val compared = joined.map(p => p._1 - p._2)
     out("diffs")(compared)
-    Plot.plot(compared)
+//    Plot.plot(compared)     // plot it
   }
 
   test("by") {

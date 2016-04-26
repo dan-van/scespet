@@ -93,10 +93,13 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
      * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
      * NODEPLOY - rename to Close
      */
-    override def complete(): Unit = {
+    override def close(): Unit = {
       ignoreMore = true
       env.removeListener(in.trigger, this)
+      super.close()
     }
+
+
   }
 
   class BindableAppendFunc[X] extends Bucket with OutTrait[Seq[X]]{
@@ -273,6 +276,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("MFunc grouped reduce") {
+    // TODO:this is broken
     val out = stream.keyToStream( key => impl.bucketStream(new OldStyleFuncAppend[Char](stream(key), env)).reset(3.events).last() )
     val expectedDigits = data_digit.grouped(3).map( generateAppendScan(_).last ).toSeq
     val expectedAlpha = data_chars.grouped(3).map( generateAppendScan(_).last ).toSeq

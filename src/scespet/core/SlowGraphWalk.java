@@ -47,7 +47,9 @@ public class SlowGraphWalk {
 
         private Node(EventGraphObject graphObject) {
             this.graphObject = graphObject;
-            if (graphObject == null) throw new IllegalArgumentException("Null graphObject");
+            if (graphObject == null) {
+                throw new IllegalArgumentException("Null graphObject");
+            }
         }
 
         public EventGraphObject getGraphObject() {

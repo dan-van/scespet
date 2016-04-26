@@ -470,11 +470,12 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
      * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
      * NODEPLOY - rename to Close
      */
-    override def complete(): Unit = {
+    override def close(): Unit = {
       closed = true
       if (sourceAIsOldStyle) {
         env.removeListener(in.trigger, this)
       }
+      super.close()
     }
   }
 }

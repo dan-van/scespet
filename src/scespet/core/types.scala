@@ -194,16 +194,12 @@ trait SelfAgg[-X] extends Agg[X] {
   */
 trait Bucket extends MFunc with AutoCloseable {
   def open():Unit
-  /**
-   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
-   * NODEPLOY - rename to Close
-   */
-  def complete(){}
-
+  def pause():Unit = {}
   /**
    * TODO: should I have distinct close, complete, reset? What happened to the idea of reset buckets?
+   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
    */
-  override def close(): Unit = complete()
+  override def close(): Unit = ()
 
 }
 

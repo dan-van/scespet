@@ -121,6 +121,10 @@ trait SliceCellLifecycle[C] {
    */
   def newCell():C
 
+  /**
+    * This is called to stop a cell updating.
+    * @param c
+    */
   def closeCell(c:C)
 }
 
@@ -160,7 +164,8 @@ object SliceCellLifecycle {
     }
 
     override def closeCell(c: B): Unit = {
-      cell.complete()
+      // just pause the cell to be resumed in next call to newCell (which will call open on the cell again)
+      cell.pause()
     }
 
   }
