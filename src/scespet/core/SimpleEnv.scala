@@ -23,6 +23,8 @@ class SimpleEnv() extends Environment {
   val eventSources = mutable.Set[EventSource]()
   val initialised = mutable.Set[EventSource]()
 
+  var stopped = false
+
   val terminationEvent = new types.MFunc {
     def calculate(): Boolean = {
       println("Termination event firing")
@@ -60,6 +62,9 @@ class SimpleEnv() extends Environment {
     if (eventI == 0) {
       if (!eventSourceQueue.isEmpty) eventTime = eventSourceQueue.head.getNextTime
     }
+    if (eventSourceQueue.isEmpty || stopped) {
+      return
+    }
     graph.applyChanges()
     if (initialised.size < eventSources.size) {
       val initTime = if (eventTime != 0) {
@@ -91,7 +96,10 @@ class SimpleEnv() extends Environment {
           println(s"terminated ${nextSource}")
         }
       } catch {
-        case t:Throwable => throw new RuntimeException(s"Error on event $eventI", t)
+        case t:Throwable => {
+          stopped = true
+          throw new RuntimeException(s"Error on event $eventI", t)
+        }
       }
     }
     graph.fire(terminationEvent)
@@ -227,7 +235,9 @@ class SimpleEnv() extends Environment {
 
   def getDelayedExecutor(wakeupTarget: Function) = ???
 
-  def shutDown(reason: String, error: Throwable) {}
+  def shutDown(reason: String, error: Throwable): Unit = {
+    stopped = true
+  }
 
   def getRootEnvironment = ???
 }
