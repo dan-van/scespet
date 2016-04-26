@@ -2,6 +2,10 @@ package programs
 
 import java.util.logging.Logger
 
+import gsa.esg.mekon.MekonConfig.GraphFactory
+import gsa.esg.mekon.SystemMode
+import gsa.esg.mekon.core.{InstantTreeBuildingGraphWalker, DefaultEnvironment}
+import gsa.esg.mekon.run.Mekon
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
 import scespet.EnvTermBuilder
@@ -19,7 +23,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   val logger = Logger.getLogger(classOf[SliceTests].getName)
 
   var env:Env = _
-  var graph :{ def fire (graphObject: EventGraphObject):Unit } = _
+//  var graph : InstantTreeBuildingGraphWalker = _
+  var graph : SlowGraphWalk = _
   var impl:EnvTermBuilder = _
   /**
    * with 'old style' the bucket itself is a Function, and makes its own calls to env.addListener
@@ -36,9 +41,13 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
 //    val mekon = new Mekon(SystemMode.TEST)
 //    mekon.consumeAllEvents(true)
+//    val eventGraph = new InstantTreeBuildingGraphWalker
+//    mekon.setGraphFactory(new GraphFactory {
+//      override def newGraph(realtime: Boolean) = eventGraph
+//    })
 //    val runner = mekon.newRunner()
 //    env = runner.getEnvironment
-//    graph = env.asInstanceOf[DefaultEnvironment].getEventGraph
+//    graph = eventGraph
 
     impl = EnvTermBuilder(env)
 //    sourceAIsOldStyle = true    //Uncomment me to effectively do "TestOldStyle" (handy for debugging a failed test)
