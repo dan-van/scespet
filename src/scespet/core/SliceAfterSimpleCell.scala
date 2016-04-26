@@ -92,7 +92,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
 
       if (cellIsFunction & addListenerToNewReduce) {
         // wire up the bucket to this rendezvous so that it is strictly 'after' any mutations that the joinValueRendezvous may apply
-        env.addWakeupOrdering(this, nextReduce.asInstanceOf[MFunc])
+        env.addWakeupReceiver(this, nextReduce.asInstanceOf[MFunc])
         addListenerToNewReduce = false
       }
 
@@ -135,7 +135,6 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         // however the joinValueRendezvous may have just fired along with the bucket slice, that would cause this new reduce
         // to get a load of events that weren't intended for it. Hence we only add an ordering here, then later promote to a full trigger
         env.addWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        joinValueRendezvous.newBucketBuilt = true
         joinValueRendezvous.addListenerToNewReduce = true
         bucketHasValue = false
 

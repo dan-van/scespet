@@ -93,7 +93,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
 
       if (cellIsFunction & addListenerToNewReduce) {
         // wire up the bucket to this rendezvous so that it is strictly 'after' any mutations that the joinValueRendezvous may apply
-        env.addWakeupOrdering(this, nextReduce.asInstanceOf[MFunc])
+        env.addWakeupReceiver(this, nextReduce.asInstanceOf[MFunc])
         addListenerToNewReduce = false
       }
 
@@ -122,7 +122,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       if (newCell != nextReduce) {
         if (nextReduce != null) {
           env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-          env.removeWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          env.removeWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // eventCountInput hasn't yet got its event (from nextReduce). so we can't yet remove the listener
           env.removeListener(nextReduce.asInstanceOf[EventGraphObject], eventCountInput)
           // listen to it so that we propagate value updates to the bucket
@@ -218,7 +218,7 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       }
     }
 
-    val bucketChange = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce)
+    val bucketChange = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     if (bucketChange) {
       // for a cumulative reduce (i.e. scan), after a bucket reset we need to wait for the next event entering the bucket until we expose the
       // contents of the new bucket.
