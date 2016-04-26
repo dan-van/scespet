@@ -192,13 +192,19 @@ trait SelfAgg[-X] extends Agg[X] {
 // todo - certainly the "bindTo" verb could work with a vanilla Cell
 // NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
   */
-trait Bucket extends MFunc {
+trait Bucket extends MFunc with AutoCloseable {
   def open():Unit
   /**
    * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
    * NODEPLOY - rename to Close
    */
   def complete(){}
+
+  /**
+   * TODO: should I have distinct close, complete, reset? What happened to the idea of reset buckets?
+   */
+  override def close(): Unit = complete()
+
 }
 
 

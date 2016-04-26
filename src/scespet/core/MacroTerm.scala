@@ -249,8 +249,8 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 //    } else {
 
         reduceType match {
-          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, window, lifecycle, bindings, env)
-          case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, window, lifecycle, bindings, env)
+          case ReduceType.CUMULATIVE => new WindowedBucket_Continuous[B, OUT](cellOut, window, lifecycle, bindings, env, exposeEmpty)
+          case ReduceType.LAST => new WindowedBucket_LastValue[B, OUT](cellOut, window, lifecycle, bindings, env, exposeEmpty)
         }
       }
 
@@ -341,7 +341,6 @@ class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGro
   }
 
   def scan[Y, O](newBFunc: => Y, exposeEmpty :Boolean = false)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    val exposeEmpty = true
     val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
     _collapse[Y,O](lifecycle, adder, yOut).all(exposeEmpty)
   }

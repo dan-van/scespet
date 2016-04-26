@@ -32,12 +32,15 @@ import scespet.core.types.MFunc
  *
  *
  */
-class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :CellSliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
+class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :CellSliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeEmptyValues:Boolean) extends SlicedBucket[Y, OUT] {
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
   private var closedReduce : Y = _
   private var hasExposedValueForNextReduce = false
   private var hasExposedValueForClosedReduce = false
+  private var bucketHasValue = false
+  private var closedBucketHasValue = false
+  private var firstBucket = true
 
 
   // most of the work is actually handled in this 'rendezvous' class
@@ -47,6 +50,22 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
 
     def calculate(): Boolean = {
       import collection.JavaConversions.iterableAsScalaIterable
+      if (firstBucket && exposeEmptyValues && emitType == ReduceType.CUMULATIVE) {
+        // we are forced to emit an empty bucket, but we may have inputs that want to feed into the backet.
+        // bit of a hack, as I'm not actually capturing the values from the inputs, merely assuming I can apply them in
+        // a subsequent cycle for the same effect (after we have exposed the empty state)
+        for (bind <- bindings) {
+          val bindingInput = bind._1
+          if (env.hasChanged(bindingInput.getTrigger)) {
+            logger.info("Capturing deferred event from "+bindingInput)
+            pendingInitialValue :+= bindingInput
+          }
+        }
+        env.wakeupThisCycle(this)
+        return true
+      }
+
+
       addedValueToBucket = false
       if (pendingInitialValue.nonEmpty) {
         for (in <- pendingInitialValue) {
@@ -84,6 +103,9 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
 
   def assignNewReduce() :Unit = {
     val newCell = cellLifecycle.newCell()
+    bucketHasValue = false
+    hasExposedValueForNextReduce = false
+
     // tweak the listeners:
     if (cellIsFunction) {
       // assigning newReduce is triggered by the slice listener, which comes before the actual SliceBeforeSimpleCell instance.
@@ -97,7 +119,6 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     } else {
       nextReduce = newCell
     }
-    hasExposedValueForNextReduce = false
   }
   // init the first reduce
   //    // TODO: if nextReduce was a hasVal, then we'd have strong modelling of initialisation state
@@ -137,6 +158,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
   }
 
   env.addListener(joinValueRendezvous, this)
+  if (exposeEmptyValues && emitType == ReduceType.CUMULATIVE) env.wakeupThisCycle(joinValueRendezvous)
 
 
   private def closeCurrentBucket() {
@@ -145,6 +167,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     }
     cellLifecycle.closeCell(nextReduce)
     completedReduce = cellOut.out(nextReduce)
+    closedBucketHasValue = bucketHasValue
     hasExposedValueForClosedReduce = hasExposedValueForNextReduce
     hasExposedValueForNextReduce = false
   }
@@ -171,7 +194,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
 
     // NODEPLOY think about this further, but I'm going with nextReduce is in valid state now.
     // todo: maybe we could tweak this if Y instanceof something with initialisation state?
-    initialised = exposeInitialValue
+    initialised = exposeEmptyValues
   }
 
   def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
@@ -184,21 +207,8 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     }
   }
 
-  var cyclicFireWaiting = false
   def calculate():Boolean = {
-    justClosedBucket = env.hasChanged(sliceHandler)
-    val fireForClosedBucket = if (emitType == ReduceType.CUMULATIVE) {
-      // in CUMULATIVE mode, the last value of the bucket before it is closed will have already been exposed.
-      // just closing a bucket means we have just started a new one and need to expose its initial value (whether it is empty, or if a value is added
-      if (justClosedBucket && !hasExposedValueForClosedReduce) {
-        ??? // I don't really understand how this would have happened - investigate
-      }
-      false
-    } else {
-      // in LAST mode, we won't have seen the last state of the bucket before the slice,
-      // so we need to check for this and expose it
-      justClosedBucket && !hasExposedValueForClosedReduce
-    }
+    val sliceFired = env.hasChanged(sliceHandler)
 
     if (closedReduce != null && env.hasChanged(closedReduce.asInstanceOf[EventGraphObject])) {
       val postCloseValue = cellOut.out(closedReduce)
@@ -225,34 +235,20 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
     val cellFired = cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     val addedValueToCell = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket
 
-    val fireForCellChange = if (emitType == ReduceType.CUMULATIVE) {
-      addedValueToCell || cellFired || justClosedBucket || cyclicFireWaiting
-    } else {
-      false
-    }
-
-    cyclicFireWaiting = false
-    if (false && fireForClosedBucket && addedValueToCell && emitType == ReduceType.CUMULATIVE) {
-      // we just closed a bucket, but we added a value to the next bucket, in CUMULATIVE fire mode, we will need to expose that state
-      // do a cyclic fire to process the next state
-      var boom = true
-      if (emitType == ReduceType.CUMULATIVE) {
-        if (boom) ??? // I dont think I 've got a test covering cumulativ mode, and I think that we double fire the prevoius event
-      }
-      cyclicFireWaiting = true
-      env.wakeupThisCycle(this)
-    }
-
-    if (fireForCellChange) {
-      hasExposedValueForNextReduce = true
+    if (cellFired || addedValueToCell) {
+      bucketHasValue = true
     }
 
     val fire = if (emitType == ReduceType.CUMULATIVE) {
-      fireForCellChange
+      // in CUMULAIVE mode, only fire an even on a slice fire if the bucket is empty and we're supposed to be exposing empty values
+      val newBucketOrBucketClosed = sliceFired || firstBucket
+      addedValueToCell || cellFired || (newBucketOrBucketClosed && exposeEmptyValues && !bucketHasValue)
     } else {
-      fireForClosedBucket
+      // in LAST mode, expose a value on slice.
+      sliceFired && (closedBucketHasValue || exposeEmptyValues)
     }
     if (fire) {
+      firstBucket = false
       initialised = true // belt and braces initialiser // NODEPLOY - is initialised now dead as a concept?
     }
     return fire

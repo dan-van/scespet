@@ -33,6 +33,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    */
   var sourceAIsOldStyle = false
   var exposeEmpty = false
+  var doMutable = false
 
   override protected def beforeEach() {
     super.beforeEach()
@@ -50,8 +51,10 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 //    graph = eventGraph
 
     impl = EnvTermBuilder(env)
-//    sourceAIsOldStyle = true    //Uncomment me to effectively do "TestOldStyle" (handy for debugging a failed test)
-//    exposeEmpty = true
+
+//    sourceAIsOldStyle = true
+//    exposeEmpty = false
+//    doMutable = false
   }
 
   override protected def afterEach(): Unit = {
@@ -67,7 +70,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * @param triggerAlign
    * @return (sourceA, sourceB, slice)
    */
-  def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign, doMutable:Boolean = false) = {
+  def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign) = {
     type S = EventGraphObject                                                                     // NODEPLOY need to set up mutable tests
     type Y = OldStyleFuncAppend[Char]
     type OUT = OldStyleFuncAppend[Char]
@@ -119,7 +122,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
         }
 
         addPostCheck("Didn't observe all expected:") {
-          assert(i == expected.length, s"from $expected")
+          assert(i == expected.length, s"not enough events observed out of expected: $expected")
         }
       })
     }
@@ -128,7 +131,6 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
   test("Concept sliceAfter CUMULATIVE") {
     val expected = if (exposeEmpty) {
-      // NOTE: exposeEmpty doesn't currently expose the initial bucket value. This is asymmetric, but a pain in the ass
       List("", "A", "AB", "ABC", /*slice*/"", "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
     } else {
       List("A", "AB", "ABC", "D").map(_.toCharArray.toList)
@@ -180,7 +182,12 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceBefore CUMULATIVE") {
-    val expected = List("A", "AB", "ABC", /*slice*/ "", "D" , /*slice and add atomically*/ "E", /*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      // NOTE: exposeEmpty doesn't currently expose the initial bucket value. This is asymmetric, but a pain in the ass
+      List("", "A", "AB", "ABC", /*slice*/ "", /* then add */ "D" , /*slice and add atomically*/ "E", /*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
+    } else {
+      List("A", "AB", "ABC", /*slice then add, but skip empty*/ "D" , /*slice and add atomically*/ "E").map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.CUMULATIVE
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
@@ -214,7 +221,11 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
 
   test("Concept sliceBefore LAST") { // cumulative slice before not implemented (is that still necessary?)
-    val expected = List("ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
+    val expected = if (exposeEmpty) {
+      List("ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
+    } else {
+      List("ABC", /*slice*/ "D" /*slice, but empty bucket*/).map(_.toCharArray.toList)
+    }
     val reduceType = ReduceType.LAST
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
 
@@ -421,7 +432,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
 
-  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket with AutoCloseable {
+  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
     var value = Seq[X]()
     env.addListener(in.trigger, this)
     // see scespet.core.SlowGraphWalk.feature_correctForMissedFireOnNewEdge
@@ -446,14 +457,12 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
     override def open(): Unit = value = Nil
 
-
-    override def close(): Unit = {complete() ; closed = true          }
-
     /**
      * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
      * NODEPLOY - rename to Close
      */
     override def complete(): Unit = {
+      closed = true
       if (sourceAIsOldStyle) {
         env.removeListener(in.trigger, this)
       }
@@ -465,6 +474,7 @@ class  TestOldStyle extends SliceTests {
   override protected def beforeEach(): Unit = {
     super.beforeEach()
     sourceAIsOldStyle = true
+    exposeEmpty = false
   }
 }
 

@@ -130,9 +130,9 @@ class TestSingleTerms extends ScespetTestBase with BeforeAndAfterEach with OneIn
 
   test("fold each") {
     val elements = List.fill(11)(2)
-//    val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
-    val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ )).toList.flatten
-//    expectedOut should be(List(List(2, 4, 6), List(2, 4, 6), List(2, 4, 6), List(2, 4)).flatten)
+    val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ ).drop(1)).toList.flatten
+//    val expectedOut = elements.grouped(3).map( _.scanLeft(0)( _+_ )).toList.flatten
+    expectedOut should be(List(List(2, 4, 6), List(2, 4, 6), List(2, 4, 6), List(2, 4)).flatten)
 
     val stream = impl.asStream( IteratorEvents(elements)((_,_) => 0L) )
 

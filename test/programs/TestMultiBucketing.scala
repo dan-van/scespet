@@ -12,11 +12,8 @@ import scala.collection.mutable
 
 
 /**
-* Created with IntelliJ IDEA.
-* User: danvan
-* Date: 21/12/2012
-* Time: 09:29
-* To change this template use File | Settings | File Templates.
+  * NOTE: I think that all of these test definitions are stale and incorrect.
+  * expected values are not consistent with behaviour in exposeEmpty. These tests need re-writing.
 */
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
 import org.junit.runner.RunWith
@@ -27,6 +24,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
+  var exposeEmpty = false
 
   val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
@@ -66,14 +64,16 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
 //  class XYCollector() extends Bucket with OutTrait[XYCollector] with CellAdder[Int] {
-  class XYCollector() extends Bucket with CellAdder[Int] with Cloneable {
+  class XYCollector() extends MFunc with AutoCloseable with CellAdder[Int] with Cloneable {
     var firstX:Int = -1
     var lastX:Int = -1
     var xChanged ,yChanged = 0
     var countX, countY, countBoth = 0
     var done = false
 
-    override def open(): Unit = {
+    open()
+
+    def open(): Unit = {
       firstX = -1
       lastX = -1
       xChanged = 0
@@ -84,7 +84,10 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
       done = false
     }
 
-    override def complete() {
+
+    override def close(): Unit = complete()
+
+    def complete() {
       if (done) throw new AssertionError("double call to done: "+this)
       done = true
     }
@@ -104,13 +107,14 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 //        throw new AssertionError("Calculate should always be *after* mutation from bindings")
 //      }
       // NODEPLOY calculate should only be called if asked for
-//      env.wakeupThisCycle(this)
+      env.wakeupThisCycle(this)
     }
     def addY(x:Int) = {
       yChanged += 1
 //      if (env.hasChanged(this)) {
 //        throw new AssertionError("Calculate should always be *after* mutation from bindings")
 //      }
+      env.wakeupThisCycle(this)
     }
 
     override def toString: String = s"firstX:$firstX x:$lastX nx:$countX, ny:$countY, nboth:$countBoth, done:$done"
@@ -357,4 +361,10 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     new StreamTest("Odd", expectedOdd, stream("Odd"))
   }
 
+  class WithEmpty extends TestMultiBucketing {
+    override protected def beforeEach(): Unit = {
+      super.beforeEach()
+      exposeEmpty = true
+    }
+  }
 }

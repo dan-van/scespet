@@ -25,7 +25,7 @@ import scespet.core.types.MFunc
  *
  */
  
-class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeInitialValue:Boolean) extends SlicedBucket[Y, OUT] {
+class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellLifecycle :SliceCellLifecycle[Y], emitType:ReduceType, bindings:List[(HasVal[_], (Y => _ => Unit))], env :types.Env, ev: SliceTriggerSpec[S], exposeEmptyBucket:Boolean) extends SlicedBucket[Y, OUT] {
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
   private var completedReduceValue : OUT = _
@@ -35,7 +35,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
-    var newBucketBuilt = false
+    var addListenerToNewReduce = false
     var addedValueToBucket = false
 
     override def nextReduce: Y = SliceAfterSimpleCell.this.nextReduce
@@ -50,7 +50,10 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         ??? // I think I can delete this path
       }
 
-      if (firstBucket && exposeInitialValue && emitType == ReduceType.CUMULATIVE) {
+      if (firstBucket && exposeEmptyBucket && emitType == ReduceType.CUMULATIVE) {
+        // we are forced to emit an empty bucket, but we may have inputs that want to feed into the backet.
+        // bit of a hack, as I'm not actually capturing the values from the inputs, merely assuming I can apply them in
+        // a subsequent cycle for the same effect (after we have exposed the empty state)
         for (bind <- bindings) {
           val bindingInput = bind._1
           if (env.hasChanged(bindingInput.getTrigger)) {
@@ -87,10 +90,10 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         }
       }
 
-      if (cellIsFunction & newBucketBuilt) {
+      if (cellIsFunction & addListenerToNewReduce) {
         // wire up the bucket to this rendezvous so that it is strictly 'after' any mutations that the joinValueRendezvous may apply
-        env.addWakeupReceiver(this, nextReduce.asInstanceOf[MFunc])
-        newBucketBuilt = false
+        env.addWakeupOrdering(this, nextReduce.asInstanceOf[MFunc])
+        addListenerToNewReduce = false
       }
 
       // whenever we add a value to the bucket, we need to fire, this is because the bucket and/or the SliceAfterBucket need to know when there has been a mutation
@@ -110,6 +113,8 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
 
   def assignNewReduce() :Unit = {
     val newCell = cellLifecycle.newCell()
+    bucketHasValue = false
+
     // tweak the listeners:
     if (cellIsFunction) {
       // watch out for the optimisation where the lifecycle re-uses the current cell
@@ -131,6 +136,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
         // to get a load of events that weren't intended for it. Hence we only add an ordering here, then later promote to a full trigger
         env.addWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
         joinValueRendezvous.newBucketBuilt = true
+        joinValueRendezvous.addListenerToNewReduce = true
         bucketHasValue = false
 
         // listen to it so that we fire value events whenever the nextReduce fires
@@ -146,7 +152,8 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   //    env.fireAfterChangingListeners(nextReduce.asInstanceOf[MFunc])
   assignNewReduce()
   var firstBucket = true
-  if (exposeInitialValue && emitType == ReduceType.CUMULATIVE) env.wakeupThisCycle(joinValueRendezvous)
+  // in 'exposeEmptyBucket' mode, when running CUMULATIVE, we should expose the initial empty bucket for completeness
+  if (exposeEmptyBucket && emitType == ReduceType.CUMULATIVE) env.wakeupThisCycle(joinValueRendezvous)
 
 
   def value:OUT = {
@@ -169,7 +176,7 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
     // todo: maybe we could tweak this if Y instanceof something with initialisation state?
     // e.g. if nextReduce is a hasVal, should we try to use its initialisation state?
     // alternatively, this could be a question for the cellLifecycle?
-    initialised = exposeInitialValue
+    initialised = exposeEmptyBucket
   }
 
   def addInputBinding[X](in:HasVal[X], adder:Y=>X=>Unit) {
@@ -196,22 +203,14 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
   }
 
   def calculate():Boolean = {
-    val assignedNewReduce = if (queuedNewAssignment) {
+    val newBucketCreated = if (queuedNewAssignment) {
       queuedNewAssignment = false
       assignNewReduce()
-      firstBucket = false
       true
     } else {
-      if (firstBucket) {
-        if (cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
-          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
-        }
-        firstBucket = false
-        true
-      } else {
-        false
-      }
+      firstBucket
     }
+    firstBucket = false
 
     val bucketChange = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket || cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     if (bucketChange) {
@@ -239,7 +238,14 @@ class SliceAfterSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, c
       false
     }
 
-    val fire = if (emitType == ReduceType.CUMULATIVE) bucketChange || (exposeInitialValue && assignedNewReduce) else sliceFire && (bucketHasValue || exposeInitialValue)
+    val fire = if (emitType == ReduceType.CUMULATIVE) {
+      if (newBucketCreated && exposeEmptyBucket && bucketChange) {
+          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event at construction. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
+      }
+      bucketChange || (exposeEmptyBucket && newBucketCreated)
+    } else {
+      sliceFire && (bucketHasValue || exposeEmptyBucket)
+    }
     if (fire) {
       initialised = true // belt and braces initialiser
 //      firedForBucket = true
