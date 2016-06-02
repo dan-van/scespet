@@ -23,8 +23,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   val logger = Logger.getLogger(classOf[SliceTests].getName)
 
   var env:Env = _
-//  var graph : InstantTreeBuildingGraphWalker = _
-  var graph : SlowGraphWalk = _
+  var graph : InstantTreeBuildingGraphWalker = _
+//  var graph : SlowGraphWalk = _
   var impl:EnvTermBuilder = _
   /**
    * with 'old style' the bucket itself is a Function, and makes its own calls to env.addListener
@@ -38,17 +38,17 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   override protected def beforeEach() {
     super.beforeEach()
     env = new SimpleEnv
-    graph = env.asInstanceOf[SimpleEnv].graph
+//    graph = env.asInstanceOf[SimpleEnv].graph
 
-//    val mekon = new Mekon(SystemMode.TEST)
-//    mekon.consumeAllEvents(true)
-//    val eventGraph = new InstantTreeBuildingGraphWalker
-//    mekon.setGraphFactory(new GraphFactory {
-//      override def newGraph(realtime: Boolean) = eventGraph
-//    })
-//    val runner = mekon.newRunner()
-//    env = runner.getEnvironment
-//    graph = eventGraph
+    val mekon = new Mekon(SystemMode.TEST)
+    mekon.consumeAllEvents(true)
+    val eventGraph = new InstantTreeBuildingGraphWalker
+    mekon.setGraphFactory(new GraphFactory {
+      override def newGraph(realtime: Boolean) = eventGraph
+    })
+    val runner = mekon.newRunner()
+    env = runner.getEnvironment
+    graph = eventGraph
 
     impl = EnvTermBuilder(env)
 
