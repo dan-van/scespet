@@ -28,7 +28,8 @@ public class SlowGraphWalk {
 
     private boolean feature_correctForMissedFireOnNewEdge = true; //Yes, we do add edges to nodes that have
 
-    EventTrace eventLogger = new EventTrace(this);
+//    EventTrace eventLogger = new EventTrace(this);
+    NullEventTrace eventLogger = new NullEventTrace();
     private Node currentFiringNode = null;
 
     public class Node {
@@ -50,6 +51,25 @@ public class SlowGraphWalk {
 
         public EventGraphObject getGraphObject() {
             return graphObject;
+        }
+
+        public boolean hasAnyIncomingTriggers() {
+            ArrayList<EventGraphObject> list = new ArrayList<>();
+            for (Node node : in) {
+                if (!in_orderingOnly.contains( node )) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public boolean hasAnyListeners() {
+            for (Node node : out) {
+                if (!out_orderingOnly.contains(node)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         public Collection<Function> getListeners() {
@@ -325,7 +345,7 @@ public class SlowGraphWalk {
         }
     }
 
-    private Node getNode(EventGraphObject source) {
+    public Node getNode(EventGraphObject source) {
         Node sourceNode = nodes.get(source);
         if (sourceNode == null) {
             sourceNode = new Node(source);
@@ -377,15 +397,15 @@ public class SlowGraphWalk {
 
     public void applyChanges() {
         if (!isChanging) {
-            while (!deferredChanges.isEmpty() || !deferredFires.isEmpty()) {
-                if (!isChanging) {
-                    eventLogger.beginApplyingChanges();
-                    isChanging = true;
-                }
-
+            while (!deferredChanges.isEmpty() || !deferredFires.isEmpty() || !newNodesThisCycle.isEmpty()) {
                 // each time round this loop is effectively a new cycle
                 cycleCount += 1;
                 for (Runnable deferredChange : deferredChanges) {
+                    if (!isChanging) {
+                        eventLogger.beginApplyingChanges();
+                        isChanging = true;
+                    }
+
                     deferredChange.run();
                 }
                 deferredChanges.clear();
@@ -393,7 +413,9 @@ public class SlowGraphWalk {
                 // this is an interesting attempt to play with alternate approach to initialisation.
                 // if a new node has never been initialised (i.e. had cacluate called), and it is listening to a source that has fired in the past
                 // then tweak the 'hasChanged' logic and 'fire' the new node so that it can react to the input nodes.
-                Collections.sort(newNodesThisCycle, new Comparator<Node>() {
+                List<Node> newNodesCopy = new ArrayList<>(newNodesThisCycle);
+                newNodesThisCycle.clear();
+                Collections.sort(newNodesCopy, new Comparator<Node>() {
                     @Override
                     public int compare(Node o1, Node o2) {
                         return o1.order - o2.order;
@@ -404,7 +426,7 @@ public class SlowGraphWalk {
                 // NODEPLOY - TODO: track down whether we rely on this?
                 int currentCycle = cycleCount;
                 cycleCount = 0; // this effectively makes all nodes that have ever fired be hasChanged==true
-                for (Node node : newNodesThisCycle) {
+                for (Node node : newNodesCopy) {
                     if (isInitialised(node)) {
                         logger.info("How is this node already initialised?: "+node);
                     } else {
@@ -415,7 +437,7 @@ public class SlowGraphWalk {
                                 initialisedInputs.add(inputNode.getGraphObject());
                             }
                         }
-                        if (!initialisedInputs.isEmpty()) {
+                        if (!initialisedInputs.isEmpty() || node.in.size() == 0) {
                             boolean inited = false;
                             if (graphObject instanceof EventGraphObject.Lifecycle) {
                                 // NODEPLOY delete this?
@@ -431,7 +453,6 @@ public class SlowGraphWalk {
                 }
                 // restore it
                 cycleCount = currentCycle;
-                newNodesThisCycle.clear();
 
                 eventLogger.firingPostBuildEvents(deferredFires);
                 for (EventGraphObject deferredFire : deferredFires) {
@@ -538,6 +559,32 @@ public class SlowGraphWalk {
         public void endApplyingChanges() {
             logger.info("End change block. New structure:");
             restructured();
+        }
+    }
+
+    public static class NullEventTrace {
+        public NullEventTrace() {
+        }
+
+        public void beginWalk(Node entry) {
+        }
+
+        public void addListener(Node source, Node target) {
+        }
+
+        public void removeListener(Node source, Node target) {
+        }
+
+        public void restructured() {
+        }
+
+        public void beginApplyingChanges() {
+        }
+
+        public void firingPostBuildEvents(List<EventGraphObject> deferredFires) {
+        }
+
+        public void endApplyingChanges() {
         }
     }
 }

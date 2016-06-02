@@ -459,6 +459,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
     return new VectTerm(env)(new VectorJoin[K, K2, X, Y](input, other.input, env, keyMap, fireOnOther=false))
   }
 
+  def take[Y]( other:VectTerm[K,Y]) :VectTerm[K,(X,Y)] = {
+    return new VectTerm(env)(new VectorJoin[K, K, X, Y](input, other.input, env, identity[K], fireOnOther=false))
+  }
+
 
   /**
    * we could build this out of other primitives (e.g. reduce, or 'take(derive).map') but this is more convenient and efficient

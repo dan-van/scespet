@@ -7,19 +7,20 @@
       <sourceFolder url="file://$MODULE_DIR$/test" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/out" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="1.8" jdkType="JavaSDK" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="scala-sdk-2.10.4" level="project" />
+    <orderEntry type="library" name="scala-sdk-2.11.2" level="application" />
     <orderEntry type="module" module-name="mekon" />
     <orderEntry type="library" scope="TEST" name="jep-plot" level="application" />
     <orderEntry type="library" name="annotations-2.0" level="project" />
     <orderEntry type="library" name="trove-3.0" level="project" />
     <orderEntry type="library" name="jfreechart-1.0" level="project" />
-    <orderEntry type="library" name="jcommon-1.0" level="project" />
     <orderEntry type="module" module-name="stubs" />
-    <orderEntry type="library" name="msgpack-0.6.8" level="project" />
     <orderEntry type="library" scope="TEST" name="junit-4.10" level="project" />
-    <orderEntry type="library" name="scalatest_2.10-2.0" level="project" />
+    <orderEntry type="library" name="scalatest_2.11-2.2" level="project" />
+    <orderEntry type="library" name="scala-swing_2.11-1.0" level="project" />
+    <orderEntry type="library" name="jcommon-1.0" level="project" />
+    <orderEntry type="library" name="gsa-shared-core-1.14" level="project" />
     <orderEntry type="module-library">
       <library>
         <CLASSES>

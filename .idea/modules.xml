@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/Scespet.iml" filepath="$PROJECT_DIR$/Scespet.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../mekon/mekon.iml" filepath="$PROJECT_DIR$/../mekon/mekon.iml" />
       <module fileurl="file://$PROJECT_DIR$/stubs/stubs.iml" filepath="$PROJECT_DIR$/stubs/stubs.iml" />
     </modules>
   </component>

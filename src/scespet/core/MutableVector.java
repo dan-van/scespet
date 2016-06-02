@@ -134,7 +134,12 @@ public class MutableVector<X> implements VectorStream<X,X> {
             if (value instanceof EventGraphObject) {
                 changeTrigger = (EventGraphObject) value;
             } else {
+                // NODEPLOY - I suspect this is ugly performance, I think new initialisation semantics could replace this?
                 Function oneShotInit = new Function() {
+                    public String toString() {
+                        return "OneShotInit for Cell: "+Cell.this;
+                    }
+
                     @Override
                     public boolean calculate() {
                         return true;

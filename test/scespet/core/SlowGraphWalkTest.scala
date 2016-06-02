@@ -131,4 +131,32 @@ class SlowGraphWalkTest extends FunSuite with Matchers with AssertionsForJUnit w
     l3.changeSet (2) shouldBe Set(l2b, l2c)
   }
 
+  /**
+    * Lots of existing event source code wakes up listeners in the "advanceState" before actually calling graph.fire.
+    * this needs to work.
+    */
+  test("event source calls wakeup") {
+    implicit val graph = new SlowGraphWalk
+
+    val eventSource = new MFunc {
+      override def calculate(): Boolean = true
+      override def toString: String = "Root"
+    }
+    val listen = new MyNode("listener")
+
+    graph.addWakeupDependency(eventSource, listen)
+    graph.wakeup(listen)
+    listen.eventCount shouldBe(0)
+    graph.fire(eventSource)
+    listen.eventCount shouldBe(1)
+    listen.changeSet(0) shouldBe(Set(eventSource))
+
+    graph.fire(eventSource)
+    listen.eventCount shouldBe(1)
+
+    graph.wakeup(listen)
+    graph.fire(eventSource)
+    listen.eventCount shouldBe(2)
+  }
+
 }
