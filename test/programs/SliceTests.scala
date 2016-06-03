@@ -49,7 +49,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     * the following is some Scalatest Foo to use this test class with different args, but have a 'default arg' that allows me to
     * right-click on a test and run it in intellij
     */
-  var args: Params = Params(sourceAIsOldStyle = false, exposeEmpty = true, doMutable = true)
+  var args: Params = Params(sourceAIsOldStyle = false, exposeEmpty = false, doMutable = true)
   var rootSuite = true
   val allArgs = {
     val bools = IndexedSeq(true, false)
