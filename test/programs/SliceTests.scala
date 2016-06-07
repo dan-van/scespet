@@ -23,8 +23,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   val logger = Logger.getLogger(classOf[SliceTests].getName)
 
   var env:Env = _
-  var graph : InstantTreeBuildingGraphWalker = _
-//  var graph : SlowGraphWalk = _
+//  var graph : InstantTreeBuildingGraphWalker = _
+  var graph : SlowGraphWalk = _
   var impl:EnvTermBuilder = _
   /**
    * with 'old style' the bucket itself is a Function, and makes its own calls to env.addListener
@@ -33,22 +33,25 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    */
   var sourceAIsOldStyle = false
   var exposeEmpty = false
-  var doMutable = false
+  var doMutable = true
 
   override protected def beforeEach() {
     super.beforeEach()
-    env = new SimpleEnv
-//    graph = env.asInstanceOf[SimpleEnv].graph
-
-    val mekon = new Mekon(SystemMode.TEST)
-    mekon.consumeAllEvents(true)
-    val eventGraph = new InstantTreeBuildingGraphWalker
-    mekon.setGraphFactory(new GraphFactory {
-      override def newGraph(realtime: Boolean) = eventGraph
-    })
-    val runner = mekon.newRunner()
-    env = runner.getEnvironment
-    graph = eventGraph
+    val useMekon = false
+    if (useMekon) {
+      val mekon = new Mekon(SystemMode.TEST)
+      mekon.consumeAllEvents(true)
+      val eventGraph = new InstantTreeBuildingGraphWalker
+      mekon.setGraphFactory(new GraphFactory {
+        override def newGraph(realtime: Boolean) = eventGraph
+      })
+      val runner = mekon.newRunner()
+      env = runner.getEnvironment
+//      graph = eventGraph
+    } else {
+      env = new SimpleEnv
+      graph = env.asInstanceOf[SimpleEnv].graph
+    }
 
     impl = EnvTermBuilder(env)
 
@@ -76,6 +79,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     type OUT = OldStyleFuncAppend[Char]
     val slice = new MFunc() {
       override def calculate(): Boolean = true
+
+      override def toString: String = "SLICE trigger"
     }
     val sourceA :ValueFunc[Char] = new ValueFunc[Char](env)
     val sourceB :ValueFunc[Char] = new ValueFunc[Char](env)
@@ -266,6 +271,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
         doSlice = false
         ret
       }
+
+      override def toString: String = "SliceAndSourceA:doSlice="+doSlice
     }
     // define sourceA -> sliceAndSourceA -> slice
     // this ensures that sourceA is "before" and "concurrent" with the trigger I use for this test
