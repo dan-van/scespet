@@ -2,6 +2,7 @@ package scespet.core
 
 import gsa.esg.mekon.core.EventGraphObject
 import scespet.core.SlicedBucket.JoinValueRendezvous
+import scespet.core.SlowGraphWalk.Wakeup
 import scespet.util.Logged
 import scespet.core.types.MFunc
 
@@ -42,11 +43,17 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
     override def nextReduce: Y = SliceBeforeBucket.this.nextReduce
 
     def calculate(): Boolean = {
+      val doneSlice = env.hasChanged(sliceHandler)
+      if (doneSlice) {
+        println("NODEPLOY Is this a fresh bucket?")
+      }
+
       if (hasExposedCompletedBucket) {
         // this covers the case where we have done the bucket-close event, but haven't yet processed the self-wakeup to open a new bucket
         assignNewReduce()
         hasExposedCompletedBucket = false
       }
+
 
       import collection.JavaConversions.iterableAsScalaIterable
       var addedValueToBucket = false
@@ -71,12 +78,14 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
           addedValueToBucket = true
         }
       }
-      val doneSlice = env.hasChanged(sliceHandler)
 
-      if (addedValueToBucket && doneSlice) {
-        // oh, this could be nasty - what if we're using a mutable cell, and the 'out' function is exposing mutable state?
-        // NODEPLOY, umm, what is sca
-        throw new UnsupportedOperationException("We have closed a bucket, but got an event to add to the new one. We can't do that, because we haven't yet propagated the state of the closed bucket. Requirements contradiction for bucket: "+nextReduce)
+      if (addedValueToBucket && doneSlice && !hasExposedCompletedBucket) {
+        // Oh dear - maybe adding to the bucket has just mutated the completed value (i.e. added new data to a sealed bucket)
+        // that's a violation
+        val updatedSnap = cellOut.out(nextReduce)
+        if (updatedSnap == completedReduce) {
+          throw new UnsupportedOperationException(s"Danger of double counting in sliceValue: ${completedReduce}. The slice cause is coincident with a value-adding binding, and the value yielded by CellOut is equal to the value snapped before we updated the bucket. This implies that CellOut is generating mutable objects, and it is being mutateg before we can expose it. Please either change the slicing behaviour, or make CellOut generate immutable snaps.")
+        }
       }
 
       val fireBucketCell = addedValueToBucket || doneSlice
@@ -115,12 +124,14 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
   assignNewReduce()
 
 
-  val sliceHandler = new MFunc() {
+  val sliceHandler = new MFunc() with Wakeup {
+    var fireCount = 0
     override def calculate(): Boolean = {
       if (sliceTriggered()) {
         closeCurrentBucket()
         // we can't open a new bucket just yet, as we need to expose the state of this closed bucket first.
       }
+      fireCount += 1
       true
     }
   }
@@ -191,7 +202,17 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
     val sliceFire = env.hasChanged(sliceHandler)
     val reduceFired = cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     if (sliceFire && reduceFired) {
-      throw new UnsupportedOperationException("We are allocating a new bucket, but that bucket looks like it has just fired, i.e. the bucket generated its own event which is causally 'before' the slice event. This is a requirements contradiction. Either use a SliceAfter, or make the source of events bind to a mutable method on the bucket (which allows us to identify the event source, and ensure that the sice events are ordered after the data events");
+      // Oh dear - we've had a slice event, but before we've been able to expose the bucket, the bucket itself has also fired.
+      // this implies that the bucket is listening to something that is coincident with the slice events, and that the value we
+      // snapped may have been mutated from its intended value. check this and alert if necessary
+      val updatedSnap = cellOut.out(nextReduce)
+      if (updatedSnap == completedReduce) {
+        throw new UnsupportedOperationException(s"Danger of double counting in sliceValue: ${completedReduce}." +
+          s" The slice cause is coincident with something that the bucket iteself is listening to, and the value yielded " +
+          s"by CellOut is equal to the value snapped before we updated the bucket. " +
+          s"This implies that CellOut is generating mutable objects, and these are being mutated before we can expose the value." +
+          s" Please either change the slicing behaviour, or make CellOut generate immutable snaps.")
+      }
     }
 
     if (hasExposedCompletedBucket && reduceFired) {

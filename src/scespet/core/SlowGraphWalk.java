@@ -24,6 +24,8 @@ import java.util.logging.Logger;
  *
  */
 public class SlowGraphWalk {
+    public interface Wakeup {}
+
     private static final Logger logger = Logger.getLogger(SlowGraphWalk.class.getName());
 
     private boolean feature_correctForMissedFireOnNewEdge = true; //Yes, we do add edges to nodes that have
@@ -46,7 +48,9 @@ public class SlowGraphWalk {
 
         private Node(EventGraphObject graphObject) {
             this.graphObject = graphObject;
-            if (graphObject == null) throw new IllegalArgumentException("Null graphObject");
+            if (graphObject == null) {
+                throw new IllegalArgumentException("Null graphObject");
+            }
         }
 
         public EventGraphObject getGraphObject() {
@@ -197,7 +201,7 @@ public class SlowGraphWalk {
         propagateOrder(targetNode, sourceNode.order);
         eventLogger.addListener(sourceNode, targetNode);
 
-        if (hasCalculated(sourceNode) && !hasCalculated(targetNode)) {
+        if (hasChanged(sourceNode) && !hasCalculated(targetNode)) {
             if (feature_correctForMissedFireOnNewEdge) {
                 // Oops, this new link would not be activated, it missed the source firing. Catch up
                 wakeup(target);
@@ -481,6 +485,9 @@ public class SlowGraphWalk {
     }
 
     public void wakeup(EventGraphObject graphObject) {
+        if (graphObject instanceof Wakeup) {
+            System.out.println("NODEPLOY");
+        }
         if (currentFiringNode != null && currentFiringNode.graphObject == graphObject) {
             if (currentFiringNode.foundCyclicCallAt < cycleCount) {  // only add it to cyclic fires once per cycle
                 // a self-wakeup, punt it as a cycle

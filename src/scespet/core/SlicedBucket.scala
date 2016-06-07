@@ -30,7 +30,7 @@ object SlicedBucket {
     }
   }
 
-  abstract class JoinValueRendezvous[B](bucketSlicer:SlicedBucket[B, _], bindings:List[(HasVal[_], (B => _ => Unit))], env:types.Env) extends types.MFunc {
+  abstract class JoinValueRendezvous[B](bucketSlicer:SlicedBucket[B, _], bindings:List[(HasVal[_], (B => _ => Unit))], env:types.Env) extends types.MFunc with Logged {
     var inputBindings = Map[EventGraphObject, InputBinding[B, _]]()
 
     // NOTE: any implemenation of calculate needs to consume the pendingInitialValue set. I may change classes to make this more obvious
@@ -43,7 +43,9 @@ object SlicedBucket {
       val trigger = in.getTrigger
       inputBindings += trigger -> inputBinding
       env.addListener(trigger, this)
-// NODEPLOY - I think that adding to the pending set and waking(this) solves the concept below
+      if (in.initialised != env.hasChanged(in.getTrigger)) {
+        logger.warning(s"NODEPLOY I wanted to replace in.initialised (${in.initialised}) with simply env.hasChanged (or maybe env.isInitialised)")
+      }
 //      if (env.hasChanged(trigger)) {
 //        // we missed the event
 //        // NODEPLOY - what is the best way to respond? We want to take the new value, and propagate on

@@ -207,9 +207,9 @@ class SliceAfterBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cellL
       firstBucket = false
       true
     } else {
-      if (firstBucket) {
+      if (firstBucket && exposeInitialValue) {
         if (cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
-          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?")
+          throw new UnsupportedOperationException("I can't expose an empty bucket, as the bucket itself has fired an event. I don't know if this inconsistency is bad semantics, ot simply irrelevant?. Cell: "+nextReduce)
         }
         firstBucket = false
         true

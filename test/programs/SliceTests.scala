@@ -7,12 +7,35 @@ import gsa.esg.mekon.SystemMode
 import gsa.esg.mekon.core.{InstantTreeBuildingGraphWalker, DefaultEnvironment}
 import gsa.esg.mekon.run.Mekon
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
-import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach}
+import org.scalatest.{Suite, OneInstancePerTest, BeforeAndAfterEach}
+import programs.SliceTests.Params
 import scespet.EnvTermBuilder
 import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, MutableBucketLifecycle}
 import scespet.core._
 import scespet.core.types._
 import scespet.util.{SliceAlign, ScespetTestBase}
+
+import scala.collection.immutable.IndexedSeq
+
+object SliceTests {
+
+  case class Params(
+                     /**
+                       * with 'old style' the bucket itself is a Function, and makes its own calls to env.addListener
+                       * This has complexities in relation to the bucket producing events that are concurrent with Slice (or have the wrong happens-before relation).
+                       * tricky.
+                       */
+                     sourceAIsOldStyle:Boolean,
+                     exposeEmpty:Boolean,
+                     doMutable:Boolean)
+
+  def apply(p:Params) = {
+    val t = new SliceTests
+    t.args = p
+    t.rootSuite = false
+    t
+  }
+}
 
 /**
  * A lower level test of SliceAfterBucket
@@ -26,14 +49,29 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 //  var graph : InstantTreeBuildingGraphWalker = _
   var graph : SlowGraphWalk = _
   var impl:EnvTermBuilder = _
+
   /**
-   * with 'old style' the bucket itself is a Function, and makes its own calls to env.addListener
-   * This has complexities in relation to the bucket producing events that are concurrent with Slice (or have the wrong happens-before relation).
-   * tricky.
-   */
-  var sourceAIsOldStyle = false
-  var exposeEmpty = false
-  var doMutable = true
+    * the following is some Scalatest Foo to use this test class with different args, but have a 'default arg' that allows me to
+    * right-click on a test and run it in intellij
+    */
+  var args: Params = Params(sourceAIsOldStyle = false, exposeEmpty = false, doMutable = true)
+  var rootSuite = true
+  val allArgs = {
+    val bools = IndexedSeq(true, false)
+    for (b1 <- bools; b2 <- bools; b3 <- bools) yield Params(b1, b2, b3)
+
+  }
+
+  override def testNames: Set[String] = if (rootSuite) Set.empty else super.testNames
+  override def suiteId: String = super.suiteId + (if (rootSuite) "" else args.toString)
+  override def suiteName: String = super.suiteId + args.toString
+  override def nestedSuites: IndexedSeq[Suite] = if (rootSuite) allArgs.map( p => SliceTests(p) ) else super.nestedSuites
+  override def newInstance: Suite with OneInstancePerTest = {
+    val instance = super.newInstance.asInstanceOf[SliceTests]
+    instance.args = this.args
+    instance.rootSuite = this.rootSuite
+    instance
+  }
 
   override protected def beforeEach() {
     super.beforeEach()
@@ -64,6 +102,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     env.shutDown("End", null)
     super.afterEach()
   }
+
+
   /**
    * sourceA is bound via old-style mekon graph wiring,
    * sourceB is bound via a binding a datasource onto a mutable method of the OldStyleFundAppend
@@ -74,6 +114,12 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
    * @return (sourceA, sourceB, slice)
    */
   def setupTestABSlice(reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign) = {
+    val sourceA :ValueFunc[Char] = new ValueFunc[Char](env)
+    val sourceB :ValueFunc[Char] = new ValueFunc[Char](env)
+    setupTestABSliceImpl(sourceA, sourceB, reduceType, expected, triggerAlign)
+  }
+
+  def setupTestABSliceImpl(sourceA :ValueFunc[Char], sourceB :ValueFunc[Char], reduceType:ReduceType, expected:List[List[Char]], triggerAlign:SliceAlign) = {
     type S = EventGraphObject                                                                     // NODEPLOY need to set up mutable tests
     type Y = OldStyleFuncAppend[Char]
     type OUT = OldStyleFuncAppend[Char]
@@ -82,36 +128,34 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
       override def toString: String = "SLICE trigger"
     }
-    val sourceA :ValueFunc[Char] = new ValueFunc[Char](env)
-    val sourceB :ValueFunc[Char] = new ValueFunc[Char](env)
-    val valueStreamForOldStyleEvents :ValueFunc[Char] = if (sourceAIsOldStyle) {
+    val valueStreamForOldStyleEvents :ValueFunc[Char] = if (args.sourceAIsOldStyle) {
       sourceA
     } else {
       new ValueFunc[Char](env) // just bind it to a no-op
     }
 
 
-    if (exposeEmpty && reduceType == ReduceType.LAST) {
+    if (args.exposeEmpty && reduceType == ReduceType.LAST) {
       logger.info("I'm not bothering with exposeEmpty==true for reduce=LAST right now. Skipping test body")
-    } else  if (exposeEmpty && reduceType == ReduceType.CUMULATIVE && sourceAIsOldStyle) {
+    } else  if (args.exposeEmpty && reduceType == ReduceType.CUMULATIVE && args.sourceAIsOldStyle) {
       logger.info("I'm not bothering with exposeEmpty==true for reduce=CUMULATIVE when using sourceAIsOldStyle. Skipping test body")
     } else {
       val aggOut = implicitly[AggOut[Y, OUT]]
       val sliceSpec = implicitly[SliceTriggerSpec[S]]
 
       var otherBindings = List[(HasVal[_], (Y => _ => Unit))]()
-      if (!sourceAIsOldStyle) {
+      if (!args.sourceAIsOldStyle) {
         otherBindings :+= sourceA -> ((y: Y) => (c: Char) => y.append(c))
       }
       otherBindings :+= sourceB -> ((y:Y) => (c:Char) => y.append(c))
-      val lifecycle = if (doMutable) {
+      val lifecycle = if (args.doMutable) {
         new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
       } else {
         new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
       }
       val groupBuilder = new UncollapsedGroupWithTrigger(null, slice, triggerAlign, env, sliceSpec)
 
-      val sliceBucket = groupBuilder.newBucket(reduceType, lifecycle, aggOut, otherBindings, exposeEmpty)
+      val sliceBucket = groupBuilder.newBucket(reduceType, lifecycle, aggOut, otherBindings, args.exposeEmpty)
 
       env.addListener(sliceBucket, new MFunc() {
         var i = 0
@@ -135,7 +179,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceAfter CUMULATIVE") {
-    val expected = if (exposeEmpty) {
+    val expected = if (args.exposeEmpty) {
       List("", "A", "AB", "ABC", /*slice*/"", "D" /*slice*/, ""/*slice*/).map(_.toCharArray.toList)
     } else {
       List("A", "AB", "ABC", "D").map(_.toCharArray.toList)
@@ -187,7 +231,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept sliceBefore CUMULATIVE") {
-    val expected = if (exposeEmpty) {
+    val expected = if (args.exposeEmpty) {
       // NOTE: exposeEmpty doesn't currently expose the initial bucket value. This is asymmetric, but a pain in the ass
       List("", "A", "AB", "ABC", /*slice*/ "", /* then add */ "D" , /*slice and add atomically*/ "E", /*initial empty slice*/"", /*final empty slice*/ "").map(_.toCharArray.toList)
     } else {
@@ -226,7 +270,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
 
   test("Concept sliceBefore LAST") { // cumulative slice before not implemented (is that still necessary?)
-    val expected = if (exposeEmpty) {
+    val expected = if (args.exposeEmpty) {
       List("ABC", /*slice*/ "D" , /*slice*/ "").map(_.toCharArray.toList)
     } else {
       List("ABC", /*slice*/ "D" /*slice, but empty bucket*/).map(_.toCharArray.toList)
@@ -298,7 +342,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept joined sources") {
-    val expected = if (exposeEmpty) {
+    val expected = if (args.exposeEmpty) {
       List("", "A", "AB", "ABC",  /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/ "", /*slice*/ "").map(_.toCharArray.toList)
     } else {
       List("A", "AB", "ABC",  /*slice*/ "DD", /*slice*/ "EE").map(_.toCharArray.toList)
@@ -338,7 +382,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("Concept joined sources LAST") {
-    val expected = if (exposeEmpty) {
+    val expected = if (args.exposeEmpty) {
       List("ABC", "DD", "EE", "").map(_.toCharArray.toList)
     } else {
       List("ABC", "DD", "EE").map(_.toCharArray.toList)
@@ -377,7 +421,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
   test("joined sources slice is data") {
-    val expected = if (exposeEmpty) {
+    val expected = if (args.exposeEmpty) {
       List("", "A", "AB", "ABC", /*slice*/ "", "DD", /*slice*/"", "EE", /*slice*/"").map(_.toCharArray.toList)
     } else {
       List("A", "AB", "ABC", "DD", "EE").map(_.toCharArray.toList)
@@ -439,6 +483,27 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
 
+  test("Initialise") {
+    val expected = List("AB").map(_.toCharArray.toList)
+    val reduceType = ReduceType.LAST
+
+    val a :ValueFunc[Char] = new ValueFunc[Char](env)
+    val b :ValueFunc[Char] = new ValueFunc[Char](env)
+
+    a.setValue('A')
+
+    val (sourceA, sourceB, slice) = setupTestABSliceImpl(a, b, reduceType, expected, SliceAlign.AFTER)
+    // link the slice to be coincident (and derived) from B
+    env.addListener(sourceB.trigger, slice)
+    env.graph.fire(a.trigger)
+
+    sourceA.setValue('B')
+    env.graph.fire(sourceA.trigger)
+
+    env.graph.fire(slice)
+
+  }
+
   class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
     var value = Seq[X]()
     env.addListener(in.trigger, this)
@@ -468,35 +533,18 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
      * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
      * NODEPLOY - rename to Close
      */
-    override def complete(): Unit = {
+    override def close(): Unit = {
       closed = true
-      if (sourceAIsOldStyle) {
+      if (args.sourceAIsOldStyle) {
         env.removeListener(in.trigger, this)
       }
+      super.close()
     }
   }
 }
 
-class  TestOldStyle extends SliceTests {
-  override protected def beforeEach(): Unit = {
-    super.beforeEach()
-    sourceAIsOldStyle = true
-    exposeEmpty = false
-  }
-}
-
-class  TestExposeEmpty extends SliceTests {
-  override protected def beforeEach(): Unit = {
-    super.beforeEach()
-    sourceAIsOldStyle = false
-    exposeEmpty = true
-  }
-}
 
 class TestExposeEmptyOldStyle extends SliceTests {
-  override protected def beforeEach(): Unit = {
-    super.beforeEach()
-    sourceAIsOldStyle = true
-    exposeEmpty = true
-  }
+  this.args = new Params(sourceAIsOldStyle = false, exposeEmpty = true, doMutable = true)
+  this.rootSuite = false
 }

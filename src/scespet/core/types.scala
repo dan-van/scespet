@@ -194,16 +194,12 @@ trait SelfAgg[-X] extends Agg[X] {
   */
 trait Bucket extends MFunc with AutoCloseable {
   def open():Unit
-  /**
-   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
-   * NODEPLOY - rename to Close
-   */
-  def complete(){}
-
+  def pause():Unit = {}
   /**
    * TODO: should I have distinct close, complete, reset? What happened to the idea of reset buckets?
+   * called after the last calculate() for this bucket. e.g. a median bucket could summarise and discard data at this point
    */
-  override def close(): Unit = complete()
+  override def close(): Unit = ()
 
 }
 
@@ -222,8 +218,13 @@ object KeyToSliceCellLifecycle {
 
   // PONDER: I could work out how to use implicits here, but I only envision two usecases right now:
   def getKeyToSliceLife[K,C](newCellF:K=>C, type_c:ClassTag[C]): KeyToSliceCellLifecycle[K, C] = {
-    if (classOf[Bucket].isAssignableFrom(type_c.runtimeClass)) {
-      // I don't know what I'm doing....
+    val forceMutableBucket = classOf[Bucket].isAssignableFrom(type_c.runtimeClass)
+    getKeyToSliceLife[K,C](newCellF, type_c, forceMutableBucket)
+  }
+
+  def getKeyToSliceLife[K,C](newCellF:K=>C, type_c:ClassTag[C], forceMutableBucket:Boolean): KeyToSliceCellLifecycle[K, C] = {
+    if (forceMutableBucket) {
+      // not particularly elegant...
       type CB = C with Bucket
       return new KeyBucketImplicit[K,CB](newCellF.asInstanceOf[K=>CB], type_c.asInstanceOf[ClassTag[CB]]).asInstanceOf[KeyToSliceCellLifecycle[K,C]]
     } else {

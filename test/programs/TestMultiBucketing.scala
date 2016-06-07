@@ -9,6 +9,7 @@ import collection.JavaConversions._
 import scespet.core.types.MFunc
 import scespet.EnvTermBuilder
 import scala.collection.mutable
+import scala.reflect.ClassTag
 
 
 /**
@@ -25,6 +26,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   var env:SimpleEnv = _
   var impl:EnvTermBuilder = _
   var exposeEmpty = false
+  var doMutable = true
 
   val postRunChecks = collection.mutable.Buffer[() => Unit]()
   override protected def beforeEach() {
@@ -64,12 +66,13 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   // an 'MFunc' which tracks how many x, y, or both events have occured
 //  class XYCollector() extends Bucket with OutTrait[XYCollector] with CellAdder[Int] {
-  class XYCollector() extends MFunc with AutoCloseable with CellAdder[Int] with Cloneable {
+  class XYCollector() extends Bucket with CellAdder[Int] with Cloneable {
     var firstX:Int = -1
     var lastX:Int = -1
     var xChanged ,yChanged = 0
     var countX, countY, countBoth = 0
     var done = false
+    var paused = true
 
     open()
 
@@ -82,14 +85,15 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
       countY = 0
       countBoth = 0
       done = false
+      paused = false
     }
 
+    override def pause() = paused = true
 
-    override def close(): Unit = complete()
-
-    def complete() {
+    override def close() {
       if (done) throw new AssertionError("double call to done: "+this)
       done = true
+      super.close()
     }
 
     def calculate(): Boolean = {
@@ -145,8 +149,8 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     override def clone(): XYCollector = super.clone().asInstanceOf[XYCollector]
   }
 
-  ignore("bucket sliced reduce pre") {
-    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last()
+  test("bucket sliced reduce pre") {
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last(exposeEmpty = exposeEmpty)
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(11, 11, 5), recombinedEventCount)
 
@@ -166,10 +170,15 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
                         {val v = new XYCollector; v.firstX = 23; v.lastX = 25; v.countX = 1; v.countBoth = 1; v.done=true; v}  // for i 22 -> 26, there are 3 even numbers and 2 (even & multiple of 5)
                       )
     new StreamTest("Odd", expectedOdd, oddBuckets)
+    env.run(11)
+    // this is the first slice:
+    env.run(1)
+    // and the rest
+    env.run()
   }
 
-  ignore("bucket sliced reduce post") {
-    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).last()
+  test("bucket sliced reduce post") {
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).last(exposeEmpty = exposeEmpty)
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(12, 11, 4), recombinedEventCount)
 
@@ -237,7 +246,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
 
   ignore("bucket fold, slice before") { //See docs on SliceBeforeBucket for why I can't support this yet
-    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last()
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last(exposeEmpty = exposeEmpty)
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     new StreamTest("Recombined count", (0 to 26), recombinedCounter)
 
@@ -254,7 +263,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
   // fails due to missing event after slice
   test("bucket fold, slice after") {
-    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).all()
+    val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.AFTER).all(exposeEmpty = exposeEmpty)
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     new StreamTest("Recombined count", (0 to 26), recombinedCounter)
 
@@ -286,8 +295,8 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
     private def mySliceDef(i:Int) = {
       val doIt = i > 0 && i % 11 == 0
-      if (doIt)
-        println("Slice!")
+      if (doIt) {
+        println("Slice!") }
       doIt
     }
     lazy val sliceOn:MacroTerm[Int] = counter.filter(mySliceDef)
@@ -304,7 +313,12 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
     }
     def slicedStream(align:SliceAlign):GroupedTerm2[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.group(sliceOn, align)
-      grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
+      val collapse: GroupedTerm2[String, XYCollector, XYCollector] = {
+//        grouped.collapseK(k => new XYCollector)
+        val cellGen = KeyToSliceCellLifecycle.getKeyToSliceLife[String, XYCollector]((k:String) => new XYCollector, implicitly[ClassTag[XYCollector]], forceMutableBucket = doMutable)
+        grouped._collapse[XYCollector, XYCollector](cellGen, implicitly[XYCollector => CellAdder[Int]], implicitly[AggOut[XYCollector, XYCollector]])
+      }
+      collapse.bind(div5)(_.addY)
     }
     def windowedStream():GroupedTerm2[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.window(windowStream)
@@ -314,7 +328,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
 
   test("bucket windows reduce") {
-    val stream = new generateCounterAndPartialBucketDef(26).windowedStream().last()
+    val stream = new generateCounterAndPartialBucketDef(26).windowedStream().last(exposeEmpty = exposeEmpty)
 
     // This is similar to slice_pre - if the window close event is atomic with a value for the bucket, that value is deemed to be not-in the bucket
     // i.e. close comes first
@@ -337,7 +351,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
 
 
   test("bucket window fold") {
-    val stream = new generateCounterAndPartialBucketDef(26).windowedStream().last()
+    val stream = new generateCounterAndPartialBucketDef(26).windowedStream().last(exposeEmpty = exposeEmpty)
     val recombinedCounter = stream.mapVector(v => {val V = v.getValues.map(_.lastX); if (V.isEmpty) -1 else V.max})
     val counterExpectations = (0 to 10) ++ Seq(10) ++ (22 to 26)
     new StreamTest("Recombined count", counterExpectations, recombinedCounter)
