@@ -36,11 +36,18 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
   private val cellIsFunction :Boolean = classOf[MFunc].isAssignableFrom( cellLifecycle.C_type.runtimeClass )
   private var nextReduce : Y = _
   var hasExposedCompletedBucket = false
+  private var closedReduce : Y = _
+  private var hasExposedValueForNextReduce = false
+  private var hasExposedValueForClosedReduce = false
+  private var bucketHasValue = false
+  private var closedBucketHasValue = false
+  private var firstBucket = true
 
 
   // most of the work is actually handled in this 'rendezvous' class
   private val joinValueRendezvous = new JoinValueRendezvous[Y](this, bindings, env) {
     override def nextReduce: Y = SliceBeforeBucket.this.nextReduce
+    var addedValueToBucket = false
 
     def calculate(): Boolean = {
       val doneSlice = env.hasChanged(sliceHandler)
@@ -52,11 +59,28 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
         // this covers the case where we have done the bucket-close event, but haven't yet processed the self-wakeup to open a new bucket
         assignNewReduce()
         hasExposedCompletedBucket = false
+        ??? // this block should already be covered after recent changes
       }
 
 
       import collection.JavaConversions.iterableAsScalaIterable
-      var addedValueToBucket = false
+      if (firstBucket && exposeInitialValue && emitType == ReduceType.CUMULATIVE) {
+        // we are forced to emit an empty bucket, but we may have inputs that want to feed into the backet.
+        // bit of a hack, as I'm not actually capturing the values from the inputs, merely assuming I can apply them in
+        // a subsequent cycle for the same effect (after we have exposed the empty state)
+        for (bind <- bindings) {
+          val bindingInput = bind._1
+          if (env.hasChanged(bindingInput.getTrigger)) {
+            logger.info("Capturing deferred event from "+bindingInput)
+            pendingInitialValue :+= bindingInput
+          }
+        }
+        env.wakeupThisCycle(this)
+        return true
+      }
+
+
+      addedValueToBucket = false
       if (pendingInitialValue.nonEmpty) {
         for (in <- pendingInitialValue) {
           if (!env.hasChanged(in.getTrigger)) {
@@ -89,12 +113,16 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
       }
 
       val fireBucketCell = addedValueToBucket || doneSlice
+      // the rendezvous fires the nextReduce value to notify it of additions
       fireBucketCell
     }
   }
 
   def assignNewReduce() :Unit = {
     val newCell = cellLifecycle.newCell()
+    bucketHasValue = false
+    hasExposedValueForNextReduce = false
+
     // tweak the listeners:
     if (cellIsFunction) {
       if (nextReduce != null && env.hasChanged(nextReduce)) {
@@ -102,17 +130,16 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
       }
       // watch out for the optimisation where the lifecycle re-uses the current cell
       if (newCell != nextReduce) {
-        if (nextReduce != null) {
-          env.removeListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-          // listen to it so that we propagate value updates to the bucket
-          env.removeListener(nextReduce, this)
-        }
+          // assigning newReduce is triggered by the slice listener, which comes before the actual SliceBeforeSimpleCell instance.
+          // listener removal will be done in the main calculate block so that we can cross-check than no unexpected events have fired
+          closedReduce = nextReduce
+          nextReduce = newCell
 
-        nextReduce = newCell
-        // join values trigger the bucket
-        env.addListener(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
-        // listen to it so that we propagate value updates to the bucket
-        env.addListener(nextReduce, this)
+            nextReduce = newCell
+          // join values should be come before the reduce can fire
+          env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          // listen to it so that we propagate value updates to the bucket
+          env.addListener(nextReduce, this)
       }
     } else {
       nextReduce = newCell
@@ -130,6 +157,7 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
       if (sliceTriggered()) {
         closeCurrentBucket()
         // we can't open a new bucket just yet, as we need to expose the state of this closed bucket first.
+        // nodeploy should we assignNewEduce?
       }
       fireCount += 1
       true
@@ -154,6 +182,7 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
 
   // NODPLOY maybe 'this' should actually be the JoinValueRendezvous?
   env.addListener(joinValueRendezvous, this)
+  if (exposeInitialValue && emitType == ReduceType.CUMULATIVE) env.wakeupThisCycle(joinValueRendezvous)
 
 
   private def closeCurrentBucket() {
@@ -162,16 +191,20 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
     }
     cellLifecycle.closeCell(nextReduce)
     completedReduce = cellOut.out(nextReduce)
+    closedBucketHasValue = bucketHasValue
+    hasExposedValueForClosedReduce = hasExposedValueForNextReduce
+    hasExposedValueForNextReduce = false
   }
 
 
+  private var justClosedBucket = false
   private var completedReduce : OUT = _
 
   def value:OUT = {
-    if (emitType == ReduceType.CUMULATIVE)
-      cellOut.out(nextReduce)
-    else
+    if (emitType == ReduceType.LAST)
       completedReduce
+    else
+      cellOut.out(nextReduce)
   }
 
   if (emitType == ReduceType.LAST) {
@@ -214,6 +247,7 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
           s" Please either change the slicing behaviour, or make CellOut generate immutable snaps.")
       }
     }
+    val sliceFired = env.hasChanged(sliceHandler)
 
     if (hasExposedCompletedBucket && reduceFired) {
       throw new UnsupportedOperationException("The slice was fired, but the bucket fired afterwards before we could call newCell., Can you use sliceAfter, or make the Bucket stop doing its own listener wiring?: "+nextReduce)
@@ -235,10 +269,26 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
     } else {
       false
     }
+    // NODEPLOY - in SliceBeforeCell we close the cell here, do we need to call reduce.pause now?
+    val cellFired = cellIsFunction && env.hasChanged(nextReduce)
+    val addedValueToCell = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket
 
-    val fire = bucketFire || sliceFire
-    if (fire)
-      initialised = true  // belt and braces initialiser
+    if (cellFired || addedValueToCell) {
+      bucketHasValue = true
+    }
+
+    val fire = if (emitType == ReduceType.CUMULATIVE) {
+      // in CUMULAIVE mode, only fire an even on a slice fire if the bucket is empty and we're supposed to be exposing empty values
+      val newBucketOrBucketClosed = sliceFired || firstBucket
+      addedValueToCell || cellFired || (newBucketOrBucketClosed && exposeInitialValue && !bucketHasValue)
+    } else {
+      // in LAST mode, expose a value on slice.
+      sliceFired && (closedBucketHasValue || exposeInitialValue)
+    }
+    if (fire) {
+      firstBucket = false
+      initialised = true // belt and braces initialiser // NODEPLOY - is initialised now dead as a concept?
+    }
     return fire
   }
 

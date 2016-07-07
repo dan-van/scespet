@@ -49,11 +49,15 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     * the following is some Scalatest Foo to use this test class with different args, but have a 'default arg' that allows me to
     * right-click on a test and run it in intellij
     */
-  var args: Params = Params(sourceAIsOldStyle = false, exposeEmpty = false, doMutable = true)
+  var args: Params = Params(sourceAIsOldStyle = false, exposeEmpty = false, doMutable = false)
   var rootSuite = true
   val allArgs = {
     val bools = IndexedSeq(true, false)
-    for (b1 <- bools; b2 <- bools; b3 <- bools) yield Params(b1, b2, b3)
+    for (b1 <- bools;
+         b2 <- bools;
+//         b3 <- bools
+         b3 <- Seq(false)    // PONDER: I think I'm going to drop support for 'Mutable Bucket'
+    ) yield Params(b1, b2, b3)
 
   }
 
