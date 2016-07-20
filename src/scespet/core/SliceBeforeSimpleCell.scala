@@ -163,7 +163,7 @@ class SliceBeforeSimpleCell[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, 
 
   private def closeCurrentBucket() {
     if (cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])) {
-      throw new UnsupportedOperationException("Reduce cell fired at the same time as trying to close it")
+      throw new UnsupportedOperationException("Reduce cell " + nextReduce + " fired at the same time as trying to close it")
     }
     cellLifecycle.closeCell(nextReduce)
     completedReduce = cellOut.out(nextReduce)
