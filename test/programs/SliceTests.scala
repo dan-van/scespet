@@ -132,6 +132,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
       otherBindings :+= sourceB -> ((y:Y) => (c:Char) => y.append(c))
       val lifecycle = if (args.doMutable) {
         new MutableBucketLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
+        throw new AssertionError("I want to replace the concept of mutable buckets")
       } else {
         new CellSliceCellLifecycle[OldStyleFuncAppend[Char]](() => new OldStyleFuncAppend[Char]( valueStreamForOldStyleEvents, env))
       }

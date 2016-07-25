@@ -136,7 +136,7 @@ object SliceCellLifecycle {
       if (classOf[MFunc].isAssignableFrom(C_type.runtimeClass)) {
         // it must also be closeable:
         if (!classOf[AutoCloseable].isAssignableFrom(C_type.runtimeClass)) {
-          throw new IllegalArgumentException(C_type.runtimeClass + " Must be 'Function with AutoCloseable' ")
+          throw new IllegalArgumentException(C_type.runtimeClass + " is a Function, therefore it must also implement AutoCloseable' ")
         }
         true
       } else {

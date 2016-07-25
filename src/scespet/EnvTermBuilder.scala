@@ -51,10 +51,38 @@ class EnvTermBuilder() extends DelayedInit {
     return new MacroTerm[X](env)(data)
   }
 
+  @Deprecated // rename to asStream?
   def query[X](newHasVal :(types.Env) => HasVal[X]) : Term[X] = {
     val hasVal = newHasVal(env)
     asStream(hasVal)
   }
+
+  /**
+    * this is a richer stream build that allows the stream definition to be an MFunc with setters bound to other streams, and possible slicing operations
+    * {@see asStream} is equivalent (though more efficient) to buildStream(newCellFunc).all()
+    * PONDER: I think I could evaporate this implementation detail and have a single buildStream method.
+    *
+    * @param newCellFunc
+    * @param aggOut
+    * @param yType
+    * @tparam Y
+    * @tparam OUT
+    * @return
+    */
+  def buildStream[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y, OUT], yType:ClassTag[Y]) : ResettableBucketStreamBuild[Y, OUT] = {
+    if (classOf[Bucket].isAssignableFrom(yType.runtimeClass)) {
+      // create an AggOut that will snap the bucket on lifecycle close. ensure that the aggOut is an immutable snap.
+      // this means that it will be then safe to make a reset lifecycle
+//      val lifecycle = new MutableBucketLifecycle[Y](() => newCellFunc)(yType)
+      val lifecycle = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
+      new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
+      throw new UnsupportedOperationException("I want to change how I bridge to resettable MFunc")
+    } else {
+      val lifecycle = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
+      new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
+    }
+  }
+
 
   def asVector[X](elements:Iterable[X]) :VectTerm[X,X] = {
     import scala.collection.JavaConverters._
@@ -96,27 +124,8 @@ class EnvTermBuilder() extends DelayedInit {
 
 
   }
-
-  // NODEPLOY support a verb that gives reset mutation on buckets, and delete this?
-  def streamOf2[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y,OUT], yType:ClassTag[Y]) : PartialBuiltSlicedBucket[Y, OUT] = {
-    //    if (data.isInstanceOf[EventSource]) {
-    //      env.registerEventSource(data.asInstanceOf[EventSource])
-    //    }
-//    val cellLifeCycle:SliceCellLifecycle[Y] = new BucketCellLifecycle[Y] {
-//      override def newCell(): Y = newCellFunc
-//    }
-    ???
-//    val group = new UncollapsedGroupWithTrigger[](null, )
-//    return new PartialBuiltSlicedBucket[Y, OUT](aggOut, cellLifeCycle, env)
-  }
-
-  def bucketStream[Y <: Bucket, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y, OUT], yType:ClassTag[Y]) : ResettableBucketStreamBuild[Y, OUT] = {
-    /* This is a 'slicer' that actually just calls open and close on the same bucket instance */
-    val reset = new MutableBucketLifecycle[Y](() => newCellFunc)(yType)
-    new ResettableBucketStreamBuild[Y, OUT](aggOut, reset, yType, env)
-  }
 }
-
+  // NODEPLOY rename me - no longer to do with buckets (maybe something to do with stream generators?
   class ResettableBucketStreamBuild[Y, OUT](aggOut:AggOut[Y, OUT],cellReset: SliceCellLifecycle[Y], yType:ClassTag[Y], val env:Environment) {
     private def noreset() :PartialBuiltSlicedBucket[Y, OUT] = reset[Any](null, triggerAlign = AFTER)(SliceTriggerSpec.TERMINATION)
 

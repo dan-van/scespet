@@ -312,16 +312,16 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
         }
       })
     }
-    def slicedStream(align:SliceAlign):GroupedTerm2[String, XYCollector, XYCollector] = {
+    def slicedStream(align:SliceAlign):AggregationTerm[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.group(sliceOn, align)
-      val collapse: GroupedTerm2[String, XYCollector, XYCollector] = {
+      val collapse: AggregationTerm[String, XYCollector, XYCollector] = {
 //        grouped.collapseK(k => new XYCollector)
         val cellGen = KeyToSliceCellLifecycle.getKeyToSliceLife[String, XYCollector]((k:String) => new XYCollector, implicitly[ClassTag[XYCollector]], forceMutableBucket = doMutable)
         grouped._collapse[XYCollector, XYCollector](cellGen, implicitly[XYCollector => CellAdder[Int]], implicitly[AggOut[XYCollector, XYCollector]])
       }
       collapse.bind(div5)(_.addY)
     }
-    def windowedStream():GroupedTerm2[String, XYCollector, XYCollector] = {
+    def windowedStream():AggregationTerm[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.window(windowStream)
       grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
     }

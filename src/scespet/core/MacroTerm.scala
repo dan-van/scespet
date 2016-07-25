@@ -390,10 +390,7 @@ class PartialBuiltSlicedBucket[Y, OUT](uncollapsed:UncollapsedGroup[_], cellOut:
   }
 
 
-  // NODEPLOY - I think this would be better named as 'reset', once you already have a stream->reducer binding, talking about grouping is confusing.
-  //NODEPLOY - think:
-  // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
-  // this avoids needing a new slice trigger definition each slice.
+  // NODEPLOY - delete this method:
   def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialBuiltSlicedBucket[Y, OUT] = {
     // NODEPLOY move calls to this to be of the stream.group(slice).collapse pattern
     ???

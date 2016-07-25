@@ -1,5 +1,6 @@
 package programs
 
+import gsa.esg.mekon.core.Function
 import org.junit.runner.RunWith
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit, JUnitRunner}
 import org.scalatest.{OneInstancePerTest, BeforeAndAfterEach, FunSuite}
@@ -70,8 +71,8 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     override def add(x: X): Unit = value :+= x
   }
 
-  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket with OutTrait[Seq[X]] {
-    var value = Seq[X]()
+  class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends MFunc with AutoCloseable with OutTrait[Seq[X]] {
+    var value: Seq[X] = Nil
     var lastSize = 0
     env.addListener(in.trigger, this)
     override def calculate(): Boolean = {
@@ -89,7 +90,9 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
       value :+= x
     }
 
-    override def open(): Unit = value = Nil
+    override def close(): Unit = {
+      env.removeListener(in.trigger, this)
+    }
   }
 
   class BindableAppendFunc[X] extends Bucket with OutTrait[Seq[X]] {
@@ -107,7 +110,8 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
 
   /**
    * given "abc", we return ("a","ab","abc")
-   * @param dat
+    *
+    * @param dat
    * @return
    */
   def generateAppendScan(dat:Seq[Char]):Seq[Seq[Char]] = {
@@ -231,25 +235,25 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
 
   // -------------- Pure old-style function streams
   test("MFunc scan") {
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).all()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).all()
     val expected = generateAppendScan(data)
     new StreamTest("scan", expected, out)
   }
 
   test("MFunc reduce") {
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).last()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).last()
     val expected = List(data.foldLeft(Seq[Char]())(_ :+ _))
     new StreamTest("scan", expected, out)
   }
 
   test("MFunc grouped scan") {
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).all()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).all()
     val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     new StreamTest("scan", expected, out)
   }
 
   test("MFunc grouped reduce") {
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).last()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).last()
     val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
     new StreamTest("reduce", expected, out)
   }
@@ -261,7 +265,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
     val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).all()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).all()
     val expected :List[Seq[Char]] = List(
       "Aa",
       "Aab",
@@ -285,7 +289,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
     val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).last()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).bind(alternateUppers)(_.append).last()
     val expected = List("AabCcdEefGghIijKk".toCharArray.toSeq)
     new StreamTest("scan", expected, out)
   }
@@ -296,7 +300,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
     val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).bind(alternateUppers)(_.append).all()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).bind(alternateUppers)(_.append).all()
     val expected = List(
       "Aa",
       "Aab",
@@ -320,7 +324,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
       override def apply(v1: Char): Boolean = { accept = !accept; accept }
     }
     val alternateUppers = impl.asStream(stream.input).filter( alternate ).map( _.toUpper )
-    val out = impl.bucketStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).bind(alternateUppers)(_.append).last()
+    val out = impl.buildStream(new OldStyleFuncAppend[Char](stream.input, env)).reset(3.events).bind(alternateUppers)(_.append).last()
     val expected = List(
       "AabCc",
            "dEef",
