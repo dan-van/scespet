@@ -335,9 +335,9 @@ class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGro
 //  def reduce[Y <: Cell](newBFunc: => Y) :Term[Y#OUT] = ???
 //  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-  val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
-  val exposeEmpty :Boolean = false
-  _collapse[Y,O](lifecycle, adder, yOut).last(exposeEmpty)
+    val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
+    val exposeEmpty :Boolean = false
+    _collapse[Y,O](lifecycle, adder, yOut).last(exposeEmpty)
   }
 
   def scan[Y, O](newBFunc: => Y, exposeEmpty :Boolean = false)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {

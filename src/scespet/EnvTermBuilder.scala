@@ -71,12 +71,11 @@ class EnvTermBuilder() extends DelayedInit {
     */
   def buildStream[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y, OUT], yType:ClassTag[Y]) : ResettableBucketStreamBuild[Y, OUT] = {
     if (classOf[Bucket].isAssignableFrom(yType.runtimeClass)) {
-      // create an AggOut that will snap the bucket on lifecycle close. ensure that the aggOut is an immutable snap.
-      // this means that it will be then safe to make a reset lifecycle
+      // NODEPLOY
+      // For 'bucket' I think that we could create a lifecycle that creates wrapper objects per slice with a shared underlying bucket instance
 //      val lifecycle = new MutableBucketLifecycle[Y](() => newCellFunc)(yType)
-      val lifecycle = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
-      new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
-      throw new UnsupportedOperationException("I want to change how I bridge to resettable MFunc")
+//      new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
+      throw new UnsupportedOperationException("I think I can delete 'bucket'. Any requirement for mutable reset can be implmented via wrapping with a delegating MFunc & AutoClose")
     } else {
       val lifecycle = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
       new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
