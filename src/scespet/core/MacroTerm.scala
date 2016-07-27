@@ -276,7 +276,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = adder(b)(x)
     }
-    val lifecycle :SliceCellLifecycle[B] = new MutableBucketLifecycle[B](() => newBFunc)(type_b)
+    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](() => newBFunc)(type_b)
     groupedTerm._collapse[B, OUT](lifecycle, cellAdd, aggOut)
   }
 }

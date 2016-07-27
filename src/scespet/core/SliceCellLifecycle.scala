@@ -150,6 +150,8 @@ object SliceCellLifecycle {
 
 
   class MutableBucketLifecycle[B <: Bucket](newCellFunc: () => B)(implicit val b_type:ClassTag[B]) extends SliceCellLifecycle[B] {
+    throw new AssertionError("I want to replace the concept of mutable buckets")
+
     lazy val cell = newCellFunc()
 
     override def C_type: ClassTag[B] = b_type
