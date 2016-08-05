@@ -96,7 +96,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
         def fire(evt:EventGraphObject): Unit = {
           val lock = !eventGraph.isCurrentThreadWithinFire
           if (lock) eventGraph.acquireFireLock(evt)
-          eventGraph.fire(evt)
+          eventGraph.fireNodeAndChildren(evt)
           if (lock) eventGraph.releaseFireLock(evt)
         }
         def releaseFireLock(evt:EventGraphObject): Unit = eventGraph.releaseFireLock(evt)
@@ -143,11 +143,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     type S = EventGraphObject                                                                     // NODEPLOY need to set up mutable tests
     type Y = OldStyleFuncAppend[Char]
     type OUT = OldStyleFuncAppend[Char]
-    val slice = new MFunc() {
-      override def calculate(): Boolean = true
-
-      override def toString: String = "SLICE trigger"
-    }
+    val slice = new SliceFire()
     val valueStreamForOldStyleEvents :ValueFunc[Char] = if (args.sourceAIsOldStyle) {
       sourceA
     } else {
@@ -215,7 +211,7 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     //SLICE concurrent with sourceA firing C. sourceA.setValue has queued up a 'wakeup' so is concurrent with slice
     // . SliceAfter means C is added before the slice takes effect.
     setAndFireSlice(sourceA, 'C', slice)
-
+//NODEPLOY     IN THE LINE ABOVE, SOURCE A GETS UNLINKED!
     setAndFire(sourceA, 'D')
 
     // a slice will expose and empty bucket
@@ -277,15 +273,15 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
   }
 
 
-  def fireSlice(slice: MFunc with Object {def toString: String; def calculate(): Boolean}): Unit = {
+  def fireSlice(slice: SliceFire): Unit = {
     graph.acquireFireLock(null)
     graph.fire(slice)
     graph.releaseFireLock(null)
   }
 
-  def setAndFireSlice(valueContainer: ValueFunc[Char], newVal: Char, sliceFunc: MFunc with Object {def toString: String; def calculate(): Boolean}): Unit = {
+  def setAndFireSlice(valueContainer: ValueFunc[Char], newVal: Char, sliceFunc: SliceFire): Unit = {
     graph.acquireFireLock(null)
-    valueContainer.setValue(newVal)
+    sliceFunc.enqueueSetter(valueContainer, newVal)
     graph.fire(sliceFunc)
     graph.releaseFireLock(null)
   }
@@ -332,9 +328,10 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     val expected = List("A", /*slice*/ "BC").map(_.toCharArray.toList)
     val reduceType = ReduceType.LAST
     val (sourceA, sourceB, slice) = setupTestABSlice(reduceType, expected, SliceAlign.BEFORE)
-    val sliceAndSourceA = new MFunc() {
+    val sliceAndSourceA = new SliceFire() {
       var doSlice = false
       override def calculate(): Boolean = {
+        super.calculate()
         val ret = doSlice
         doSlice = false
         ret
@@ -454,6 +451,11 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     // link the slice to be coincident (and derived) from B
     env.addListener(sourceB.trigger, slice)
 
+    val concurentFirer: SliceFire = new SliceFire()
+    env.addOrdering(concurentFirer, sourceA.trigger)
+    env.addOrdering(concurentFirer, sourceB.trigger)
+
+
     setAndFire(sourceA, 'A')
 
     setAndFire(sourceA, 'B')
@@ -462,15 +464,14 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     setAndFire(sourceB, 'C')
 
     // fire concurrently both inputs and the slice
-    sourceA.setValue('D')
-    setAndFire(sourceB, 'D')
+    concurentFirer.enqueueSetter(sourceA, 'D')
+    concurentFirer.enqueueSetter(sourceB, 'D')
+    fireSlice(concurentFirer)
 
     // fire concurrently both inputs, and the slice event
-    graph.acquireFireLock(null)
-    sourceA.setValue('E')
-    sourceB.setValue('E')
-    graph.fire(sourceB)
-    graph.releaseFireLock(null)
+    concurentFirer.enqueueSetter(sourceA, 'E')
+    concurentFirer.enqueueSetter(sourceB, 'E')
+    fireSlice(concurentFirer)
 
   }
 
@@ -481,6 +482,11 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     // link the slice to be coincident (and derived) from B
     env.addListener(sourceB.trigger, slice)
 
+    val concurentFirer: SliceFire = new SliceFire()
+    env.addOrdering(concurentFirer, sourceA.trigger)
+    env.addOrdering(concurentFirer, sourceB.trigger)
+
+
     setAndFire(sourceA, 'A')
 
     setAndFire(sourceA, 'B')
@@ -489,16 +495,14 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
     setAndFire(sourceB, 'C')
 
     // fire concurrently both inputs and the slice
-    sourceA.setValue('D')
-    setAndFire(sourceB, 'D')
+    concurentFirer.enqueueSetter(sourceA, 'D')
+    concurentFirer.enqueueSetter(sourceB, 'D')
+    fireSlice(concurentFirer)
 
     // fire concurrently both inputs, and the slice event
-    graph.acquireFireLock(null)
-    sourceA.setValue('E')
-    sourceB.setValue('E')
-    graph.fire(sourceB)
-    graph.releaseFireLock(null)
-
+    concurentFirer.enqueueSetter(sourceA, 'E')
+    concurentFirer.enqueueSetter(sourceB, 'E')
+    fireSlice(concurentFirer)
   }
 
 
@@ -560,6 +564,22 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
       }
       super.close()
     }
+  }
+
+  class SliceFire extends MFunc {
+    private var actions :List[ (ValueFunc[Any], Any) ] = List()
+    def enqueueSetter[X](valueContainer:ValueFunc[X], newVal:X): Unit = {
+      actions = actions :+ (valueContainer.asInstanceOf[ValueFunc[Any]] -> newVal)
+    }
+    override def calculate(): Boolean = {
+      for ((container, newVal) <- actions) {
+        container.setValue(newVal)
+      }
+      actions = Nil
+      true
+    }
+
+    override def toString: String = "SLICE trigger"
   }
 }
 
