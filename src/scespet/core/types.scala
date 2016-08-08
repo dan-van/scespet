@@ -225,8 +225,10 @@ object KeyToSliceCellLifecycle {
   def getKeyToSliceLife[K,C](newCellF:K=>C, type_c:ClassTag[C], forceMutableBucket:Boolean): KeyToSliceCellLifecycle[K, C] = {
     if (forceMutableBucket) {
       // not particularly elegant...
-      type CB = C with Bucket
-      return new KeyBucketImplicit[K,CB](newCellF.asInstanceOf[K=>CB], type_c.asInstanceOf[ClassTag[CB]]).asInstanceOf[KeyToSliceCellLifecycle[K,C]]
+//      type CB = C with Bucket
+//      return new KeyBucketImplicit[K,CB](newCellF.asInstanceOf[K=>CB], type_c.asInstanceOf[ClassTag[CB]]).asInstanceOf[KeyToSliceCellLifecycle[K,C]]
+      throw new UnsupportedOperationException("I'm unpicking bucket support")
+      // PONDER: why not use  scespet.core.SliceCellLifecycle.buildLifecycle( () => newBFunc ,yType ) ?
     } else {
       return new KeyCellImplicit[K,C](newCellF, type_c)
     }

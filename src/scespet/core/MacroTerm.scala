@@ -268,15 +268,16 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
    * bindTo is a mechanism to allow easier interop with lower-level mutable streams and existing business logic.
    * e.g. stats collectors that work on having mutator methods called from price and trade events, and having 'open' and 'close'
    * to mark bucket boundaries
-   * NOTE: bucket is instantiated per key, but thereafer is mutated, unlike calls to scan and reduce
+   * NOTE: B is instantiated per key, and 'adder' is responsible for mutating B with input values from stream[X]
    */
-  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B,OUT] = {
+  def bindTo[B <: MFunc, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B,OUT] = {
     val groupedTerm = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION)
 
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = adder(b)(x)
     }
-    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](() => newBFunc)(type_b)
+
+    val lifecycle = scespet.core.SliceCellLifecycle.buildLifecycle( () => newBFunc, type_b )
     groupedTerm._collapse[B, OUT](lifecycle, cellAdd, aggOut)
   }
 }
@@ -332,21 +333,16 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[_], sliceSpec:S, trigger
  * NODEPLOY make this API symmetric with {@link scespet.core.GroupedVectTerm}
  */
 class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGroup[X], val env:types.Env) {
-//  def reduce[Y <: Cell](newBFunc: => Y) :Term[Y#OUT] = ???
-//  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
+
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
-    val exposeEmpty :Boolean = false
+    val lifecycle :SliceCellLifecycle[Y] = scespet.core.SliceCellLifecycle.buildLifecycle( () => newBFunc ,yType )
+    val exposeEmpty :Boolean = false //NODEPLOY ponder - have I forgotten to wire this up?
     _collapse[Y,O](lifecycle, adder, yOut).last(exposeEmpty)
   }
 
   def scan[Y, O](newBFunc: => Y, exposeEmpty :Boolean = false)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
+    val lifecycle :SliceCellLifecycle[Y] = scespet.core.SliceCellLifecycle.buildLifecycle( () => newBFunc ,yType )
     _collapse[Y,O](lifecycle, adder, yOut).all(exposeEmpty)
-  }
-
-  def collapseWith2[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
-    collapseWith[B,OUT](()=>newBFunc)(addFunc)(aggOut, type_b)
   }
 
   def collapseWith[B, OUT](newBFunc: () => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {

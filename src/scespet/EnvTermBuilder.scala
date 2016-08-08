@@ -70,16 +70,8 @@ class EnvTermBuilder() extends DelayedInit {
     * @return
     */
   def buildStream[Y <: MFunc, OUT](newCellFunc: => Y)(implicit aggOut:AggOut[Y, OUT], yType:ClassTag[Y]) : ResettableBucketStreamBuild[Y, OUT] = {
-    if (classOf[Bucket].isAssignableFrom(yType.runtimeClass)) {
-      // NODEPLOY
-      // For 'bucket' I think that we could create a lifecycle that creates wrapper objects per slice with a shared underlying bucket instance
-//      val lifecycle = new MutableBucketLifecycle[Y](() => newCellFunc)(yType)
-//      new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
-      throw new UnsupportedOperationException("I think I can delete 'bucket'. Any requirement for mutable reset can be implmented via wrapping with a delegating MFunc & AutoClose")
-    } else {
-      val lifecycle = new CellSliceCellLifecycle[Y](() => newCellFunc)(yType)
-      new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
-    }
+    val lifecycle = scespet.core.SliceCellLifecycle.buildLifecycle(() => newCellFunc, yType)
+    new ResettableBucketStreamBuild[Y, OUT](aggOut, lifecycle, yType, env)
   }
 
 

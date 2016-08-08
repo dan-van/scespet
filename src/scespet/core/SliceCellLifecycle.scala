@@ -130,6 +130,17 @@ trait SliceCellLifecycle[C] {
 
 
 object SliceCellLifecycle {
+  def buildLifecycle[Y](newCellFunc: () => Y, yType:ClassTag[Y]) : SliceCellLifecycle[Y] = {
+    // NODEPLOY - I'm not 100% sure I still have a requirement for 'bucket'. I'll leave the code in place for now, but I think
+    // that we could create a lifecycle that creates wrapper objects per slice with a shared underlying bucket instance
+    val lifecycle:SliceCellLifecycle[Y] = if (classOf[Bucket].isAssignableFrom(yType.runtimeClass)) {
+      new MutableBucketLifecycle[Y](newCellFunc)(yType)
+    } else {
+      new CellSliceCellLifecycle[Y](newCellFunc)(yType)
+    }
+    lifecycle
+  }
+
   class CellSliceCellLifecycle[A](newCellF: () => A)(implicit val C_type:ClassTag[A]) extends SliceCellLifecycle[A]{
     // NODEPLOY make this aother variant rather than using if blocks
     val doClose =
@@ -150,7 +161,7 @@ object SliceCellLifecycle {
 
 
   class MutableBucketLifecycle[B <: Bucket](newCellFunc: () => B)(implicit val b_type:ClassTag[B]) extends SliceCellLifecycle[B] {
-    throw new AssertionError("I want to replace the concept of mutable buckets")
+    throw new AssertionError("I think that 'Bucket' as a first class concept, where we require SliceAfterBucket and SliceBeforeBucket slice implementations is overly complex and could now be replaced with wrapper objects around a 'mutable instace' if really required ")
 
     lazy val cell = newCellFunc()
 

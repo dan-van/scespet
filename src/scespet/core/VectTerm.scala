@@ -555,7 +555,9 @@ class VectCellLifecycle[K, Y](newCellF: K => Y)(implicit type_y:ClassTag[Y]) ext
 
 }
 class VectBucketLifecycle[K, B <: Bucket](newCellF: K => B)(implicit type_y:ClassTag[B]) extends KeyToSliceCellLifecycle[K,B] {
-  override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = new MutableBucketLifecycle[B](() => newCellF(k))(type_y)
+  override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = {
+    scespet.core.SliceCellLifecycle.buildLifecycle( () => newCellF(k), type_y )
+  }
 }
 
 class AggregationTerm[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGroup[K, _], lifecycle:KeyToSliceCellLifecycle[K,B], cellOut:AggOut[B, OUT], env:types.Env) {
