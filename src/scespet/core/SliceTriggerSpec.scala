@@ -4,7 +4,7 @@ import scespet.core.types._
 import scala.concurrent.duration.{FiniteDuration, Duration}
 import scespet.util.Timer
 import scespet.core.types.Events
-import scespet.core.SliceTriggerSpec.EventObjIsTriggerSpec
+import scespet.core.SliceTriggerSpec.{EventObjIsTriggerSpec}
 
 /**
  * Created by danvan on 10/07/2014.
@@ -24,19 +24,21 @@ trait SliceTriggerSpec[-X] {
   }
 }
 
+trait SliceTriggerProvider {
+  def buildTrigger(src: Set[EventGraphObject], env: types.Env) :EventGraphObject
+}
+
 object SliceTriggerSpec {
-  val TERMINATION = new SliceTriggerSpec[Any] {
-    def buildTrigger(x:Any, src: Set[EventGraphObject], env: types.Env) = {
-      env.getTerminationEvent
-    }
+
+  val TERMINATION = new SliceTriggerProvider() {
+    override def buildTrigger(src: Set[EventGraphObject], env: Env): EventGraphObject = env.getTerminationEvent
   }
+
 
   // NODEPLOY is this really necessary? doesn't it just make for confusion with TERMINATION. Can't we just use TERMINATION?
   /** Never fire a slice */
-  val NULL = new SliceTriggerSpec[Null] {
-    def buildTrigger(x:Null, src: Set[EventGraphObject], env: types.Env) = {
-      null
-    }
+  val NULL = new SliceTriggerProvider() {
+    override def buildTrigger(src: Set[EventGraphObject], env: Env): EventGraphObject = null
   }
 
 //  implicit object FiniteDurationIsTriggerSpec extends SliceTriggerSpec[FiniteDuration] {
@@ -71,6 +73,10 @@ object SliceTriggerSpec {
   }
 
   implicit def toTriggerSpec[T](m:MacroTerm[T]) :SliceTriggerSpec[MacroTerm[T]] = new MacroTermSliceTrigger[T](m)
+
+  implicit object SliceTriggerProviderIsSpec extends SliceTriggerSpec[SliceTriggerProvider] {
+    override def buildTrigger(x: SliceTriggerProvider, src: Set[EventGraphObject], env: Env): EventGraphObject = x.buildTrigger(src, env)
+  }
 }
 
 trait VectSliceTriggerSpec[-X] {
@@ -105,6 +111,13 @@ object VectSliceTriggerSpec {
     }
   }
 
+  implicit object sliceTriggerToVectSpec extends VectSliceTriggerSpec[scespet.core.SliceTriggerProvider] {
+    override def toTriggerSpec[K](k: K, x: scespet.core.SliceTriggerProvider): SliceTriggerSpec[scespet.core.SliceTriggerProvider] = implicitly[SliceTriggerSpec[scespet.core.SliceTriggerProvider]]
+
+    override def newCellPrerequisites(x: scespet.core.SliceTriggerProvider): Set[EventGraphObject] = Set()
+  }
+
+
   // NODEPLOY - either this one of the SliceTriggerSpec.toVectSliceTrigger is redundant. Which is it?
   implicit def sliceSpecToVectSliceSpec[X](implicit ev:SliceTriggerSpec[X]):VectSliceTriggerSpec[X] = {
     new VectSliceTriggerSpec[X] {
@@ -115,4 +128,14 @@ object VectSliceTriggerSpec {
       override def newCellPrerequisites(x: X): Set[EventGraphObject] = Set()
     }
   }
+//
+//  implicit class SliceTriggerIsVectSpec[T](t:SliceTriggerSpec[T]) extends VectSliceTriggerSpec[SliceTriggerSpec[T]] {
+//    override def toTriggerSpec[K](k: K, x: SliceTriggerSpec[T]): SliceTriggerSpec[SliceTriggerSpec[T]] = new SliceTriggerSpec[SliceTriggerSpec[T]] {
+//      // NODEPLOU - can I delete src?
+//      override def buildTrigger(x: SliceTriggerSpec[T], src: Set[EventGraphObject], env: Env): EventGraphObject = x.
+//    }
+//
+//    override def newCellPrerequisites(x:X) :Set[EventGraphObject]
+//  }
+
 }

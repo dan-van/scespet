@@ -134,7 +134,10 @@ object SliceCellLifecycle {
     // NODEPLOY - I'm not 100% sure I still have a requirement for 'bucket'. I'll leave the code in place for now, but I think
     // that we could create a lifecycle that creates wrapper objects per slice with a shared underlying bucket instance
     val lifecycle:SliceCellLifecycle[Y] = if (classOf[Bucket].isAssignableFrom(yType.runtimeClass)) {
-      new MutableBucketLifecycle[Y](newCellFunc)(yType)
+      // yeah, we could use implicits and typeclasses, but I'm not bothering if I don't even know if I'm keeping this
+      type YB = Y with Bucket
+      val lifeCycleYB = new MutableBucketLifecycle[YB](newCellFunc.asInstanceOf[() => YB])(yType.asInstanceOf[ClassTag[YB]])
+      lifeCycleYB.asInstanceOf[SliceCellLifecycle[Y]]
     } else {
       new CellSliceCellLifecycle[Y](newCellFunc)(yType)
     }
@@ -142,7 +145,6 @@ object SliceCellLifecycle {
   }
 
   class CellSliceCellLifecycle[A](newCellF: () => A)(implicit val C_type:ClassTag[A]) extends SliceCellLifecycle[A]{
-    // NODEPLOY make this aother variant rather than using if blocks
     val doClose =
       if (classOf[MFunc].isAssignableFrom(C_type.runtimeClass)) {
         // it must also be closeable:

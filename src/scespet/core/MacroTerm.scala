@@ -35,6 +35,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   /**
    * Fold is a running reduction - the new state of the reduction is exposed after each element addition
    * e.g. a running cumulative sum, as opposed to a sum
+ *
    * @param y
    * @tparam Y
    * @return
@@ -56,6 +57,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
    * NODEPLOY - is this replaced by 'reduce'?  NOTE, the implementation is far simpler here, may be worth keeping.
    *
    * Reduce collapses all values into a single value emitted at env.terminationEvent
+ *
    * @param y
    * @tparam Y
    * @return
@@ -127,6 +129,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   /**
    * present this single stream as a vector stream, where f maps value to key
    * effectively a demultiplex operation
+ *
    * @param f
    * @tparam K
    * @return
@@ -231,12 +234,12 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
     // THINK: this could be special cased to provide a more performant impl of scanning a stream without grouping
-    group[Null](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
+    group(SliceTriggerSpec.TERMINATION, AFTER).reduce(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
   }
 
   def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
     // THINK: this could be special cased to provide a more performant impl of scanning a stream without grouping
-    group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
+    group(SliceTriggerSpec.NULL, AFTER).scan(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
   }
 
   def window(window:HasValue[Boolean]) : GroupedTerm[X] = {
@@ -271,7 +274,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
    * NOTE: B is instantiated per key, and 'adder' is responsible for mutating B with input values from stream[X]
    */
   def bindTo[B <: MFunc, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B,OUT] = {
-    val groupedTerm = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION)
+    val groupedTerm = group(SliceTriggerSpec.TERMINATION, AFTER)
 
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = adder(b)(x)
@@ -345,11 +348,11 @@ class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGro
     _collapse[Y,O](lifecycle, adder, yOut).all(exposeEmpty)
   }
 
-  def collapseWith[B, OUT](newBFunc: () => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
+  def collapseWith[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = addFunc(b)(x)
     }
-    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](newBFunc)(type_b)
+    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](() => newBFunc)(type_b)
     _collapse[B,OUT](lifecycle, cellAdd, aggOut)
   }
 

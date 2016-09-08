@@ -95,7 +95,7 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
     }
   }
 
-  class BindableAppendFunc[X] extends Bucket with OutTrait[Seq[X]] {
+  class BindableAppendFunc[X] extends MFunc with AutoCloseable with OutTrait[Seq[X]] {
     var value = Seq[X]()
 
     def add(x:X) {
@@ -105,7 +105,11 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
       true
     }
 
-    override def open(): Unit = value = Nil
+
+//    override def open(): Unit = value = Nil
+    override def close(): Unit = {
+      println("Closed "+getClass+" value = "+value)
+    }
   }
 
   /**
@@ -222,13 +226,13 @@ class BucketStreamTest extends ScespetTestBase with BeforeAndAfterEach with OneI
   }
 
   test("bind grouped scan") {
-    val out = stream.group(3.events).collapseWith2(new BindableAppendFunc[Char])(_.add).all()
+    val out = stream.group(3.events).collapseWith(new BindableAppendFunc[Char])(_.add).all()
     val expected = data.grouped(3).map( generateAppendScan(_) ).reduce( _ ++ _ )
     new StreamTest("scan", expected, out)
   }
 
   test("bind grouped reduce") {
-    val out = stream.group(3.events).collapseWith2(new BindableAppendFunc[Char])(_.add).last()
+    val out = stream.group(3.events).collapseWith(new BindableAppendFunc[Char])(_.add).last()
     val expected = data.grouped(3).map( generateAppendScan(_).last ).toSeq
     new StreamTest("scan", expected, out)
   }

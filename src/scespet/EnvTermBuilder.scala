@@ -118,7 +118,7 @@ class EnvTermBuilder() extends DelayedInit {
 }
   // NODEPLOY rename me - no longer to do with buckets (maybe something to do with stream generators?
   class ResettableBucketStreamBuild[Y, OUT](aggOut:AggOut[Y, OUT],cellReset: SliceCellLifecycle[Y], yType:ClassTag[Y], val env:Environment) {
-    private def noreset() :PartialBuiltSlicedBucket[Y, OUT] = reset[Any](null, triggerAlign = AFTER)(SliceTriggerSpec.TERMINATION)
+    private def noreset() :PartialBuiltSlicedBucket[Y, OUT] = reset(SliceTriggerSpec.TERMINATION, triggerAlign = AFTER)
 
     def all() :MacroTerm[OUT] = noreset().all()
     def last() :MacroTerm[OUT] = noreset().last()

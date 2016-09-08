@@ -316,7 +316,8 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
       val grouped = evenOdd.group(sliceOn, align)
       val collapse: AggregationTerm[String, XYCollector, XYCollector] = {
 //        grouped.collapseK(k => new XYCollector)
-        val cellGen = KeyToSliceCellLifecycle.getKeyToSliceLife[String, XYCollector]((k:String) => new XYCollector, implicitly[ClassTag[XYCollector]], forceMutableBucket = doMutable)
+        if (doMutable) throw new UnsupportedOperationException("I'd need to hook up the different lifecycle if I want to re-support this appraoch")
+        val cellGen = KeyToSliceCellLifecycle.getKeyToSliceLife[String, XYCollector]((k:String) => new XYCollector, implicitly[ClassTag[XYCollector]])
         grouped._collapse[XYCollector, XYCollector](cellGen, implicitly[XYCollector => CellAdder[Int]], implicitly[AggOut[XYCollector, XYCollector]])
       }
       collapse.bind(div5)(_.addY)

@@ -6,7 +6,7 @@ import gsa.esg.mekon.core.{Environment, EventGraphObject}
 import scespet.core.SliceCellLifecycle
 import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
 import scespet.core.VectorStream.ReshapeSignal
-import scespet.core.types.MFunc
+import scespet.core.types.{CloseableFunc, MFunc}
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
 
@@ -491,11 +491,12 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 //  def reduce[Y <: Agg[X]](newBFunc: K => Y):VectTerm[K, Y#OUT] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)
   def reduce[Y, O](newBFunc: => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = reduce[Y, O]((k:K) => newBFunc)(type_y, adder, yOut)
   // THINK: this could be special cased to be faster
-  def reduce[Y, O](newBFunc: K => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec).reduceK(newBFunc)(adder, yOut, type_y)
+//  def reduce[Y, O](newBFunc: K => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = group(SliceTriggerSpec.TERMINATION).reduceK(newBFunc)(adder, yOut, type_y)
+  def reduce[Y, O](newBFunc: K => Y)(implicit type_y:ClassTag[Y], adder:Y => CellAdder[X], yOut :AggOut[Y, O]):VectTerm[K, O] = group(SliceTriggerSpec.TERMINATION, AFTER).reduceK(newBFunc)(adder, yOut, type_y)
 
   def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]):VectTerm[K, O] = scan[Y, O]((k:K) => newBFunc)(adder,yOut, type_b)
   // THINK: this could be special cased to be faster
-  def scan[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = group[Null](null, AFTER)(SliceTriggerSpec.NULL.asVectSliceSpec).scanK(newBFunc)(adder,yOut, type_b)
+  def scan[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = group(SliceTriggerSpec.NULL, AFTER).scanK(newBFunc)(adder,yOut, type_b)
 
   /**
    * bindTo is a mechanism to allow easier interop with lower-level mutable streams and existing business logic.
@@ -503,7 +504,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * to mark bucket boundaries
    * NOTE: bucket is instantiated per key, but thereafer is mutated, unlike calls to scan and reduce
    */
-  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut, type_b)
+  // NODEPLOY replace this with simply : stream.group(SliceTriggerSpec.TERMINATION).collapseWith(...
+  def bindTo[B <: CloseableFunc, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut, type_b)
 
   /**
    * bindTo is a mechanism to allow easier interop with lower-level mutable streams and existing business logic.
@@ -511,13 +513,13 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * to mark bucket boundaries
    * NOTE: bucket is instantiated per key, but thereafer is mutated, unlike calls to scan and reduce
    */
-  def bindTo[B <: Bucket, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = {
-    val groupedVectTerm: GroupedVectTerm[K, X] = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION.asVectSliceSpec)
+  def bindTo[B <: CloseableFunc, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = {
+    val groupedVectTerm: GroupedVectTerm[K, X] = group(SliceTriggerSpec.TERMINATION, AFTER)
 
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = adder(b)(x)
     }
-    val lifecycle = new VectBucketLifecycle[K, B](newBFunc)(type_b)
+    val lifecycle: KeyToSliceCellLifecycle[K, B] = KeyToSliceCellLifecycle.getKeyToSliceLife(newBFunc, type_b)
     groupedVectTerm._collapse[B, OUT](lifecycle, cellAdd, aggOut)
   }
 
@@ -548,16 +550,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   override def toString: String = s"VectTerm[$input]"
-}
-
-class VectCellLifecycle[K, Y](newCellF: K => Y)(implicit type_y:ClassTag[Y]) extends KeyToSliceCellLifecycle[K,Y]{
-  override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y]( () => newCellF(k) )(type_y)
-
-}
-class VectBucketLifecycle[K, B <: Bucket](newCellF: K => B)(implicit type_y:ClassTag[B]) extends KeyToSliceCellLifecycle[K,B] {
-  override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = {
-    scespet.core.SliceCellLifecycle.buildLifecycle( () => newCellF(k), type_y )
-  }
 }
 
 class AggregationTerm[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVectGroup[K, _], lifecycle:KeyToSliceCellLifecycle[K,B], cellOut:AggOut[B, OUT], env:types.Env) {
@@ -595,7 +587,7 @@ class AggregationTerm[K, B, OUT](input:VectTerm[K,_], uncollapsed:UncollapsedVec
 }
 
 /**
- *  @see GroupedTerm2
+ *  @see scespet.core.GroupedTerm - make these symmetric
  */
 class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: UncollapsedVectGroup[K, X], val env:types.Env) {
 //  var orderDepends = Seq[VectTerm[K,_]]()
@@ -651,10 +643,11 @@ class GroupedVectTerm[K, X](val input:VectTerm[K,X], val uncollapsedGroup: Uncol
     _collapse(lifecycle, adder, aggOut)
   }
 
-  // some shortcuts - are they worth keeping?
+  // some shortcuts - are they worth keeping? // NODEPLOY don't think so
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = {
-    val lifecycle :KeyToSliceCellLifecycle[K, Y] = KeyToSliceCellLifecycle.getKeyToSliceLife[K, Y]((k:K) => newBFunc, type_b)
-    _collapse(lifecycle, adder, yOut).last()
+//    val lifecycle :KeyToSliceCellLifecycle[K, Y] = KeyToSliceCellLifecycle.getKeyToSliceLife[K, Y]((k:K) => newBFunc, type_b)
+//    _collapse(lifecycle, adder, yOut).last()
+    collapse(newBFunc).last()
   }
 
   def reduce[Y, O](newBFunc: K => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], type_b:ClassTag[Y]) :VectTerm[K,O] = {
@@ -749,7 +742,7 @@ class PartialBuiltSlicedVectBucket[K, Y, OUT](input:VectTerm[K, _], yOut :AggOut
   var bindings = List[(VectTerm[K, _], (Y => _ => Unit))]()
 
   private lazy val scanAllTerm: VectTerm[K, OUT] = {
-    reset[Null](null)(SliceTriggerSpec.NULL).all()
+    reset(SliceTriggerSpec.NULL).all()
 //    val cellBuilder = (i:Int, k:K) => {
 //      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
 //      val slicer = new SliceAfterBucket[Null, Y](null, cellLifecycle, ReduceType.CUMULATIVE, env, SliceTriggerSpec.NULL)
@@ -767,7 +760,7 @@ class PartialBuiltSlicedVectBucket[K, Y, OUT](input:VectTerm[K, _], yOut :AggOut
 
 
   def last(): VectTerm[K, OUT] = {
-    reset[Null](null)(SliceTriggerSpec.NULL).last()
+    reset(SliceTriggerSpec.NULL).last()
 //    val cellBuilder = (i:Int, k:K) => {
 //      val cellLifecycle = keyCellLifecycle.lifeCycleForKey(k)
 //      val slicer = new SliceBeforeBucket[Any, Y](null, cellLifecycle, ReduceType.LAST, env, SliceTriggerSpec.TERMINATION)
