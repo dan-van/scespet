@@ -135,13 +135,26 @@ trait SliceCellLifecycle[C] {
 
 
 object SliceCellLifecycle {
+  def buildLifecycle[Y](newCellFunc: () => Y, yType:ClassTag[Y]) : SliceCellLifecycle[Y] = {
+    // NODEPLOY - I'm not 100% sure I still have a requirement for 'bucket'. I'll leave the code in place for now, but I think
+    // that we could create a lifecycle that creates wrapper objects per slice with a shared underlying bucket instance
+    val lifecycle:SliceCellLifecycle[Y] = if (classOf[Bucket].isAssignableFrom(yType.runtimeClass)) {
+      // yeah, we could use implicits and typeclasses, but I'm not bothering if I don't even know if I'm keeping this
+      type YB = Y with Bucket
+      val lifeCycleYB = new MutableBucketLifecycle[YB](newCellFunc.asInstanceOf[() => YB])(yType.asInstanceOf[ClassTag[YB]])
+      lifeCycleYB.asInstanceOf[SliceCellLifecycle[Y]]
+    } else {
+      new CellSliceCellLifecycle[Y](newCellFunc)(yType)
+    }
+    lifecycle
+  }
+
   class CellSliceCellLifecycle[A](newCellF: () => A)(implicit val C_type:ClassTag[A]) extends SliceCellLifecycle[A]{
-    // NODEPLOY make this aother variant rather than using if blocks
     val doClose =
       if (classOf[MFunc].isAssignableFrom(C_type.runtimeClass)) {
         // it must also be closeable:
         if (!classOf[AutoCloseable].isAssignableFrom(C_type.runtimeClass)) {
-          throw new IllegalArgumentException(C_type.runtimeClass + " Must be 'Function with AutoCloseable' ")
+          throw new IllegalArgumentException(C_type.runtimeClass + " is a Function, therefore it must also implement AutoCloseable' ")
         }
         true
       } else {
@@ -155,6 +168,8 @@ object SliceCellLifecycle {
 
 
   class MutableBucketLifecycle[B <: Bucket](newCellFunc: () => B)(implicit val b_type:ClassTag[B]) extends SliceCellLifecycle[B] {
+    throw new AssertionError("I think that 'Bucket' as a first class concept, where we require SliceAfterBucket and SliceBeforeBucket slice implementations is overly complex and could now be replaced with wrapper objects around a 'mutable instace' if really required ")
+
     lazy val cell = newCellFunc()
 
     override def C_type: ClassTag[B] = b_type

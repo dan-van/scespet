@@ -150,6 +150,7 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
   }
 
   test("bucket sliced reduce pre") {
+    // TODO: Make this work
     val stream = new generateCounterAndPartialBucketDef(26).slicedStream(SliceAlign.BEFORE).last(exposeEmpty = exposeEmpty)
     val recombinedEventCount = stream.mapVector(_.getValues.foldLeft[Int]( 0 ) ((c, bucket) => c + bucket.countBoth + bucket.countX + bucket.countY))
     new StreamTest("Recombined count", List(11, 11, 5), recombinedEventCount)
@@ -311,16 +312,17 @@ class TestMultiBucketing extends FunSuite with BeforeAndAfterEach with OneInstan
         }
       })
     }
-    def slicedStream(align:SliceAlign):GroupedTerm2[String, XYCollector, XYCollector] = {
+    def slicedStream(align:SliceAlign):AggregationTerm[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.group(sliceOn, align)
-      val collapse: GroupedTerm2[String, XYCollector, XYCollector] = {
+      val collapse: AggregationTerm[String, XYCollector, XYCollector] = {
 //        grouped.collapseK(k => new XYCollector)
-        val cellGen = KeyToSliceCellLifecycle.getKeyToSliceLife[String, XYCollector]((k:String) => new XYCollector, implicitly[ClassTag[XYCollector]], forceMutableBucket = doMutable)
+        if (doMutable) throw new UnsupportedOperationException("I'd need to hook up the different lifecycle if I want to re-support this appraoch")
+        val cellGen = KeyToSliceCellLifecycle.getKeyToSliceLife[String, XYCollector]((k:String) => new XYCollector, implicitly[ClassTag[XYCollector]])
         grouped._collapse[XYCollector, XYCollector](cellGen, implicitly[XYCollector => CellAdder[Int]], implicitly[AggOut[XYCollector, XYCollector]])
       }
       collapse.bind(div5)(_.addY)
     }
-    def windowedStream():GroupedTerm2[String, XYCollector, XYCollector] = {
+    def windowedStream():AggregationTerm[String, XYCollector, XYCollector] = {
       val grouped = evenOdd.window(windowStream)
       grouped.collapseK(k => new XYCollector).bind(div5)(_.addY)
     }

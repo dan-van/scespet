@@ -1,6 +1,7 @@
 package scespet.core
 
 import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
+import scespet.core.types.CloseableFunc
 
 import reflect.macros.Context
 import gsa.esg.mekon.core.{Function => MFunc, EventGraphObject, Environment}
@@ -16,6 +17,10 @@ package object types {
   type Env = gsa.esg.mekon.core.Environment
   type EventGraphObject = gsa.esg.mekon.core.EventGraphObject
   type MFunc = gsa.esg.mekon.core.Function
+  /**
+    * when we do grouping / reduction operations, and the reducer is a function, it needs to be closeable. This type represents that concept
+    */
+  type CloseableFunc = gsa.esg.mekon.core.Function with AutoCloseable
   type EventSource = gsa.esg.mekon.core.EventSource
 
   case class Events(n:Int) extends AnyVal
@@ -28,7 +33,8 @@ package object types {
 
 /**
  * used to wrap a builder on 'HasVal' to allow FuncCollector to install roots into different environments
- * @param builder
+  *
+  * @param builder
  * @tparam X
  */
 class Root[X](builder :types.Env => HasVal[X]) extends UpdatingHasVal[X] {
@@ -58,7 +64,8 @@ trait FuncCollector {
 /**
  * Something that provides a value (i.e. a source)
  * todo: rename me to ListenableHasVal
- * @tparam X
+  *
+  * @tparam X
  */
 trait HasVal[X] extends HasValue[X]{
   def initialised:Boolean
@@ -110,7 +117,8 @@ trait UpdatingHasVal[Y] extends HasVal[Y] with MFunc {
 /**
  * trivial UpdatingHasVal which needs to be bound to an event source.
  * on trigger, it will apply function f and store the result
- * @param initVal
+  *
+  * @param initVal
  * @param f
  * @tparam Y
  */
@@ -129,7 +137,8 @@ class Generator[Y](initVal:Y, f:()=>Y) extends UpdatingHasVal[Y] {
  * if calculate returns false, then state was not modified
  *
  * i.e. this is an operation that can both map and filter
- * @tparam X
+  *
+  * @tparam X
  * @tparam Y
  */
 trait Func[X,Y] extends UpdatingHasVal[Y] {
@@ -167,7 +176,8 @@ trait Cell {
 /**
  * TODO: work out if this is necessary
  * This is the same as Agg, but with the output type parameter (V) explicit in the signature.
- * @tparam X
+  *
+  * @tparam X
  * @tparam V
  */
 trait Reducer[-X, V] extends Agg[X] with OutTrait[V] { // NODEPLOY - Agg[X] can be replaced by CellAdder[X]
@@ -176,7 +186,8 @@ trait Reducer[-X, V] extends Agg[X] with OutTrait[V] { // NODEPLOY - Agg[X] can 
 
 /**
  * trait to add to a class to enable itself to the state that is exposed as a result of aggregating
- * @tparam X
+  *
+  * @tparam X
  */
 trait SelfAgg[-X] extends Agg[X] {
   type OUT = this.type
@@ -187,11 +198,8 @@ trait SelfAgg[-X] extends Agg[X] {
 /**
  * The history of this is for integration with another codebase, where I have lots of MFunc-like classes
  * and I wanted to use them in a similar syntax to working with Agg aggregations.
- *
-// todo - would be nicer to treat the 'Agg' trait and Bucket trait as compatible features that can be added to Cell
-// todo - certainly the "bindTo" verb could work with a vanilla Cell
-// NODEPLOY - could rename this to 'streamOf' ? and add a stop/start method relating to group/window operations?
-  */
+ */
+//trait Bucket extends CloseableFunc {
 trait Bucket extends MFunc with AutoCloseable {
   def open():Unit
   def pause():Unit = {}
@@ -204,32 +212,15 @@ trait Bucket extends MFunc with AutoCloseable {
 }
 
 
-trait KeyToSliceCellLifecycle[K, C] {
-  def lifeCycleForKey(k:K):SliceCellLifecycle[C]
+class KeyToSliceCellLifecycle[K, C](newCellF:K=>C, type_c:ClassTag[C]) {
+  def lifeCycleForKey(k:K):SliceCellLifecycle[C] = {
+    scespet.core.SliceCellLifecycle.buildLifecycle( () => newCellF(k) , type_c )
+  }
 }
+
 object KeyToSliceCellLifecycle {
-  private class KeyCellImplicit[K, Y](newCellF: K => Y, type_y:ClassTag[Y]) extends KeyToSliceCellLifecycle[K,Y]{
-    override def lifeCycleForKey(k: K): SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y]( () => newCellF(k) )(type_y)
-
-  }
-  private class KeyBucketImplicit[K, B <: Bucket](newCellF: K => B, type_y:ClassTag[B]) extends KeyToSliceCellLifecycle[K,B]{
-    override def lifeCycleForKey(k: K): SliceCellLifecycle[B] = new MutableBucketLifecycle[B]( () => newCellF(k) )(type_y)
-  }
-
-  // PONDER: I could work out how to use implicits here, but I only envision two usecases right now:
   def getKeyToSliceLife[K,C](newCellF:K=>C, type_c:ClassTag[C]): KeyToSliceCellLifecycle[K, C] = {
-    val forceMutableBucket = classOf[Bucket].isAssignableFrom(type_c.runtimeClass)
-    getKeyToSliceLife[K,C](newCellF, type_c, forceMutableBucket)
-  }
-
-  def getKeyToSliceLife[K,C](newCellF:K=>C, type_c:ClassTag[C], forceMutableBucket:Boolean): KeyToSliceCellLifecycle[K, C] = {
-    if (forceMutableBucket) {
-      // not particularly elegant...
-      type CB = C with Bucket
-      return new KeyBucketImplicit[K,CB](newCellF.asInstanceOf[K=>CB], type_c.asInstanceOf[ClassTag[CB]]).asInstanceOf[KeyToSliceCellLifecycle[K,C]]
-    } else {
-      return new KeyCellImplicit[K,C](newCellF, type_c)
-    }
+    new KeyToSliceCellLifecycle[K,C](newCellF, type_c)
   }
 }
 
@@ -296,6 +287,7 @@ trait MultiTerm[K,X] {
 
   /**
    * for symmetry with MacroTerm.value
+ *
    * @return
    */
   def value = values
@@ -349,8 +341,10 @@ trait MultiTerm[K,X] {
    * TODO: naming
    * this is related to "map", but "map" is a function of value, this is a function of key
    * maybe this should be called 'mapkey', or 'takef'? (i.e. we're 'taking' cells from the domain 'cellFromKey'?)
+ *
    * the reason I chose 'join' is that we're effectively doing a left join of this vector onto a vector[domain, cellFromKey]
-   @param cellFromKey
+ *
+   *@param cellFromKey
     * @tparam Y
    * @return
    */

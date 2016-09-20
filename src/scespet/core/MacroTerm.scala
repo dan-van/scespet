@@ -35,6 +35,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   /**
    * Fold is a running reduction - the new state of the reduction is exposed after each element addition
    * e.g. a running cumulative sum, as opposed to a sum
+ *
    * @param y
    * @tparam Y
    * @return
@@ -56,6 +57,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
    * NODEPLOY - is this replaced by 'reduce'?  NOTE, the implementation is far simpler here, may be worth keeping.
    *
    * Reduce collapses all values into a single value emitted at env.terminationEvent
+ *
    * @param y
    * @tparam Y
    * @return
@@ -127,6 +129,7 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
   /**
    * present this single stream as a vector stream, where f maps value to key
    * effectively a demultiplex operation
+ *
    * @param f
    * @tparam K
    * @return
@@ -231,12 +234,12 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
     // THINK: this could be special cased to provide a more performant impl of scanning a stream without grouping
-    group[Null](null, AFTER)(SliceTriggerSpec.TERMINATION).reduce(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
+    group(SliceTriggerSpec.TERMINATION, AFTER).reduce(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
   }
 
   def scan[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
     // THINK: this could be special cased to provide a more performant impl of scanning a stream without grouping
-    group[Null](null, AFTER)(SliceTriggerSpec.NULL).scan(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
+    group(SliceTriggerSpec.NULL, AFTER).scan(newBFunc)(adder, yOut, yType).asInstanceOf[Term[O]]
   }
 
   def window(window:HasValue[Boolean]) : GroupedTerm[X] = {
@@ -268,15 +271,16 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
    * bindTo is a mechanism to allow easier interop with lower-level mutable streams and existing business logic.
    * e.g. stats collectors that work on having mutator methods called from price and trade events, and having 'open' and 'close'
    * to mark bucket boundaries
-   * NOTE: bucket is instantiated per key, but thereafer is mutated, unlike calls to scan and reduce
+   * NOTE: B is instantiated per key, and 'adder' is responsible for mutating B with input values from stream[X]
    */
-  def bindTo[B <: Bucket, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B,OUT] = {
-    val groupedTerm = group[Any](null, AFTER)(SliceTriggerSpec.TERMINATION)
+  def bindTo[B <: MFunc, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut :AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B,OUT] = {
+    val groupedTerm = group(SliceTriggerSpec.TERMINATION, AFTER)
 
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = adder(b)(x)
     }
-    val lifecycle :SliceCellLifecycle[B] = new MutableBucketLifecycle[B](() => newBFunc)(type_b)
+
+    val lifecycle = scespet.core.SliceCellLifecycle.buildLifecycle( () => newBFunc, type_b )
     groupedTerm._collapse[B, OUT](lifecycle, cellAdd, aggOut)
   }
 }
@@ -332,28 +336,23 @@ class UncollapsedGroupWithTrigger[S, IN](input:HasValue[_], sliceSpec:S, trigger
  * NODEPLOY make this API symmetric with {@link scespet.core.GroupedVectTerm}
  */
 class GroupedTerm[X](val term:MacroTerm[X], val uncollapsedGroup: UncollapsedGroup[X], val env:types.Env) {
-//  def reduce[Y <: Cell](newBFunc: => Y) :Term[Y#OUT] = ???
-//  def reduce[Y <: Cell](newBFunc: => Y)(implicit ev:Y <:< Agg[X]) :Term[Y#OUT] = {
+
   def reduce[Y, O](newBFunc: => Y)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-  val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
-  val exposeEmpty :Boolean = false
-  _collapse[Y,O](lifecycle, adder, yOut).last(exposeEmpty)
+    val lifecycle :SliceCellLifecycle[Y] = scespet.core.SliceCellLifecycle.buildLifecycle( () => newBFunc ,yType )
+    val exposeEmpty :Boolean = false //NODEPLOY ponder - have I forgotten to wire this up?
+    _collapse[Y,O](lifecycle, adder, yOut).last(exposeEmpty)
   }
 
   def scan[Y, O](newBFunc: => Y, exposeEmpty :Boolean = false)(implicit adder:Y => CellAdder[X], yOut :AggOut[Y, O], yType:ClassTag[Y]) :Term[O] = {
-    val lifecycle :SliceCellLifecycle[Y] = new CellSliceCellLifecycle[Y](() => newBFunc)(yType)
+    val lifecycle :SliceCellLifecycle[Y] = scespet.core.SliceCellLifecycle.buildLifecycle( () => newBFunc ,yType )
     _collapse[Y,O](lifecycle, adder, yOut).all(exposeEmpty)
   }
 
-  def collapseWith2[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
-    collapseWith[B,OUT](()=>newBFunc)(addFunc)(aggOut, type_b)
-  }
-
-  def collapseWith[B, OUT](newBFunc: () => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
+  def collapseWith[B, OUT](newBFunc: => B)(addFunc: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b:ClassTag[B]) :PartialBuiltSlicedBucket[B, OUT] = {
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {
       override def add(x: X): Unit = addFunc(b)(x)
     }
-    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](newBFunc)(type_b)
+    val lifecycle :SliceCellLifecycle[B] = new CellSliceCellLifecycle[B](() => newBFunc)(type_b)
     _collapse[B,OUT](lifecycle, cellAdd, aggOut)
   }
 
@@ -390,10 +389,7 @@ class PartialBuiltSlicedBucket[Y, OUT](uncollapsed:UncollapsedGroup[_], cellOut:
   }
 
 
-  // NODEPLOY - I think this would be better named as 'reset', once you already have a stream->reducer binding, talking about grouping is confusing.
-  //NODEPLOY - think:
-  // CellLifecycle creates a new cell at beginning of stream, then multiple calls to close bucket after a slice
-  // this avoids needing a new slice trigger definition each slice.
+  // NODEPLOY - delete this method:
   def reset[S](sliceSpec: S, triggerAlign: SliceAlign = AFTER)(implicit ev: SliceTriggerSpec[S]):PartialBuiltSlicedBucket[Y, OUT] = {
     // NODEPLOY move calls to this to be of the stream.group(slice).collapse pattern
     ???
