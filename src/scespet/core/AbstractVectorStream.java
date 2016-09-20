@@ -117,14 +117,22 @@ public abstract class AbstractVectorStream<K, V> implements VectorStream<K, V> {
 
     @Override
     public String toString() {
-        StringBuilder buf = new StringBuilder(getClass().getSimpleName()+"{");
-        for (int i=0; i<getSize(); i++) {
-            buf.append(getKey(i)).append("=").append(get(i)).append(", ");
+        int size = Math.min(5, getSize());
+        StringBuilder buf = new StringBuilder(getClass().getSimpleName()+"{size = "+getSize()+"}");
+
+        if (size > 0) {
+            buf.append("0.." + (size - 1) + " = ");
+            for (int i = 0; i < size; i++) {
+                K key = getKey(i);
+                buf.append(key);
+                V value = get(i);
+                if (key != value) {
+                    buf.append("=").append(value);
+                }
+                buf.append(", ");
+            }
+            buf.append("]");
         }
-        if (getSize() > 0) {
-            buf.delete(buf.length() - 2, buf.length());
-        }
-        buf.append("}");
         return buf.toString();
     }
 }

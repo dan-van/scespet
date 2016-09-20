@@ -23,7 +23,7 @@ package object types {
     def events = new Events(i)
   }
 
-
+  type SetTerm[X] = VectTerm[X, X]
 }
 
 /**

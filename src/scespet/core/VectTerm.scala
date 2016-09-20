@@ -22,6 +22,7 @@ import scala.{Predef, Some}
  * Time: 21:10
  * To change this template use File | Settings | File Templates.
  */
+
 class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends MultiTerm[K,X] {
   val logger = Logger.getLogger(classOf[VectTerm[_,_]].getName)
   import scala.collection.JavaConverters._
@@ -38,7 +39,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   /**
    * when this is MultiTerm[X,X] (i.e. a set), then you can present it as a Stream[List[X]]
-   * @return
+    *
+    * @return
    */
   def keyList()(implicit ev:K =:= X):MacroTerm[List[K]] = {
     val keySetHolder : HasVal[List[K]] = new HasVal[List[K]] {
@@ -148,7 +150,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
       initialised = true
       f.apply(input)
     } else {
-      println("Initial vector is uninitialised. not applying mapVector to the empty vector")
+      logger.warning("NODEPLOY does this happen? Initial vector is uninitialised. not applying mapVector to the empty vector")
       initialised = false
       null.asInstanceOf[Y]
     }
@@ -176,7 +178,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   def map[Y: TypeTag](f:X=>Y, exposeNull:Boolean = true):VectTerm[K,Y] = {
-    if ( (typeOf[Y] =:= typeOf[EventGraphObject]) ) println(s"WARNING: if you meant to listen to events from ${typeOf[Y]}, you should use 'derive'")
+    // NODEPLOY I think it is such an easy mistake to make, I may add a default-value arg to ensure people really want this?
+    if ( (typeOf[Y] =:= typeOf[EventGraphObject]) ) throw new RuntimeException(s"NODEPLOY if you meant to listen to events from ${typeOf[Y]}, you should use 'keyToStream'")
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
 
       var value:Y = _
@@ -224,9 +227,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   def filterType[Y : ClassTag]():VectTerm[K,Y] = {
     val typeY = implicitly[ClassTag[Y]]
     class MapCell(index:Int) extends UpdatingHasVal[Y] {
-      //      var value = f(input.get(index)) // NOT NEEDED, as we generate a cell in response to an event, we auto-call calculate on init
-//      val classTag = reflect.classTag[Y]
       var value:Y = _
+
       def calculate() = {
         val inputVal = input.get(index)
         val oy = typeY.unapply(inputVal)
@@ -246,7 +248,8 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   /**
    * remember that fo symmetry, this operates on the VALUES.
    * If you want a subset of keys, use "subset"
-   * @param accept
+    *
+    * @param accept
    * @return
    */
   def filter(accept: (X) => Boolean):VectTerm[K,X] = {
@@ -318,7 +321,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
           env.wakeupThisCycle(cellFunc)
         }
 
-        // NODEPLOY - TODO: I think this approach to initialisation can now be evaporated
+        // NODEPLOY 2016-09-08 - TODO: I think this approach to initialisation can now be evaporated - I think that the new truth is (sourceEverCalculated || cellFunc.initialised), though I'm interested in when they contradict.
         // initialise the cell
         val hasInputValue = sourceCell.initialised()
         val hasChanged = env.hasChanged(sourceTrigger)
@@ -392,7 +395,9 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
           if (inputCell.initialised()) {
             // expand x and add elements
             val x = inputCell.value()
+            val size = getSize
             this.addAll(expand(x).toIterable.asJava)
+            logger.info("NODEPLOY expanded : "+x+" into "+(getSize - size)+" new entries")
           } else {
             // NODEPLOY - check this, test it somehow
             println("cell not initialised yet: "+inputCell)
@@ -400,9 +405,14 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
           // install a listener to keep doing this
           val cellTrigger = input.getTrigger(i)
           env.addListener(cellTrigger, new types.MFunc() {
+            // this can add columns, tell the graph.
+            env.addWakeupReceiver(this, getNewColumnTrigger())
+
             def calculate(): Boolean = {
+              val size = getSize
               val x = input.get(i)
               val added = addAll( expand(x).toIterable.asJava)
+              logger.info("NODEPLOY expanded : "+x+" into "+(getSize - size)+" new entries")
               added
             }
           })
@@ -427,8 +437,10 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * TODO: naming
    * this is related to "map", but "map" is a function of value, this is a function of key
    * maybe this should be called 'mapkey', or 'takef'? (i.e. we're 'taking' cells from the domain 'cellFromKey'?)
-   * the reason I chose 'join' is that we're effectively doing a left join of this vector onto a vector[domain, cellFromKey]
-   @param cellFromKey
+    *
+    * the reason I chose 'join' is that we're effectively doing a left join of this vector onto a vector[domain, cellFromKey]
+ *
+    *@param cellFromKey
    * @tparam Y
    * @return
    */
@@ -466,6 +478,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
 
   /**
    * we could build this out of other primitives (e.g. reduce, or 'take(derive).map') but this is more convenient and efficient
+    *
    * @param evt
    * @return
    */

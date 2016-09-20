@@ -1,7 +1,7 @@
 package scespet
 
 import scespet.core._
-import gsa.esg.mekon.core.{Environment, EventSource}
+import gsa.esg.mekon.core.{InstantTreeBuildingGraphWalker, DefaultEnvironment, Environment, EventSource}
 import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.MFunc
@@ -41,6 +41,9 @@ class EnvTermBuilder() extends DelayedInit {
 
   def init(env:types.Env) {
     this.env = env
+    if (! env.asInstanceOf[DefaultEnvironment].getEventGraph.isInstanceOf[InstantTreeBuildingGraphWalker]) {
+      throw new AssertionError("You need to use InstantTreeBuildingGraphWalker")
+    }
     for (b <- initBody) b.apply()
   }
 

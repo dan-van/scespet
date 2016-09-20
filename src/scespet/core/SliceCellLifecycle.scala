@@ -85,6 +85,11 @@ trait CellAdder[-X] {
 
 object CellAdder {
   implicit def aggToAdder[X](agg:CellAdder[X]) :CellAdder[X] = agg
+
+  implicit def funcToAdder[X](f:(X) => Any) :CellAdder[X] = new CellAdder[X] {
+    override def add(x: X): Unit = f(x)
+  }
+
   implicit def setToAdder[X](set:collection.mutable.Set[X]) :CellAdder[X] = new CellAdder[X] {
     override def add(x: X): Unit = set.add(x)
   }

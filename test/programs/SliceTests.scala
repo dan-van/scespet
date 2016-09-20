@@ -530,12 +530,12 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
 
   class OldStyleFuncAppend[X](in:HasVal[X], env:types.Env) extends Bucket {
     var value = Seq[X]()
+    if (env.hasChanged(in.trigger)) {
+      logger.warning("NODEPLOY experimental - I am expecting the graph to wake me up after this.")
+      //      env.wakeupThisCycle(this)
+    }
     env.addListener(in.trigger, this)
     // see scespet.core.SlowGraphWalk.feature_correctForMissedFireOnNewEdge
-//    if (env.hasChanged(in.trigger)) {
-//      logger.warning("NODEPLOY experimental - should I be responsible for self-wake if already fired?")
-//      env.wakeupThisCycle(this)
-//    }
     private var closed = false
     //    if (in.initialised) {
     //      env.fireAfterChangingListeners(this) // do my initialisation

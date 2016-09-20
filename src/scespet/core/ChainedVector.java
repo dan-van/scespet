@@ -4,6 +4,7 @@ import gsa.esg.mekon.core.Environment;
 import gsa.esg.mekon.core.EventGraphObject;
 
 import java.util.Collection;
+import java.util.logging.Logger;
 
 /**
  * Created with IntelliJ IDEA.
@@ -14,6 +15,7 @@ import java.util.Collection;
  */
 
 public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
+    private static final Logger logger = Logger.getLogger(ChainedVector.class.getName());
 
     private final VectorStream.ReshapeSignal reshapeSignal;
     private final VectorStream<K, ?> sourceVector;
@@ -31,6 +33,10 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
             private ReshapeSignal sourceVectorChanged = sourceVector.getNewColumnTrigger();
             {
                 env.addListener(sourceVectorChanged, this);
+//                if (!env.hasChanged( sourceVectorChanged ) && sourceVector.getSize() > 0) {
+//                    logger.info("NODEPLOY - Observe this happening, attaching to a vector with data, that is not firing, we need to sync and fire: "+this);
+//                    env.wakeupThisCycle(this);
+//                }
             }
 
             public void init() {
@@ -40,13 +46,16 @@ public abstract class ChainedVector<K, V> extends AbstractVectorStream<K, V> {
                 super.init();
                 initialised = sourceVector.isInitialised();
                 if (initialised) {
-                    calculate();
+                    env.wakeupThisCycle(this);
+//                    throw new UnsupportedOperationException("I think I want to delete this?");
                 }
-                throw new UnsupportedOperationException("I think I want to delete this?");
 //                return initialised;
             }
 
             public boolean calculate() {
+                if (!env.isFiring(this)) {
+                    throw new AssertionError("NODEPLOY Illegal!");
+                }
                 for (int i=seenKeys; i<sourceVector.getSize(); i++) {
                     K newKey = sourceVector.getKey(i);
                     add(newKey);

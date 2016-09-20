@@ -11,12 +11,15 @@ class ReKeyedVector[K,V, K2](source:VectorStream[K,V], keyFunc:K => Option[K2], 
 
   val getNewColumnTrigger = new ReshapeSignal(env, this)
   env.addListener(source.getNewColumnTrigger, this)
+  // this function can add things to the reshape signal
+  env.addWakeupReceiver(this, getNewColumnTrigger)
+  if (source.isInitialised) {
+    env.wakeupThisCycle(this)
+  }
 
   var lastSourceSize:Int = 0
   val sourceIndicies = collection.mutable.ArrayBuffer[Int]()
 
-  // initialise
-  calculate()
 
   def newCell(newIndex: Int, key: K2) = {
     val sourceIndex = sourceIndicies(newIndex)

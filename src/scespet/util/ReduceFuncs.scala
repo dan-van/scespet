@@ -57,7 +57,9 @@ class Collect extends SelfAgg[AnyRef] {
  */
 class Counter extends Reducer[Any, Int] {
   var c=0
-  override def add(x: Any) { c += 1 }
+  override def add(x: Any) {
+    c += 1
+  }
   def value = c
   override def toString = String.valueOf(c)
 }
