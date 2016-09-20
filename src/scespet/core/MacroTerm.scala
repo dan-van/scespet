@@ -42,10 +42,11 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
    */
   def fold_all[Y <: Agg[X]](y: Y):MacroTerm[Y#OUT] = {
     val listener = new AbsFunc[X,Y#OUT] {
-      override def value = y.value
+      value = y.value
       initialised = true
       def calculate() = {
-        y.add(input.value);
+        y.add(input.value)
+        value = y.value
         true
       }
     }

@@ -137,9 +137,9 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
 
             nextReduce = newCell
           // join values should be come before the reduce can fire
-          env.addWakeupOrdering(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
+          env.addWakeupReceiver(joinValueRendezvous, nextReduce.asInstanceOf[MFunc])
           // listen to it so that we propagate value updates to the bucket
-          env.addListener(nextReduce, this)
+          env.addListener(nextReduce.asInstanceOf[EventGraphObject], this)
       }
     } else {
       nextReduce = newCell
@@ -270,7 +270,7 @@ class SliceBeforeBucket[S, Y, OUT](cellOut:AggOut[Y,OUT], val sliceSpec :S, cell
       false
     }
     // NODEPLOY - in SliceBeforeCell we close the cell here, do we need to call reduce.pause now?
-    val cellFired = cellIsFunction && env.hasChanged(nextReduce)
+    val cellFired = cellIsFunction && env.hasChanged(nextReduce.asInstanceOf[EventGraphObject])
     val addedValueToCell = env.hasChanged(joinValueRendezvous) && joinValueRendezvous.addedValueToBucket
 
     if (cellFired || addedValueToCell) {
