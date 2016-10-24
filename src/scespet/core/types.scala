@@ -306,7 +306,7 @@ trait MultiTerm[K,X] {
    * I think this concept is wrong. May need a special type for it (e.g. MatrixTerm[(K2,K), X])
    * I think a nested composite key is different to simply a Map of key tuples to values.
    */
-  def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X]
+  def by[K2]( keyMap:(K,X)=>K2 ):VectTerm[K2,X]
 
   /**
    * This allows operations that operate on the entire vector rather than single cells (e.g. a demean operation, or a "unique value count")

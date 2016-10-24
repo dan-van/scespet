@@ -1,5 +1,7 @@
 package data
 
+import org.jfree.chart.labels.StandardXYToolTipGenerator
+
 import scala.swing.{Component, MainFrame}
 import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
 import org.jfree.data.general.AbstractSeriesDataset
@@ -10,7 +12,7 @@ import org.jfree.chart.renderer.xy.{XYLineAndShapeRenderer, XYItemRendererState,
 import org.jfree.chart.axis.{ValueAxis, DateAxis, NumberAxis}
 import org.jfree.chart.plot.{Plot, CrosshairState, PlotRenderingInfo, XYPlot}
 import java.awt.event.{ActionEvent, ActionListener}
-import org.jfree.chart.{ChartPanel, JFreeChart}
+import org.jfree.chart.{ChartFactory, ChartPanel, JFreeChart}
 import java.awt.{Paint, Shape, Graphics2D, Dimension}
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
 
@@ -232,6 +234,7 @@ object Plot {
     val chart = new JFreeChart("Plot", plot.asInstanceOf[Plot])
     val chartPanel = new ChartPanel(chart)
 
+    renderer.setBaseToolTipGenerator(StandardXYToolTipGenerator.getTimeSeriesInstance)
     def enableShapes() {
       renderer.setShapesVisible(true)
       renderer.setAutoPopulateSeriesFillPaint(true)

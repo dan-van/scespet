@@ -100,8 +100,37 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
       }
     }
     env.addListener(input.trigger, listener)
-    if (input.initialised) // This initialises the initial value - we do not need to propagate an event here.
+    if (input.initialised) {
+      // This initialises the initial value - we do not need to propagate an event here.
+      // NODEPLOY - check this, may no longer be required?
       listener.calculate()
+    }
+    return new MacroTerm[Y](env)(listener)
+  }
+
+  def flatMap[Y](expand: (X=>TraversableOnce[Y])):MacroTerm[Y] = {
+    val listener = new AbsFunc[X,Y] {
+      val buf = collection.mutable.ArrayBuffer[Y]()
+      def calculate() = {
+        if (env.hasChanged(input.trigger)) {
+          buf.appendAll(expand(input.value))
+        }
+        if (buf.nonEmpty) {
+          value = buf.remove(0)
+          initialised = true
+          if (buf.nonEmpty) {
+            env.wakeupThisCycle(this)
+          }
+          true
+        } else false
+      }
+    }
+    env.addListener(input.trigger, listener)
+    if (input.initialised) {
+      // This initialises the initial value - we do not need to propagate an event here.
+      // NODEPLOY - check this, may no longer be required?
+      listener.calculate()
+    }
     return new MacroTerm[Y](env)(listener)
   }
 
@@ -289,7 +318,8 @@ class MacroTerm[X](val env:types.Env)(val input:HasVal[X]) extends Term[X] with 
 /**
  * NODEPLOY reame to BucketFactory
  * {@see scespet.core.UncollapsedVectGroup}
- * @tparam IN
+  *
+  * @tparam IN
  */
 trait UncollapsedGroup[IN] {
   def newBucket[B, OUT](reduceType:ReduceType, lifecycle :SliceCellLifecycle[B], cellOut:AggOut[B, OUT], bindings:List[(HasVal[_], (B => _ => Unit))], exposeEmpty:Boolean) :SlicedBucket[B,OUT]

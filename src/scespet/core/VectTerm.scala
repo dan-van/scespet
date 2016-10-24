@@ -113,7 +113,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
   }
 
   /** This doesn't work yet - questions of event atomicity / multiplexing */
-  def by[K2]( keyMap:K=>K2 ):VectTerm[K2,X] = ???
+  def by[K2]( keyMap:(K,X)=>K2 ):VectTerm[K2,X] = ???
 
   /** Experiment concept. To get round event atomicity, what about a Map[K2, Vect[K,X]] which is a partition of this vect?*/
   def groupby[K2]( keyMap:K=>K2 ):VectTerm[K2,VectorStream[K,X]] = {
@@ -376,6 +376,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    *
    *
    * todo: maybe call this "flatten", "asSet" ?
+    * todo: I think this is really flatMap().toStream().map((k,v) => v).toSet(), should it be named differently?
    */
   def toValueSet[Y]( expand: (X=>TraversableOnce[Y])):VectTerm[Y,Y] = {
     val initial = collection.mutable.Set[Y]()
@@ -397,7 +398,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
             val x = inputCell.value()
             val size = getSize
             this.addAll(expand(x).toIterable.asJava)
-            logger.info("NODEPLOY expanded : "+x+" into "+(getSize - size)+" new entries")
           } else {
             // NODEPLOY - check this, test it somehow
             println("cell not initialised yet: "+inputCell)
@@ -412,7 +412,6 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
               val size = getSize
               val x = input.get(i)
               val added = addAll( expand(x).toIterable.asJava)
-              logger.info("NODEPLOY expanded : "+x+" into "+(getSize - size)+" new entries")
               added
             }
           })
@@ -517,7 +516,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * NOTE: bucket is instantiated per key, but thereafer is mutated, unlike calls to scan and reduce
    */
   // NODEPLOY replace this with simply : stream.group(SliceTriggerSpec.TERMINATION).collapseWith(...
-  def bindTo[B <: CloseableFunc, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut, type_b)
+//  def bindTo[B, OUT](newBFunc: => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = bindTo[B, OUT]((k:K) => newBFunc)(adder)(aggOut, type_b)
 
   /**
    * bindTo is a mechanism to allow easier interop with lower-level mutable streams and existing business logic.
@@ -525,7 +524,7 @@ class VectTerm[K,X](val env:types.Env)(val input:VectorStream[K,X]) extends Mult
    * to mark bucket boundaries
    * NOTE: bucket is instantiated per key, but thereafer is mutated, unlike calls to scan and reduce
    */
-  def bindTo[B <: CloseableFunc, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = {
+  def bindTo[B, OUT](newBFunc: K => B)(adder: B => X => Unit)(implicit aggOut: AggOut[B, OUT], type_b: ClassTag[B]): AggregationTerm[K, B, OUT] = {
     val groupedVectTerm: GroupedVectTerm[K, X] = group(SliceTriggerSpec.TERMINATION, AFTER)
 
     val cellAdd:B => CellAdder[X] = (b:B) => new CellAdder[X] {

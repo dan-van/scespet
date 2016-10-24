@@ -226,7 +226,7 @@ class BucketVectStreamTest extends ScespetTestBase with BeforeAndAfterEach with 
   }
 
   test("bind reduce") {
-    val out = stream.bindTo(new BindableAppendFunc[Char])(_.add).last()
+    val out = stream.bindTo(key => new BindableAppendFunc[Char])(_.add).last()
     val expectedDigits = Seq(generateAppendScan(data_digit).last)
     val expectedAlpha = Seq(generateAppendScan(data_chars).last)
     new StreamTest("reduce :Digits", expectedDigits, out("Digit"))
