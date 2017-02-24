@@ -18,6 +18,22 @@ class SimpleEvaluator() extends EnvTermBuilder() {
   }
 }
 
+object EventSourceX {
+   def apply[X, E <: EventSource](evt:E)(extract:(E) => X) :EventSourceX[X] = {
+     return new EventSourceX[X] {
+       def hasNext() = evt.hasNext
+
+       def advanceState() = evt.advanceState()
+
+       def getNextTime = evt.getNextTime
+
+       def value = extract.apply(evt)
+
+       def trigger = evt
+     }
+  }
+}
+
 trait EventSourceX[X] extends gsa.esg.mekon.core.EventSource with HasVal[X] {
   def hasNext():Boolean
   def advanceState()

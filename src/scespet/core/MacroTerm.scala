@@ -1,5 +1,6 @@
 package scespet.core
 
+import kotlin.reflect.KClass
 import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
 import scespet.core._
 import scespet.util._
