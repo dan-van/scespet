@@ -4,7 +4,7 @@ import java.util.logging.Logger
 
 import gsa.esg.mekon.MekonConfig.GraphFactory
 import gsa.esg.mekon.SystemMode
-import gsa.esg.mekon.core.{EventGraph, InstantTreeBuildingGraphWalker, DefaultEnvironment}
+import gsa.esg.mekon.core.{EventGraph, TreeBuildingGraphWalker, DefaultEnvironment}
 import gsa.esg.mekon.run.Mekon
 import org.scalatest.junit.{ShouldMatchersForJUnit, AssertionsForJUnit}
 import org.scalatest.{Suite, OneInstancePerTest, BeforeAndAfterEach}
@@ -85,7 +85,8 @@ class SliceTests extends ScespetTestBase with BeforeAndAfterEach with OneInstanc
       val mekon = new Mekon(SystemMode.TEST)
       mekon.lockWhenOutsideLoop(false)  // set this to false because the tests in this class are calling graph.fire directly rather than using the normal event manager.
       mekon.consumeAllEvents(true)
-      val eventGraph = new InstantTreeBuildingGraphWalker
+//      val eventGraph = new InstantTreeBuildingGraphWalker
+      val eventGraph = new TreeBuildingGraphWalker
       mekon.setGraphFactory(new GraphFactory {
         override def newGraph(realtime: Boolean) = eventGraph
       })

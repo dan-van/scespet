@@ -1,6 +1,6 @@
 package programs
 
-import data.Plot
+import datavis.data.Plot
 import scespet.core.types.MFunc
 import scespet.core.{CellAdder, IteratorEvents}
 

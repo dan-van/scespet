@@ -1,6 +1,6 @@
 package programs
 
-import data.Plot
+import datavis.data.Plot
 import scespet.core._
 import java.io.{BufferedWriter, FileWriter, File}
 import java.net.URL

@@ -4,15 +4,15 @@ import java.util.logging.Logger
 
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
 import scespet.core.SliceCellLifecycle
-import scespet.core.SliceCellLifecycle.{MutableBucketLifecycle, CellSliceCellLifecycle}
+import scespet.core.SliceCellLifecycle.{CellSliceCellLifecycle, MutableBucketLifecycle}
 import scespet.core.VectorStream.ReshapeSignal
 import scespet.core.types.{CloseableFunc, MFunc}
+
 import scala.reflect.runtime.universe._
 import scala.reflect.ClassTag
-
-
 import scespet.util._
 import scespet.util.SliceAlign._
+
 import scala.{Predef, Some}
 
 /**

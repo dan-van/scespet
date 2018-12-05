@@ -1,25 +1,28 @@
-package data
+package datavis.data
 
+import org.jfree.chart.entity.EntityCollection
 import org.jfree.chart.labels.StandardXYToolTipGenerator
 
-import scala.swing.{Component, MainFrame}
+import scala.swing.{Component, Dimension, Graphics2D}
+
 import gnu.trove.list.array.{TDoubleArrayList, TLongArrayList}
+import gsa.esg.mekon.core.Environment
+import javax.swing.JLabel
 import org.jfree.data.general.AbstractSeriesDataset
 import org.jfree.data.xy.XYDataset
 import org.jfree.data.DomainOrder
 import scespet.core._
-import org.jfree.chart.renderer.xy.{XYLineAndShapeRenderer, XYItemRendererState, XYStepRenderer, XYItemRenderer}
-import org.jfree.chart.axis.{ValueAxis, DateAxis, NumberAxis}
-import org.jfree.chart.plot.{Plot, CrosshairState, PlotRenderingInfo, XYPlot}
-import java.awt.event.{ActionEvent, ActionListener}
+import org.jfree.chart.renderer.xy.{XYItemRenderer, XYItemRendererState, XYLineAndShapeRenderer, XYStepRenderer}
+import org.jfree.chart.axis.{DateAxis, NumberAxis, ValueAxis}
+import org.jfree.chart.plot.{CrosshairState, Plot, PlotRenderingInfo, XYPlot}
 import org.jfree.chart.{ChartFactory, ChartPanel, JFreeChart}
-import java.awt.{Paint, Shape, Graphics2D, Dimension}
+import _root_.java.awt.event.{ActionEvent, ActionListener}
+import _root_.java.awt.{Paint, Shape, Graphics2D, Rectangle, Dimension}
+import _root_.java.awt.geom.{Rectangle2D}
+
 import gsa.esg.mekon.core.{Environment, EventGraphObject}
 
-import scala.collection.JavaConverters._
-import java.awt.geom.Rectangle2D
-import org.jfree.chart.entity.EntityCollection
-import javax.swing.JLabel
+//import scala.swing.{Component, MainFrame}
 
 /**
  * @version $Id$
@@ -28,7 +31,7 @@ object Plot {
   @volatile var active = false
   private var _chartState : ChartState = _
 
-  lazy val top = new MainFrame(){
+  lazy val top = new scala.swing.MainFrame(){
     active = true
     override def closeOperation() {
       println("Hiding frame");
@@ -107,7 +110,7 @@ object Plot {
   // ------------------------------
 // todo: think about using Evidence to provide X axis (e.g. an Environment for clock)
 // todo: rather than relying on MacroTerm being passed here
-  def plot[X](series:Term[X], name:String = s"Series(${chartstate.dataset.getSeriesCount + 1})")(implicit ev:Numeric[X], env:Environment) = {
+  def plot[X](series:Term[X], name:String = s"Series(${chartstate.dataset.getSeriesCount + 1})")(implicit ev:Numeric[X], env:Environment): Options[String, X] = {
     val options = new Options[String,X](chartstate)
     options.seriesNames(_ => name)
 
@@ -116,12 +119,14 @@ object Plot {
     options.addSeries(seriesId)
 
     series.map(v => {
-      val asDouble = implicitly[Numeric[X]].toDouble( v )
+      val asDouble: Double = implicitly[Numeric[X]].toDouble( v )
       dataset.add(seriesId, env.getEventTime, asDouble)
     })
 
     options
   }
+
+  def newOptions[X]:Options[String, X] = new Options[String, X](chartstate)
 
   def plot[K, X:Numeric](stream: VectTerm[K, X]) :Options[K,X] = {
     val options = new Options[K, X](chartstate)
@@ -148,12 +153,12 @@ object Plot {
   /**
    * this isn't good design. Think about adding stuff to plots and draw inspiration from the major plotting libraries (and REMEMBER not to go overkill, and just use python for advanced stuff!!!)
    */
-  class Options[K,X](chartState:ChartState) {
+  class Options[K,X](val chartState:ChartState) {
     var seriesList = List[Int]()
 
     private var keyRender:K=>String = (k) => String.valueOf(k)
     private var _enableShapes = false
-    private var _shape:Shape = _
+    private var _shape: Shape = _
     private var _fillPaint:Paint = _
 
     def seriesNames(newKeyRender:K=>String):Options[K,X] = {
@@ -167,6 +172,14 @@ object Plot {
       _enableShapes = true;
       applyAll()
     }
+
+    def addSeries(name:String): Int = {
+      val id = chartstate.dataset.addSeries(name)
+      addSeries(id)
+      id
+    }
+
+    def dataset(): TimeSeriesDataset = chartstate.dataset
 
     protected[Plot] def addSeries(s:Int) {
       seriesList :+= s

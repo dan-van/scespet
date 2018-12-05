@@ -1,4 +1,4 @@
-package scespet.core.java;
+package scespet.core.japi;
 
 /**
  * @author danvan

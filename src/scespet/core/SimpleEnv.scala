@@ -4,10 +4,13 @@ import scespet.core.types.MFunc
 
 import collection.mutable
 import gsa.esg.mekon.core._
-import java.util.TimeZone
+import _root_.java.util.TimeZone
+
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle
-import java.lang.Iterable
-import java.util.concurrent.TimeUnit
+import _root_.java.lang.Iterable
+import _root_.java.util.concurrent.TimeUnit
+
+import _root_.java.util
 
 /**
  * Created with IntelliJ IDEA.
@@ -243,5 +246,21 @@ class SimpleEnv() extends Environment {
   }
 
   def getRootEnvironment = ???
+
+  def discoverAvailableServices[T <: Service.MultiDiscoverable](serviceClass: Class[T]): _root_.java.util.Collection[_ <: T] = ???
+
+  /**
+    * this is primarily for guarding datastructures that could possibly be accessed outside of a graph lock, and for which we want to check this is not the case.
+    * Strictly, I think the API should be something like
+    * boolean threadHasExclusiveLock(Object mutationTarget);
+    * which would then pair with a method: registerLockOwner(GraphObject maintainer, Object mutationTarget)
+    * and would check that access to the mutation target was occurring in the correct order with respect to "GraphObject maintainer"
+    * but I don't actually have this requirement, so I'll leave it as conjecture for now.
+    *
+    * note - this is a more relaxed requirement than isCurrentThreadWithinFire - there is no guarantee that an event will actually be fired, only that we are within a threadsafe section
+    *
+    * @return true if the current thread is in a 'mekon safe' lock section. If false, then it would not be implicitly thread-safe to access datastructures that could be updated by a mekon event.
+    */
+  def currentThreadHasExclusiveLock(): Boolean = ???
 }
 

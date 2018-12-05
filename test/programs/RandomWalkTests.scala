@@ -5,7 +5,7 @@ package programs
  */
 package randomWalkTests {
 
-import data.Plot
+import datavis.data.Plot
 import scespet.EnvTermBuilder
 import scespet.core.SimpleEnv
 import scespet.util.Sum

@@ -1,6 +1,6 @@
 package scespet.core
 
-import java.util
+import _root_.java.util
 
 import gsa.esg.mekon.core.EventGraphObject
 import gsa.esg.mekon.core.EventGraphObject.Lifecycle

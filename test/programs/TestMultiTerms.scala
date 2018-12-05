@@ -1,7 +1,7 @@
 package programs
 
 import collection.mutable.ArrayBuffer
-import data.Plot
+import datavis.data.Plot
 import scespet.core._
 import scespet.util._
 import java.util.{List => JList}

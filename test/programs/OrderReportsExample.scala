@@ -1,6 +1,6 @@
 package programs
 
-import data.Plot
+import datavis.data.Plot
 import scala.collection.mutable.ArrayBuffer
 import scespet.core._
 import scespet.util._
